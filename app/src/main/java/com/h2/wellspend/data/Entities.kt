@@ -58,3 +58,10 @@ data class AppData(
     val expenses: List<Expense>,
     val budgets: List<Budget>
 )
+
+@Keep
+@Entity(tableName = "category_sort_orders")
+data class CategorySortOrder(
+    @PrimaryKey val categoryName: String,
+    val sortOrder: Int
+)

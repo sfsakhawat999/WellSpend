@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+
 import java.util.UUID
 
 class MainViewModel(private val repository: WellSpendRepository) : ViewModel() {
@@ -30,24 +31,27 @@ class MainViewModel(private val repository: WellSpendRepository) : ViewModel() {
         .map { it ?: "$" } // Default to $ if null
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "$")
 
-    val categoryOrder: StateFlow<List<Category>> = repository.categoryOrder
-        .map { orderString ->
-            if (orderString.isNullOrEmpty()) {
-                Category.values().toList()
-            } else {
-                val savedOrder = orderString.split(",").mapNotNull { name ->
-                    try {
-                        Category.valueOf(name)
-                    } catch (e: IllegalArgumentException) {
-                        null
-                    }
+    private val _optimisticUpdates = kotlinx.coroutines.flow.MutableStateFlow<List<Category>?>(null)
+
+    val categoryOrder: StateFlow<List<Category>> = kotlinx.coroutines.flow.combine(
+        repository.sortedCategories,
+        _optimisticUpdates
+    ) { repo, optimistic ->
+        optimistic ?: repo
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    init {
+        // Clear optimistic update when repository catches up
+        viewModelScope.launch {
+            kotlinx.coroutines.flow.combine(repository.sortedCategories, _optimisticUpdates) { repo, opt ->
+                repo to opt
+            }.collect { (repo, opt) ->
+                if (opt != null && repo == opt) {
+                    _optimisticUpdates.value = null
                 }
-                // Append any missing categories (e.g. newly added ones)
-                val missing = Category.values().filter { !savedOrder.contains(it) }
-                savedOrder + missing
             }
         }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), Category.values().toList())
+    }
 
     val themeMode: StateFlow<String> = repository.themeMode
         .map { it ?: "DARK" } // Default to DARK
@@ -147,9 +151,9 @@ class MainViewModel(private val repository: WellSpendRepository) : ViewModel() {
     }
 
     fun updateCategoryOrder(newOrder: List<Category>) {
+        _optimisticUpdates.value = newOrder
         viewModelScope.launch {
-            val orderString = newOrder.joinToString(",") { it.name }
-            repository.setCategoryOrder(orderString)
+            repository.updateCategoryOrder(newOrder)
         }
     }
 
@@ -158,7 +162,6 @@ class MainViewModel(private val repository: WellSpendRepository) : ViewModel() {
             repository.setThemeMode(mode)
         }
     }
-
     fun updateDynamicColor(enabled: Boolean) {
         viewModelScope.launch {
             repository.setDynamicColor(enabled)

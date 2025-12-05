@@ -173,13 +173,16 @@ fun MainScreen(viewModel: MainViewModel) {
                         )
                     }
                     ViewState.ADD -> {
+                        val categoryOrder by viewModel.categoryOrder.collectAsState()
                         AddExpenseForm(
                             currency = currency,
+                            categories = categoryOrder,
                             onAdd = { amount, desc, cat, date, isRecurring, freq ->
                                 viewModel.addExpense(amount, desc, cat, date, isRecurring, freq)
                                 viewState = ViewState.DASHBOARD
                             },
-                            onCancel = { viewState = ViewState.DASHBOARD }
+                            onCancel = { viewState = ViewState.DASHBOARD },
+                            onReorder = { viewModel.updateCategoryOrder(it) }
                         )
                     }
                     ViewState.BUDGETS -> {

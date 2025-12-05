@@ -1,6 +1,7 @@
 package com.h2.wellspend.data
 
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 
 class WellSpendRepository(private val database: AppDatabase) {
     val expenses: Flow<List<Expense>> = database.expenseDao().getAllExpenses()
@@ -40,10 +41,38 @@ class WellSpendRepository(private val database: AppDatabase) {
         database.settingDao().insertSetting(Setting("currency", symbol))
     }
 
-    val categoryOrder: Flow<String?> = database.settingDao().getSettingFlow("category_order")
+    // Category Sorting
+    val sortedCategories: Flow<List<Category>> = database.categoryDao().getAllCategorySortOrders()
+        .map { sortOrders ->
+            if (sortOrders.isEmpty()) {
+                // Return default order if no sort order is saved
+                Category.values().toList()
+            } else {
+                // Create a map of category name to sort order
+                val orderMap = sortOrders.associate { it.categoryName to it.sortOrder }
+                
+                // Sort categories based on the map, putting those without order at the end
+                Category.values().sortedBy { category ->
+                    orderMap[category.name] ?: Int.MAX_VALUE
+                }
+            }
+        }
 
-    suspend fun setCategoryOrder(order: String) {
-        database.settingDao().insertSetting(Setting("category_order", order))
+    suspend fun updateCategoryOrder(categories: List<Category>) {
+        val sortOrders = categories.mapIndexed { index, category ->
+            CategorySortOrder(category.name, index)
+        }
+        database.categoryDao().insertCategorySortOrders(sortOrders)
+    }
+
+    suspend fun ensureCategoryOrderInitialized() {
+        val existingOrders = database.categoryDao().getAllCategorySortOrdersOneShot()
+        if (existingOrders.isEmpty()) {
+            val defaultOrders = Category.values().mapIndexed { index, category ->
+                CategorySortOrder(category.name, index)
+            }
+            database.categoryDao().insertCategorySortOrders(defaultOrders)
+        }
     }
 
     val themeMode: Flow<String?> = database.settingDao().getSettingFlow("theme_mode")

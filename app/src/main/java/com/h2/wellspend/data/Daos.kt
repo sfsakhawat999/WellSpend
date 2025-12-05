@@ -76,3 +76,18 @@ interface SettingDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertSetting(setting: Setting)
 }
+
+@Dao
+interface CategoryDao {
+    @Query("SELECT * FROM category_sort_orders ORDER BY sortOrder ASC")
+    fun getAllCategorySortOrders(): Flow<List<CategorySortOrder>>
+
+    @Query("SELECT * FROM category_sort_orders ORDER BY sortOrder ASC")
+    suspend fun getAllCategorySortOrdersOneShot(): List<CategorySortOrder>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertCategorySortOrders(orders: List<CategorySortOrder>)
+
+    @Update
+    suspend fun updateCategorySortOrder(order: CategorySortOrder)
+}

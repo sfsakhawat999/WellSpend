@@ -24,6 +24,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Repeat
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -38,6 +40,7 @@ import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.key
@@ -46,17 +49,27 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.draw.clip
+import kotlin.math.roundToInt
+import kotlin.math.pow
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.foundation.layout.offset
+import androidx.compose.ui.zIndex
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.VectorConverter
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.DatePicker
@@ -72,25 +85,15 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
-import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.layout.offset
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.zIndex
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.unit.IntOffset
-import kotlin.math.roundToInt
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddExpenseForm(
     currency: String,
+    categories: List<Category>,
     onAdd: (Double, String, Category, String, Boolean, RecurringFrequency) -> Unit,
-    onCancel: () -> Unit
+    onCancel: () -> Unit,
+    onReorder: (List<Category>) -> Unit
 ) {
     var amount by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
@@ -101,6 +104,14 @@ fun AddExpenseForm(
     var showDatePicker by remember { mutableStateOf(false) }
     var expanded by remember { mutableStateOf(false) }
     val datePickerState = rememberDatePickerState()
+
+    // Ensure selected category is valid (if it was removed or something, though unlikely with enum)
+    // Also if categories list is empty (shouldn't be), default to something
+    LaunchedEffect(categories) {
+        if (!categories.contains(category) && categories.isNotEmpty()) {
+            category = categories.first()
+        }
+    }
 
     if (showDatePicker) {
         DatePickerDialog(
@@ -164,12 +175,6 @@ fun AddExpenseForm(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp)
             ) {
-                // Text(
-                //     text = "Amount",
-                //     style = MaterialTheme.typography.bodyMedium,
-                //     color = Color(0xFF64748b), // Slate 500
-                //     fontWeight = FontWeight.Medium
-                // )
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         text = currency,
@@ -183,7 +188,6 @@ fun AddExpenseForm(
                             fontSize = 48.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface,
-                            // textAlign = TextAlign.Center
                         ),
                         placeholder = {
                             Text(
@@ -217,10 +221,12 @@ fun AddExpenseForm(
                 modifier = Modifier.padding(bottom = 16.dp)
             )
             CategoryGrid(
+                categories = categories,
                 selectedCategory = category,
                 onCategorySelected = { category = it },
                 expanded = expanded,
-                onExpandChange = { expanded = it }
+                onExpandChange = { expanded = it },
+                onReorder = onReorder
             )
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -390,11 +396,11 @@ fun FrequencyButton(
 ) {
     Box(
         modifier = modifier
-            .clip(RoundedCornerShape(8.dp))
-            .background(if (selected) MaterialTheme.colorScheme.primary else Color.Transparent)
-            .border(1.dp, if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline, RoundedCornerShape(8.dp))
-            .clickable { onClick() }
-            .padding(vertical = 8.dp),
+        .clip(RoundedCornerShape(8.dp))
+        .background(if (selected) MaterialTheme.colorScheme.primary else Color.Transparent)
+        .border(1.dp, if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline, RoundedCornerShape(8.dp))
+        .clickable { onClick() }
+        .padding(vertical = 8.dp),
         contentAlignment = Alignment.Center
     ) {
         Text(
@@ -407,54 +413,191 @@ fun FrequencyButton(
 
 @Composable
 fun CategoryGrid(
+    categories: List<Category>,
     selectedCategory: Category,
     onCategorySelected: (Category) -> Unit,
     expanded: Boolean,
-    onExpandChange: (Boolean) -> Unit
+    onExpandChange: (Boolean) -> Unit,
+    onReorder: (List<Category>) -> Unit
 ) {
-    val categories = Category.values().toList()
-    val visibleCategories = if (expanded) categories else categories.take(8)
+    val visibleCount = if (expanded) categories.size else 8
+    val visibleCategories = categories.take(visibleCount)
+    
     val itemsPerRow = 4
-    val rows = (visibleCategories.size + itemsPerRow - 1) / itemsPerRow
     val itemHeight = 65.dp
     val spacing = 10.dp
+    
+    // Drag state
+    var draggedItem by remember { mutableStateOf<Category?>(null) }
+    var dragOffset by remember { mutableStateOf(Offset.Zero) }
+    
+    val rows = (visibleCategories.size + itemsPerRow - 1) / itemsPerRow
     val gridHeight = (itemHeight * rows) + (spacing * (rows - 1))
     
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+    val density = androidx.compose.ui.platform.LocalDensity.current
+
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(4),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-            modifier = Modifier.height(gridHeight)
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(gridHeight)
         ) {
-            items(visibleCategories) { cat ->
-                val isSelected = selectedCategory == cat
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface)
-                        .border(
-                            width = if (isSelected) 2.dp else 0.dp,
-                            color = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent,
-                            shape = RoundedCornerShape(16.dp)
-                        )
-                        .clickable { onCategorySelected(cat) }
-                        .padding(2.dp, 12.dp)
-                ) {
-                    Icon(
-                        imageVector = getCategoryIcon(cat),
-                        contentDescription = cat.name,
-                        tint = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(24.dp)
-                    )
-                    Text(
-                        text = cat.name,
-                        style = TextStyle(fontSize = 10.sp),
-                        color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        modifier = Modifier.padding(top = 4.dp)
-                    )
+            androidx.compose.foundation.layout.BoxWithConstraints {
+                val itemWidth = (maxWidth - (spacing * (itemsPerRow - 1))) / itemsPerRow
+                val itemWidthPx = with(density) { itemWidth.toPx() }
+                val itemHeightPx = with(density) { itemHeight.toPx() }
+                val spacingPx = with(density) { spacing.toPx() }
+                
+                // Helper to get position for an index
+                fun getPosition(index: Int): Offset {
+                    val row = index / itemsPerRow
+                    val col = index % itemsPerRow
+                    val x = (itemWidthPx + spacingPx) * col
+                    val y = (itemHeightPx + spacingPx) * row
+                    return Offset(x, y)
+                }
+
+                // Calculate hover index
+                val draggedIndex = visibleCategories.indexOf(draggedItem)
+                var hoverIndex by remember { mutableIntStateOf(-1) }
+                
+                if (draggedItem != null && draggedIndex != -1) {
+                    val startPos = getPosition(draggedIndex)
+                    val currentCenterX = startPos.x + dragOffset.x + itemWidthPx / 2
+                    val currentCenterY = startPos.y + dragOffset.y + itemHeightPx / 2
+                    
+                    // Find closest slot
+                    var closestIndex = -1
+                    var minDistance = Float.MAX_VALUE
+                    
+                    for (i in visibleCategories.indices) {
+                        val pos = getPosition(i)
+                        val centerX = pos.x + itemWidthPx / 2
+                        val centerY = pos.y + itemHeightPx / 2
+                        val dist = (currentCenterX - centerX).pow(2) + (currentCenterY - centerY).pow(2)
+                        
+                        if (dist < minDistance) {
+                            minDistance = dist
+                            closestIndex = i
+                        }
+                    }
+                    hoverIndex = closestIndex
+                } else {
+                    hoverIndex = -1
+                }
+
+                visibleCategories.forEachIndexed { index, cat ->
+                    key(cat) {
+                        val isDragged = draggedItem == cat
+                        val isSelected = selectedCategory == cat
+                        
+                        // Calculate visual target position
+                        var targetIndex = index
+                        if (draggedItem != null && draggedIndex != -1 && hoverIndex != -1) {
+                            if (index == draggedIndex) {
+                                targetIndex = index 
+                            } else if (draggedIndex < hoverIndex) {
+                                if (index > draggedIndex && index <= hoverIndex) {
+                                    targetIndex = index - 1
+                                }
+                            } else if (draggedIndex > hoverIndex) {
+                                if (index >= hoverIndex && index < draggedIndex) {
+                                    targetIndex = index + 1
+                                }
+                            }
+                        }
+                        
+                        val targetPos = getPosition(targetIndex)
+                        
+                        // Use Animatable for smooth transitions and snap support
+                        val animatedOffset = remember { androidx.compose.animation.core.Animatable(targetPos, androidx.compose.ui.geometry.Offset.VectorConverter) }
+                        
+                        LaunchedEffect(targetPos) {
+                            if (!isDragged) {
+                                animatedOffset.animateTo(targetPos)
+                            }
+                        }
+                        
+                        // Snap to drag position while dragging to keep Animatable in sync
+                        LaunchedEffect(isDragged, dragOffset) {
+                            if (isDragged) {
+                                val startPos = getPosition(index)
+                                animatedOffset.snapTo(startPos + dragOffset)
+                            }
+                        }
+                        
+                        val zIndex = if (isDragged) 1f else 0f
+                        
+                        Box(
+                            modifier = Modifier
+                                .offset { IntOffset(animatedOffset.value.x.roundToInt(), animatedOffset.value.y.roundToInt()) }
+                                .width(itemWidth)
+                                .height(itemHeight)
+                                .zIndex(zIndex)
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface)
+                                .border(
+                                    width = if (isSelected) 2.dp else 0.dp,
+                                    color = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent,
+                                    shape = RoundedCornerShape(16.dp)
+                                )
+                                .pointerInput(visibleCategories) {
+                                    detectDragGesturesAfterLongPress(
+                                        onDragStart = {
+                                            draggedItem = cat
+                                            dragOffset = Offset.Zero
+                                            haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                                        },
+                                        onDrag = { change: PointerInputChange, dragAmount: Offset ->
+                                            change.consume()
+                                            dragOffset += dragAmount
+                                        },
+                                        onDragEnd = {
+                                            val currentDraggedIndex = visibleCategories.indexOf(cat)
+                                            if (currentDraggedIndex != -1 && hoverIndex != -1 && currentDraggedIndex != hoverIndex) {
+                                                // Commit reorder
+                                                val newList = categories.toMutableList()
+                                                val item = newList.removeAt(currentDraggedIndex)
+                                                newList.add(hoverIndex, item)
+                                                onReorder(newList)
+                                            }
+                                            draggedItem = null
+                                            dragOffset = Offset.Zero
+                                            hoverIndex = -1
+                                        },
+                                        onDragCancel = {
+                                            draggedItem = null
+                                            dragOffset = Offset.Zero
+                                            hoverIndex = -1
+                                        }
+                                    )
+                                }
+                                .clickable { 
+                                    if (draggedItem == null) {
+                                        onCategorySelected(cat) 
+                                    }
+                                }
+                                .padding(2.dp, 12.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Icon(
+                                    imageVector = getCategoryIcon(cat),
+                                    contentDescription = cat.name,
+                                    tint = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                                Text(
+                                    text = cat.name,
+                                    style = TextStyle(fontSize = 10.sp),
+                                    color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    modifier = Modifier.padding(top = 4.dp)
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -467,7 +610,7 @@ fun CategoryGrid(
                 color = MaterialTheme.colorScheme.primary
             )
             Icon(
-                imageVector = if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                imageVector = if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary
             )

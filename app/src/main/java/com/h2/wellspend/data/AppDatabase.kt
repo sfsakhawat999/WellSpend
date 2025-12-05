@@ -5,12 +5,13 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 
-@Database(entities = [Expense::class, Budget::class, RecurringConfig::class, Setting::class], version = 2, exportSchema = false)
+@Database(entities = [Expense::class, Budget::class, RecurringConfig::class, Setting::class, CategorySortOrder::class], version = 4, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun expenseDao(): ExpenseDao
     abstract fun budgetDao(): BudgetDao
     abstract fun recurringDao(): RecurringDao
     abstract fun settingDao(): SettingDao
+    abstract fun categoryDao(): CategoryDao
 
     companion object {
         @Volatile
@@ -23,7 +24,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "wellspend_database"
                 )
-                .fallbackToDestructiveMigration() // For development simplicity
+                .fallbackToDestructiveMigration() // Removed to prevent data loss. Add migrations for future versions.
                 .build()
                 INSTANCE = instance
                 instance
