@@ -60,6 +60,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.width
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.key
+import kotlinx.coroutines.delay
 
 @Composable
 fun ExpenseList(
@@ -200,7 +203,9 @@ fun ExpenseCategoryItem(
                     .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
             ) {
                 items.forEach { expense ->
-                    ExpenseItem(expense = expense, currency = currency, onDelete = onDelete)
+                    key(expense.id) {
+                        ExpenseItem(expense = expense, currency = currency, onDelete = onDelete)
+                    }
                 }
             }
         }
@@ -223,97 +228,138 @@ fun ExpenseItem(
     val actionWidthPx = with(density) { actionWidth.toPx() }
     val offsetX = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
+    
+    // Delete states
+    var showDeleteDialog by remember { mutableStateOf(false) }
+    var isVisible by remember { mutableStateOf(true) }
 
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(androidx.compose.foundation.layout.IntrinsicSize.Min)
-    ) {
-        // Background (Actions)
-        Row(
-            modifier = Modifier.fillMaxSize(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Left Action (Visible when swiped right)
-            Box(
-                modifier = Modifier
-                    .width(actionWidth)
-                    .fillMaxHeight()
-                    .background(MaterialTheme.colorScheme.error)
-                    .clickable { onDelete(expense.id) },
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Delete,
-                    contentDescription = "Delete",
-                    tint = MaterialTheme.colorScheme.onError
-                )
-            }
-
-            // Right Action (Visible when swiped left)
-            Box(
-                modifier = Modifier
-                    .width(actionWidth)
-                    .fillMaxHeight()
-                    .background(MaterialTheme.colorScheme.error)
-                    .clickable { onDelete(expense.id) },
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Delete,
-                    contentDescription = "Delete",
-                    tint = MaterialTheme.colorScheme.onError
-                )
-            }
-        }
-
-        // Foreground (Content)
-        Row(
-            modifier = Modifier
-                .offset { IntOffset(offsetX.value.roundToInt(), 0) }
-                .draggable(
-                    orientation = Orientation.Horizontal,
-                    state = rememberDraggableState { delta ->
-                        scope.launch {
-                            val newValue = (offsetX.value + delta).coerceIn(-actionWidthPx, actionWidthPx)
-                            offsetX.snapTo(newValue)
-                        }
-                    },
-                    onDragStopped = {
-                        val targetOffset = if (offsetX.value > actionWidthPx / 2) actionWidthPx
-                                           else if (offsetX.value < -actionWidthPx / 2) -actionWidthPx
-                                           else 0f
-                        scope.launch { offsetX.animateTo(targetOffset) }
+    if (showDeleteDialog) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showDeleteDialog = false },
+            title = { Text("Delete Expense") },
+            text = { Text("Are you sure you want to delete this expense?") },
+            confirmButton = {
+                androidx.compose.material3.TextButton(
+                    onClick = {
+                        showDeleteDialog = false
+                        isVisible = false
                     }
-                )
+                ) {
+                    Text("Delete", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(onClick = { showDeleteDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    // Trigger actual delete after animation
+    LaunchedEffect(isVisible) {
+        if (!isVisible) {
+            kotlinx.coroutines.delay(300) // Wait for animation
+            onDelete(expense.id)
+        }
+    }
+
+    AnimatedVisibility(
+        visible = isVisible,
+        exit = shrinkVertically() + fadeOut(),
+        enter = expandVertically() + fadeIn()
+    ) {
+        Box(
+            modifier = Modifier
                 .fillMaxWidth()
-                .background(MaterialTheme.colorScheme.surface) // Opaque background to hide actions
-                .padding(16.dp),
-            verticalAlignment = Alignment.Top,
-            horizontalArrangement = Arrangement.SpaceBetween
+                .height(androidx.compose.foundation.layout.IntrinsicSize.Min)
         ) {
-            Column(modifier = Modifier.weight(1f)) {
+            // Background (Actions)
+            Row(
+                modifier = Modifier.fillMaxSize(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Left Action (Visible when swiped right)
+                Box(
+                    modifier = Modifier
+                        .width(actionWidth)
+                        .fillMaxHeight()
+                        .background(MaterialTheme.colorScheme.error)
+                        .clickable { showDeleteDialog = true },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = "Delete",
+                        tint = MaterialTheme.colorScheme.onError
+                    )
+                }
+
+                // Right Action (Visible when swiped left)
+                Box(
+                    modifier = Modifier
+                        .width(actionWidth)
+                        .fillMaxHeight()
+                        .background(MaterialTheme.colorScheme.error)
+                        .clickable { showDeleteDialog = true },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = "Delete",
+                        tint = MaterialTheme.colorScheme.onError
+                    )
+                }
+            }
+
+            // Foreground (Content)
+            Row(
+                modifier = Modifier
+                    .offset { IntOffset(offsetX.value.roundToInt(), 0) }
+                    .draggable(
+                        orientation = Orientation.Horizontal,
+                        state = rememberDraggableState { delta ->
+                            scope.launch {
+                                val newValue = (offsetX.value + delta).coerceIn(-actionWidthPx, actionWidthPx)
+                                offsetX.snapTo(newValue)
+                            }
+                        },
+                        onDragStopped = {
+                            val targetOffset = if (offsetX.value > actionWidthPx / 2) actionWidthPx
+                                               else if (offsetX.value < -actionWidthPx / 2) -actionWidthPx
+                                               else 0f
+                            scope.launch { offsetX.animateTo(targetOffset) }
+                        }
+                    )
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.surface) // Opaque background to hide actions
+                    .padding(16.dp),
+                verticalAlignment = Alignment.Top,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = expense.description.ifEmpty { "No description" },
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        text = formatter.format(Instant.ofEpochMilli(expense.timestamp)),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                }
+
                 Text(
-                    text = expense.description.ifEmpty { "No description" },
+                    text = "$currency${String.format("%.2f", expense.amount)}",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurface,
                     fontWeight = FontWeight.Medium
                 )
-                Text(
-                    text = formatter.format(Instant.ofEpochMilli(expense.timestamp)),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 4.dp)
-                )
             }
-
-            Text(
-                text = "$currency${String.format("%.2f", expense.amount)}",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-                fontWeight = FontWeight.Medium
-            )
         }
     }
 }
