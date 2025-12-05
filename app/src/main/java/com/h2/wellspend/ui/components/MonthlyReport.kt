@@ -303,25 +303,26 @@ fun MonthlyReport(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(vertical = 4.dp),
+                                .padding(vertical = 9.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(
-                                text = data.category.name.take(3),
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                style = TextStyle(fontSize = 10.sp),
-                                modifier = Modifier.width(30.dp)
+                            Icon(
+                                imageVector = getCategoryIcon(data.category),
+                                contentDescription = data.category.name,
+                                tint = getCategoryColor(data.category),
+                                modifier = Modifier.width(24.dp).size(16.dp)
                             )
                             Box(
                                 modifier = Modifier
                                     .weight(1f)
-                                    .height(24.dp)
-                                    .clip(RoundedCornerShape(0.dp, 4.dp, 4.dp, 0.dp))
+                                    .height(14.dp)
+                                    .clip(RoundedCornerShape(4.dp))
                             ) {
                                 Box(
                                     modifier = Modifier
                                         .fillMaxHeight()
                                         .fillMaxWidth((data.amount / maxVal).toFloat())
+                                        .clip(RoundedCornerShape(4.dp))
                                         .background(getCategoryColor(data.category))
                                 )
                             }
