@@ -19,8 +19,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowOutward
 import androidx.compose.material.icons.filled.CallReceived
+import androidx.compose.material.icons.automirrored.filled.CallReceived
+import androidx.compose.material.icons.automirrored.filled.CompareArrows
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.material3.Icon
@@ -169,7 +172,7 @@ fun MonthlyReport(
             verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(onClick = onBack) {
-                Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Text(
                 text = "Monthly Report",
@@ -179,7 +182,7 @@ fun MonthlyReport(
             )
             Row {
                 IconButton(onClick = { showCompareDialog = true }) {
-                    Icon(Icons.Default.CompareArrows, contentDescription = "Compare", tint = MaterialTheme.colorScheme.primary)
+                    Icon(Icons.AutoMirrored.Filled.CompareArrows, contentDescription = "Compare", tint = MaterialTheme.colorScheme.primary)
                 }
                 val context = androidx.compose.ui.platform.LocalContext.current
                 IconButton(onClick = {
@@ -255,7 +258,7 @@ fun MonthlyReport(
                         .padding(horizontal = 8.dp, vertical = 4.dp)
                 ) {
                     Icon(
-                        imageVector = if (percentChange > 0) Icons.Default.ArrowOutward else Icons.Default.CallReceived, // Using CallReceived as arrow down right approx
+                        imageVector = if (percentChange > 0) Icons.Default.ArrowOutward else Icons.AutoMirrored.Filled.CallReceived, // Using CallReceived as arrow down right approx
                         contentDescription = null,
                         tint = if (percentChange > 0) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onPrimaryContainer,
                         modifier = Modifier.size(16.dp)

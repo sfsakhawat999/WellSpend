@@ -18,6 +18,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -30,6 +32,7 @@ import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -105,14 +108,14 @@ fun MainScreen(viewModel: MainViewModel) {
     val context = LocalContext.current
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
         if (uri != null) {
-            viewModel.exportData(uri, context.contentResolver) { success, message ->
+            viewModel.exportData(uri, context.contentResolver) { _, message ->
                 android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
             }
         }
     }
     val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
-            viewModel.importData(uri, context.contentResolver) { success, message ->
+            viewModel.importData(uri, context.contentResolver) { _, message ->
                 android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
             }
         }
@@ -251,7 +254,7 @@ fun TopBar(
             }
             IconButton(onClick = onToggleView) {
                 Icon(
-                    imageVector = if (isListView) Icons.Default.BarChart else Icons.Default.List,
+                    imageVector = if (isListView) Icons.Default.BarChart else Icons.AutoMirrored.Filled.List,
                     contentDescription = "Toggle View",
                     tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                 )
@@ -281,7 +284,7 @@ fun DashboardScreen(
             isListView = false
         )
 
-        Column(modifier = Modifier.fillMaxSize()) {
+        Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
             DonutChart(
                 data = chartData,
                 totalAmount = totalSpend,
@@ -383,6 +386,7 @@ fun DashboardScreen(
                     }
                 }
             }
+            Spacer(modifier = Modifier.height(96.dp))
         }
     }
 }

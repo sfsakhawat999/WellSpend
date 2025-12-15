@@ -42,6 +42,7 @@ import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.Face
 import androidx.compose.material.icons.filled.VolunteerActivism
 import androidx.compose.material.icons.filled.TrendingUp
+import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.filled.LocalGroceryStore
 import androidx.compose.material.icons.filled.Checkroom
 import androidx.compose.material.icons.filled.Devices
@@ -107,7 +108,7 @@ val CategoryIcons = mapOf(
     Category.Fitness to Icons.Default.FitnessCenter,
     Category.Beauty to Icons.Default.Face,
     Category.Donations to Icons.Default.VolunteerActivism,
-    Category.Investments to Icons.Default.TrendingUp,
+    Category.Investments to Icons.AutoMirrored.Filled.TrendingUp,
     Category.Groceries to Icons.Default.LocalGroceryStore,
     Category.Clothing to Icons.Default.Checkroom,
     Category.Electronics to Icons.Default.Devices,
