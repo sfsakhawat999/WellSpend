@@ -1,0 +1,614 @@
+package com.h2.wellspend
+
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.ExperimentalAnimationApi
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.BarChart
+import androidx.compose.material.icons.filled.ChevronLeft
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.h2.wellspend.data.Category
+import com.h2.wellspend.ui.CategoryColors
+import com.h2.wellspend.ui.components.AddExpenseForm
+import com.h2.wellspend.ui.components.ChartData
+import com.h2.wellspend.ui.components.DonutChart
+import com.h2.wellspend.ui.components.ExpenseList
+import com.h2.wellspend.ui.components.MonthlyReport
+import com.h2.wellspend.ui.AccountScreen
+import com.h2.wellspend.data.Expense
+import androidx.compose.material.icons.filled.AccountBalanceWallet
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.FilterChip
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.MoreHoriz
+import androidx.compose.material.icons.filled.AccountBalance
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import com.h2.wellspend.ui.components.MoreScreen
+import com.h2.wellspend.ui.components.SettingsScreen
+import com.h2.wellspend.ui.components.BudgetScreen
+
+
+enum class Screen {
+    HOME, ACCOUNTS, EXPENSES, MORE
+}
+
+@Composable
+fun MainScreen(viewModel: MainViewModel) {
+    var currentDate by remember { mutableStateOf(LocalDate.now()) }
+    var expenseToEdit by remember { mutableStateOf<Expense?>(null) }
+    val listState = rememberLazyListState()
+    
+    // Navigation State
+    var currentScreen by remember { mutableStateOf(Screen.HOME) }
+    // Overlay States (Sub-screens)
+    var showAddExpense by remember { mutableStateOf(false) }
+    var showReport by remember { mutableStateOf(false) }
+    var showBudgets by remember { mutableStateOf(false) }
+    var showSettings by remember { mutableStateOf(false) }
+    var showDataManagement by remember { mutableStateOf(false) } // Maps to Settings for now
+
+    // Data
+    val expenses by viewModel.expenses.collectAsState(initial = emptyList())
+    val budgets by viewModel.budgets.collectAsState(initial = emptyList())
+    val currency by viewModel.currency.collectAsState(initial = "$")
+    val themeMode by viewModel.themeMode.collectAsState(initial = "SYSTEM")
+    val dynamicColor by viewModel.dynamicColor.collectAsState(initial = false)
+    val accounts by viewModel.accounts.collectAsState(initial = emptyList())
+    val balances by viewModel.accountBalances.collectAsState(initial = emptyMap())
+
+    // Handle back button
+    androidx.activity.compose.BackHandler {
+        when {
+            showAddExpense -> showAddExpense = false
+            showReport -> showReport = false
+            showBudgets -> showBudgets = false
+            showSettings -> showSettings = false
+            currentScreen != Screen.HOME -> currentScreen = Screen.HOME
+            else -> { /* Exit app handled by system */ }
+        }
+    }
+
+    // Filter expenses for current month
+    val currentMonthExpenses = expenses.filter {
+        val date = try { LocalDate.parse(it.date.take(10)) } catch(e:Exception) { LocalDate.now() }
+        date.month == currentDate.month && date.year == currentDate.year
+    }
+
+    val totalSpend = currentMonthExpenses.sumOf { it.amount + it.feeAmount }
+
+    val expensesByCat = currentMonthExpenses.groupBy { it.category }
+    val chartDataList = expensesByCat.map { (cat, list) ->
+        ChartData(
+            name = cat.name,
+            value = list.sumOf { it.amount },
+            color = CategoryColors[cat] ?: Color.Gray
+        )
+    }.toMutableList()
+
+    val totalFees = currentMonthExpenses.sumOf { it.feeAmount }
+    if (totalFees > 0) {
+        chartDataList.add(
+            ChartData(
+                name = Category.TransactionFee.name,
+                value = totalFees,
+                color = CategoryColors[Category.TransactionFee] ?: Color.Gray
+            )
+        )
+    }
+    val chartData = chartDataList.sortedByDescending { it.value }
+
+    val context = LocalContext.current
+    val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        if (uri != null) {
+            viewModel.exportData(uri, context.contentResolver) { _, message ->
+                android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            viewModel.importData(uri, context.contentResolver) { _, message ->
+                android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
+        bottomBar = {
+            if (!showAddExpense && !showReport && !showBudgets && !showSettings) {
+                NavigationBar(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    tonalElevation = 0.dp
+                ) {
+                    NavigationBarItem(
+                        selected = currentScreen == Screen.HOME,
+                        onClick = { currentScreen = Screen.HOME },
+                        icon = { Icon(Icons.Default.Home, contentDescription = "Home") },
+                        label = { Text("Home") }
+                    )
+                    NavigationBarItem(
+                        selected = currentScreen == Screen.ACCOUNTS,
+                        onClick = { currentScreen = Screen.ACCOUNTS },
+                        icon = { Icon(Icons.Default.AccountBalance, contentDescription = "Accounts") },
+                        label = { Text("Accounts") }
+                    )
+                    NavigationBarItem(
+                        selected = currentScreen == Screen.EXPENSES,
+                        onClick = { currentScreen = Screen.EXPENSES },
+                        icon = { Icon(Icons.AutoMirrored.Filled.List, contentDescription = "Expenses") },
+                        label = { Text("Expenses") }
+                    )
+                    NavigationBarItem(
+                        selected = currentScreen == Screen.MORE,
+                        onClick = { currentScreen = Screen.MORE },
+                        icon = { Icon(Icons.Default.MoreHoriz, contentDescription = "More") },
+                        label = { Text("More") }
+                    )
+                }
+            }
+        },
+        floatingActionButton = {
+            if ((currentScreen == Screen.HOME || currentScreen == Screen.EXPENSES) && !showAddExpense && !showReport && !showBudgets && !showSettings) {
+                FloatingActionButton(
+                    onClick = { 
+                        expenseToEdit = null
+                        showAddExpense = true
+                    },
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = "Add Expense")
+                }
+            }
+        }
+    ) { paddingValues ->
+        Box(modifier = Modifier.padding(paddingValues).fillMaxSize()) {
+            when {
+                showAddExpense -> {
+                    val categoryOrder by viewModel.categoryOrder.collectAsState()
+                    AddExpenseForm(
+                        currency = currency,
+                        accounts = accounts,
+                        categories = categoryOrder,
+                        initialExpense = expenseToEdit,
+                        onAdd = { amount, desc, cat, date, isRecurring, freq, type, accId, targetAccId, fee, feeName ->
+                            if (expenseToEdit != null) {
+                                viewModel.updateExpense(
+                                    id = expenseToEdit!!.id, 
+                                    amount = amount, 
+                                    description = desc, 
+                                    category = cat, 
+                                    date = date, 
+                                    isRecurring = isRecurring, 
+                                    frequency = freq,
+                                    transactionType = type,
+                                    accountId = accId,
+                                    targetAccountId = targetAccId,
+                                    feeAmount = fee,
+                                    feeConfigName = feeName
+                                )
+                            } else {
+                                viewModel.addExpense(
+                                    amount = amount, 
+                                    description = desc, 
+                                    category = cat, 
+                                    date = date, 
+                                    isRecurring = isRecurring, 
+                                    frequency = freq,
+                                    transactionType = type,
+                                    accountId = accId,
+                                    targetAccountId = targetAccId,
+                                    feeAmount = fee,
+                                    feeConfigName = feeName
+                                )
+                            }
+                            showAddExpense = false
+                        },
+                        onCancel = { showAddExpense = false },
+                        onReorder = { viewModel.updateCategoryOrder(it) }
+                    )
+                }
+                showReport -> {
+                    MonthlyReport(
+                        expenses = expenses,
+                        currency = currency,
+                        currentDate = currentDate,
+                        onBack = { showReport = false }
+                    )
+                }
+                showBudgets -> {
+                     BudgetScreen(
+                        currentBudgets = budgets,
+                        currency = currency,
+                        onSave = { newBudgets ->
+                             viewModel.updateBudgets(newBudgets, currency)
+                        },
+                        onBack = { showBudgets = false }
+                     )
+                }
+                showSettings -> {
+                     SettingsScreen(
+                        currentCurrency = currency,
+                        currentThemeMode = themeMode,
+                        currentDynamicColor = dynamicColor,
+                        onCurrencyChange = { newCurrency ->
+                             viewModel.updateBudgets(emptyList(), newCurrency)
+                        },
+                        onThemeModeChange = { viewModel.updateThemeMode(it) },
+                        onDynamicColorChange = { viewModel.updateDynamicColor(it) },
+                        onExport = { 
+                            val timestamp = java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd_HHmm"))
+                            exportLauncher.launch("wellspend_backup_$timestamp.json") 
+                        },
+                        onImport = { importLauncher.launch(arrayOf("application/json")) },
+                        onBack = { showSettings = false }
+                     )
+                }
+                else -> {
+                    // Main Screens
+                    when (currentScreen) {
+                        Screen.HOME -> {
+                             DashboardScreen(
+                                currentDate = currentDate,
+                                onDateChange = { currentDate = it },
+                                onReportClick = { showReport = true },
+                                onChartClick = { currentScreen = Screen.EXPENSES },
+                                chartData = chartData,
+                                totalSpend = totalSpend,
+                                currency = currency,
+                                budgets = budgets,
+                                onBudgetClick = { showBudgets = true },
+                                accounts = accounts,
+                                accountBalances = balances,
+                                onAccountClick = { currentScreen = Screen.ACCOUNTS }
+                            )
+                        }
+                        Screen.ACCOUNTS -> {
+                             AccountScreen(
+                                accounts = accounts,
+                                balances = balances,
+                                currency = currency,
+                                onAddAccount = { viewModel.addAccount(it) },
+                                onUpdateAccount = { viewModel.addAccount(it) },
+                                onDeleteAccount = { viewModel.deleteAccount(it) },
+                                isAccountUsed = { accountId -> expenses.any { it.accountId == accountId } }
+                             )
+                        }
+                        Screen.EXPENSES -> {
+                             ExpenseListScreen(
+                                currentDate = currentDate,
+                                onDateChange = { currentDate = it },
+                                onReportClick = { showReport = true },
+                                expenses = currentMonthExpenses,
+                                currency = currency,
+                                onDelete = { viewModel.deleteExpense(it) },
+                                onEdit = { 
+                                    expenseToEdit = it
+                                    showAddExpense = true
+                                },
+                                state = listState
+                            )
+                        }
+                        Screen.MORE -> {
+                             MoreScreen(
+                                 onReportClick = { showReport = true },
+                                 onBudgetsClick = { showBudgets = true },
+                                 onSettingsClick = { showSettings = true },
+                                 onDataManagementClick = { showSettings = true } // Maps to Settings for now
+                             )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun TopBar(
+    currentDate: LocalDate,
+    onDateChange: (LocalDate) -> Unit,
+    onReportClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = { onDateChange(currentDate.minusMonths(1)) }) {
+                Icon(Icons.Default.ChevronLeft, contentDescription = "Prev Month", tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+            }
+            Text(
+                text = currentDate.format(DateTimeFormatter.ofPattern("MMMM yyyy")),
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                fontWeight = FontWeight.Bold
+            )
+            IconButton(onClick = { onDateChange(currentDate.plusMonths(1)) }) {
+                Icon(Icons.Default.ChevronRight, contentDescription = "Next Month", tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+            }
+        }
+
+        IconButton(onClick = onReportClick) {
+            Icon(Icons.Default.Description, contentDescription = "Report", tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+        }
+    }
+}
+
+@Composable
+fun DashboardScreen(
+    currentDate: LocalDate,
+    onDateChange: (LocalDate) -> Unit,
+    onReportClick: () -> Unit,
+    onChartClick: () -> Unit,
+    chartData: List<ChartData>,
+    totalSpend: Double,
+    currency: String,
+    budgets: List<com.h2.wellspend.data.Budget>,
+    onBudgetClick: () -> Unit,
+    accounts: List<com.h2.wellspend.data.Account>,
+    accountBalances: Map<String, Double>,
+    onAccountClick: () -> Unit
+) {
+    Column(modifier = Modifier.fillMaxSize()) {
+        TopBar(
+            currentDate = currentDate,
+            onDateChange = onDateChange,
+            onReportClick = onReportClick
+        )
+
+        Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+            DonutChart(
+                data = chartData,
+                totalAmount = totalSpend,
+                currency = currency,
+                onCenterClick = onChartClick
+            )
+            
+            // Accounts Section
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "ACCOUNTS",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.sp
+                    )
+                }
+                
+                if (accounts.isEmpty()) {
+                     Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
+                            .clickable { onAccountClick() }
+                            .padding(16.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("No accounts. Add one.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                } else {
+                    Row(
+                        modifier = Modifier.horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        accounts.forEach { acc ->
+                             // Calculate Balance (Incomplete: Currently only initialBalance is shown properly without full calculation logic in VM)
+                             // Ideally we should pass a Map<String, Double> of balances or enrich Account object.
+                             // For now, let's just show initialBalance as placeholder or just name.
+                             // Actually, user wants to see balances. 
+                             // I should assume the Account entity or a separate flow provides the calculated balance.
+                             // But my repository only provides `getAllAccounts` which returns `List<Account>`. 
+                             // The `Account` entity only has `initialBalance`.
+                             // Wait, I missed the balance calculation logic in Repository!
+                             // My plan said: "Implement Repository Logic (Balances...)".
+                             // I checked `WellSpendRepository.kt` in the beginning and it had `getAllAccounts`.
+                             // Did I implement `getAccountBalances`?
+                             // I need to check `WellSpendRepository.kt`.
+                             // If I didn't, I need to do it.
+                             // For now, I'll display "Tap to see balance" or just initial balance.
+                             // Actually, let's display the name and a placeholder.
+                             
+                             Card(
+                                shape = RoundedCornerShape(16.dp),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                                elevation = CardDefaults.cardElevation(2.dp),
+                                modifier = Modifier.width(140.dp)
+                             ) {
+                                 Column(modifier = Modifier.padding(16.dp)) {
+                                     Text(acc.name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, maxLines = 1)
+                                     Spacer(modifier = Modifier.height(8.dp))
+                                     val bal = accountBalances[acc.id] ?: acc.initialBalance
+                                     Text("$currency${String.format("%.2f", bal)}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                 }
+                             }
+                        }
+                    }
+                }
+            }
+
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "SPENDING & BUDGETS",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.sp
+                    )
+                }
+
+                // Budget List
+                if (chartData.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
+                            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(12.dp))
+                            .padding(24.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("No expenses this month. Tap + to add one.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                } else {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        chartData.forEach { item ->
+                            val budget = budgets.find { it.category.name == item.name }
+                            val limit = budget?.limitAmount ?: 0.0
+                            val percent = if (limit > 0) (item.value / limit) * 100 else 0.0
+                            val isOver = limit > 0 && item.value > limit
+
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(12.dp))
+                                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(12.dp))
+                                    .padding(16.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Box(modifier = Modifier.size(12.dp).background(item.color, CircleShape))
+                                        Spacer(modifier = Modifier.size(8.dp))
+                                        Text(item.name, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Medium)
+                                    }
+                                    Text("$currency${String.format("%.2f", item.value)}", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold)
+                                }
+
+                                if (limit > 0) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
+                                        horizontalArrangement = Arrangement.End
+                                    ) {
+                                        Text(
+                                            text = if (isOver) "Over Budget" else "${percent.toInt()}% of $currency${String.format("%.2f", limit)}",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = if (isOver) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                    // Progress Bar
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(8.dp)
+                                            .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(4.dp))
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth(minOf(percent / 100, 1.0).toFloat())
+                                                .height(8.dp)
+                                                .background(if (isOver) MaterialTheme.colorScheme.error else item.color, RoundedCornerShape(4.dp))
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(96.dp))
+        }
+    }
+}
+
+@Composable
+fun ExpenseListScreen(
+    currentDate: LocalDate,
+    onDateChange: (LocalDate) -> Unit,
+    onReportClick: () -> Unit,
+    expenses: List<com.h2.wellspend.data.Expense>,
+    currency: String,
+    onDelete: (String) -> Unit,
+    onEdit: (Expense) -> Unit,
+    state: LazyListState
+) {
+    Column(modifier = Modifier.fillMaxSize()) {
+        TopBar(
+            currentDate = currentDate,
+            onDateChange = onDateChange,
+            onReportClick = onReportClick
+        )
+        ExpenseList(
+            expenses = expenses,
+            currency = currency,
+            onDelete = onDelete,
+            onEdit = onEdit,
+            state = state
+        )
+    }
+}
