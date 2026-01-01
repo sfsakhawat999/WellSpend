@@ -263,6 +263,7 @@ class MainViewModel(
             // Unlink expenses first
             val allExpenses = repository.getAllExpensesOneShot()
             val expensesToUpdate = mutableListOf<Expense>()
+            val expensesToDelete = mutableListOf<Expense>()
             
             allExpenses.forEach { expense ->
                 var modified = false
@@ -270,6 +271,13 @@ class MainViewModel(
                 
                 // Case 1: Account is the source
                 if (expense.accountId == account.id) {
+                    // Start of request: "delete income histories"
+                    if (expense.transactionType == com.h2.wellspend.data.TransactionType.INCOME) {
+                        expensesToDelete.add(expense)
+                        return@forEach // Skip update logic for this item
+                    }
+                    // End of request
+
                     // Default behavior: Unlink source
                     // If it was a Transfer, it remains a Transfer (from "null" source)
                     newExpense = newExpense.copy(accountId = null)
@@ -294,6 +302,10 @@ class MainViewModel(
                 }
             }
             
+            if (expensesToDelete.isNotEmpty()) {
+                repository.deleteExpenses(expensesToDelete)
+            }
+
             if (expensesToUpdate.isNotEmpty()) {
                 repository.addExpenses(expensesToUpdate)
             }

@@ -24,6 +24,10 @@ class WellSpendRepository(private val database: AppDatabase) {
         database.expenseDao().deleteExpenseById(id)
     }
 
+    suspend fun deleteExpenses(expenses: List<Expense>) {
+        database.expenseDao().deleteExpenses(expenses)
+    }
+
     suspend fun setBudget(budget: Budget) {
         database.budgetDao().insertBudget(budget)
     }
