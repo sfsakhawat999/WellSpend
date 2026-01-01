@@ -270,6 +270,7 @@ class MainViewModel(
                 
                 // Case 1: Account is the source
                 if (expense.accountId == account.id) {
+                    // Default behavior: Unlink source
                     newExpense = newExpense.copy(accountId = null)
                     modified = true
                     
@@ -277,7 +278,11 @@ class MainViewModel(
                     // It implies money appeared in Target from "Nowhere".
                     // Convert to INCOME for the target account.
                     if (expense.transactionType == com.h2.wellspend.data.TransactionType.TRANSFER) {
-                        newExpense = newExpense.copy(transactionType = com.h2.wellspend.data.TransactionType.INCOME)
+                        newExpense = newExpense.copy(
+                            transactionType = com.h2.wellspend.data.TransactionType.INCOME,
+                            accountId = expense.transferTargetAccountId, // Target becomes the owner (Income Receiver)
+                            transferTargetAccountId = null
+                        )
                     }
                 }
                 
