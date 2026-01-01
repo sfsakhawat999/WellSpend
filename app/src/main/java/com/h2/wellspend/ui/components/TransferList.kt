@@ -66,8 +66,8 @@ fun TransferList(
             items(transfers) { transfer ->
                 TransferItem(
                     transfer = transfer,
-                    fromAccountName = accounts.find { it.id == transfer.accountId }?.name ?: "Unknown",
-                    toAccountName = accounts.find { it.id == transfer.transferTargetAccountId }?.name ?: "Unknown",
+                    fromAccountName = accounts.find { it.id == transfer.accountId }?.name ?: "Deleted Account",
+                    toAccountName = accounts.find { it.id == transfer.transferTargetAccountId }?.name ?: "Deleted Account",
                     currency = currency,
                     onEdit = onEdit,
                     onDelete = onDelete
