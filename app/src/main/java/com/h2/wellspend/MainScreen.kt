@@ -29,18 +29,21 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AttachMoney
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Description
-import androidx.compose.material.icons.filled.List
-import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.automirrored.filled.List as ListIcon
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -89,7 +92,7 @@ import com.h2.wellspend.ui.components.BudgetScreen
 
 
 enum class Screen {
-    HOME, ACCOUNTS, EXPENSES, MORE
+    HOME, ACCOUNTS, INCOME, EXPENSES, MORE
 }
 
 @Composable
@@ -105,6 +108,7 @@ fun MainScreen(viewModel: MainViewModel) {
     var showReport by remember { mutableStateOf(false) }
     var showBudgets by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
+    var showTransfers by remember { mutableStateOf(false) }
     var showDataManagement by remember { mutableStateOf(false) } // Maps to Settings for now
 
     // Data
@@ -123,29 +127,37 @@ fun MainScreen(viewModel: MainViewModel) {
             showReport -> showReport = false
             showBudgets -> showBudgets = false
             showSettings -> showSettings = false
+            showTransfers -> showTransfers = false
             currentScreen != Screen.HOME -> currentScreen = Screen.HOME
             else -> { /* Exit app handled by system */ }
         }
     }
 
-    // Filter expenses for current month
-    val currentMonthExpenses = expenses.filter {
+    // Filter transactions for current month
+    val currentMonthTransactions = expenses.filter {
         val date = try { LocalDate.parse(it.date.take(10)) } catch(e:Exception) { LocalDate.now() }
         date.month == currentDate.month && date.year == currentDate.year
     }
 
-    val totalSpend = currentMonthExpenses.sumOf { it.amount + it.feeAmount }
+    // Calculate Total Spend: (All Expenses Base Amount) + (All Fees from any transaction type)
+    val totalSpend = currentMonthTransactions.filter { it.transactionType == com.h2.wellspend.data.TransactionType.EXPENSE }.sumOf { it.amount } + 
+                     currentMonthTransactions.sumOf { it.feeAmount }
 
-    val expensesByCat = currentMonthExpenses.groupBy { it.category }
+    // For Chart: Only include explicitly categorized EXPENSES (exclude Income/Transfer base amounts)
+    val expensesByCat = currentMonthTransactions
+        .filter { it.transactionType == com.h2.wellspend.data.TransactionType.EXPENSE }
+        .groupBy { it.category }
+        
     val chartDataList = expensesByCat.map { (cat, list) ->
         ChartData(
             name = cat.name,
-            value = list.sumOf { it.amount },
+            value = list.sumOf { it.amount }, // Fees are handled separately
             color = CategoryColors[cat] ?: Color.Gray
         )
     }.toMutableList()
 
-    val totalFees = currentMonthExpenses.sumOf { it.feeAmount }
+    // Add ALL fees (from Income, Transfer, and Expense) as a single "Transaction Fee" slice
+    val totalFees = currentMonthTransactions.sumOf { it.feeAmount }
     if (totalFees > 0) {
         chartDataList.add(
             ChartData(
@@ -176,7 +188,7 @@ fun MainScreen(viewModel: MainViewModel) {
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         bottomBar = {
-            if (!showAddExpense && !showReport && !showBudgets && !showSettings) {
+            if (!showAddExpense && !showReport && !showBudgets && !showSettings && !showTransfers) {
                 NavigationBar(
                     containerColor = MaterialTheme.colorScheme.surfaceVariant,
                     tonalElevation = 0.dp
@@ -194,9 +206,15 @@ fun MainScreen(viewModel: MainViewModel) {
                         label = { Text("Accounts") }
                     )
                     NavigationBarItem(
+                        selected = currentScreen == Screen.INCOME,
+                        onClick = { currentScreen = Screen.INCOME },
+                        icon = { Icon(Icons.Default.AttachMoney, contentDescription = "Income") },
+                        label = { Text("Income") }
+                    )
+                    NavigationBarItem(
                         selected = currentScreen == Screen.EXPENSES,
                         onClick = { currentScreen = Screen.EXPENSES },
-                        icon = { Icon(Icons.AutoMirrored.Filled.List, contentDescription = "Expenses") },
+                        icon = { Icon(Icons.AutoMirrored.Filled.ListIcon, contentDescription = "Expenses") },
                         label = { Text("Expenses") }
                     )
                     NavigationBarItem(
@@ -209,7 +227,7 @@ fun MainScreen(viewModel: MainViewModel) {
             }
         },
         floatingActionButton = {
-            if ((currentScreen == Screen.HOME || currentScreen == Screen.EXPENSES) && !showAddExpense && !showReport && !showBudgets && !showSettings) {
+            if ((currentScreen == Screen.HOME || currentScreen == Screen.EXPENSES || currentScreen == Screen.INCOME) && !showAddExpense && !showReport && !showBudgets && !showSettings && !showTransfers) {
                 FloatingActionButton(
                     onClick = { 
                         expenseToEdit = null
@@ -288,6 +306,22 @@ fun MainScreen(viewModel: MainViewModel) {
                         onBack = { showBudgets = false }
                      )
                 }
+                showTransfers -> {
+                    TransferListScreen(
+                        currentDate = currentDate,
+                        onDateChange = { currentDate = it },
+                        onReportClick = { showReport = true },
+                        expenses = currentMonthTransactions,
+                        accounts = accounts,
+                        currency = currency,
+                        onDelete = { viewModel.deleteExpense(it) },
+                        onEdit = { 
+                            expenseToEdit = it
+                            showAddExpense = true
+                        },
+                        onBack = { showTransfers = false }
+                    )
+                }
                 showSettings -> {
                      SettingsScreen(
                         currentCurrency = currency,
@@ -336,12 +370,28 @@ fun MainScreen(viewModel: MainViewModel) {
                                 isAccountUsed = { accountId -> expenses.any { it.accountId == accountId } }
                              )
                         }
+                        Screen.INCOME -> {
+                            IncomeListScreen(
+                                currentDate = currentDate,
+                                onDateChange = { currentDate = it },
+                                onReportClick = { showReport = true },
+                                expenses = currentMonthTransactions,
+                                accounts = accounts,
+                                currency = currency,
+                                onDelete = { viewModel.deleteExpense(it) },
+                                onEdit = { 
+                                    expenseToEdit = it
+                                    showAddExpense = true
+                                }
+                            )
+                        }
                         Screen.EXPENSES -> {
                              ExpenseListScreen(
                                 currentDate = currentDate,
                                 onDateChange = { currentDate = it },
                                 onReportClick = { showReport = true },
-                                expenses = currentMonthExpenses,
+                                expenses = currentMonthTransactions,
+                                accounts = accounts,
                                 currency = currency,
                                 onDelete = { viewModel.deleteExpense(it) },
                                 onEdit = { 
@@ -356,7 +406,8 @@ fun MainScreen(viewModel: MainViewModel) {
                                  onReportClick = { showReport = true },
                                  onBudgetsClick = { showBudgets = true },
                                  onSettingsClick = { showSettings = true },
-                                 onDataManagementClick = { showSettings = true } // Maps to Settings for now
+                                 onDataManagementClick = { showSettings = true }, // Maps to Settings for now
+                                 onTransfersClick = { showTransfers = true }
                              )
                         }
                     }
@@ -592,6 +643,7 @@ fun ExpenseListScreen(
     onDateChange: (LocalDate) -> Unit,
     onReportClick: () -> Unit,
     expenses: List<com.h2.wellspend.data.Expense>,
+    accounts: List<com.h2.wellspend.data.Account>,
     currency: String,
     onDelete: (String) -> Unit,
     onEdit: (Expense) -> Unit,
@@ -603,12 +655,93 @@ fun ExpenseListScreen(
             onDateChange = onDateChange,
             onReportClick = onReportClick
         )
+        
+        // Show Expenses ONLY (Transfers -> More > Transfers, Income -> Bottom Tab)
+        val expenseList = expenses.filter { 
+            it.transactionType == com.h2.wellspend.data.TransactionType.EXPENSE
+        }
         ExpenseList(
-            expenses = expenses,
+            expenses = expenseList,
             currency = currency,
             onDelete = onDelete,
             onEdit = onEdit,
             state = state
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun TransferListScreen(
+    currentDate: LocalDate,
+    onDateChange: (LocalDate) -> Unit,
+    onReportClick: () -> Unit,
+    expenses: List<com.h2.wellspend.data.Expense>,
+    accounts: List<com.h2.wellspend.data.Account>,
+    currency: String,
+    onDelete: (String) -> Unit,
+    onEdit: (Expense) -> Unit,
+    onBack: () -> Unit
+) {
+    Column(modifier = Modifier.fillMaxSize()) {
+        TopAppBar(
+            title = { Text("Transfers", fontWeight = FontWeight.Bold) },
+            navigationIcon = {
+                IconButton(onClick = onBack) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                }
+            },
+            colors = TopAppBarDefaults.topAppBarColors(
+                containerColor = MaterialTheme.colorScheme.background,
+                titleContentColor = MaterialTheme.colorScheme.onBackground
+            )
+        )
+        TopBar(
+            currentDate = currentDate,
+            onDateChange = onDateChange,
+            onReportClick = onReportClick
+        )
+        
+        // Filter only Transfers
+        val transfers = expenses.filter { it.transactionType == com.h2.wellspend.data.TransactionType.TRANSFER }
+        
+        com.h2.wellspend.ui.components.TransferList(
+            transfers = transfers,
+            accounts = accounts,
+            currency = currency,
+            onDelete = onDelete,
+            onEdit = onEdit
+        )
+    }
+}
+
+@Composable
+fun IncomeListScreen(
+    currentDate: LocalDate,
+    onDateChange: (LocalDate) -> Unit,
+    onReportClick: () -> Unit,
+    expenses: List<com.h2.wellspend.data.Expense>,
+    accounts: List<com.h2.wellspend.data.Account>,
+    currency: String,
+    onDelete: (String) -> Unit,
+    onEdit: (Expense) -> Unit
+) {
+    Column(modifier = Modifier.fillMaxSize()) {
+        TopBar(
+            currentDate = currentDate,
+            onDateChange = onDateChange,
+            onReportClick = onReportClick
+        )
+        
+        // Filter only Incomes
+        val incomes = expenses.filter { it.transactionType == com.h2.wellspend.data.TransactionType.INCOME }
+        
+        com.h2.wellspend.ui.components.IncomeList(
+            incomes = incomes,
+            accounts = accounts,
+            currency = currency,
+            onDelete = onDelete,
+            onEdit = onEdit
         )
     }
 }

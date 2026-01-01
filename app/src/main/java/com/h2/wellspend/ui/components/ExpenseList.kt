@@ -101,7 +101,9 @@ fun ExpenseList(
     val groupedExpenses = remember(displayExpenses) {
         displayExpenses.groupBy { it.category }
             .mapValues { entry ->
-                val total = entry.value.sumOf { it.amount }
+                val total = entry.value.filter { it.transactionType == com.h2.wellspend.data.TransactionType.EXPENSE }.sumOf { it.amount } +
+                            entry.value.sumOf { it.feeAmount } // Include fees for everything
+
                 val items = entry.value.sortedWith(
                     compareByDescending<Expense> { it.date.take(10) }
                         .thenByDescending { it.timestamp }
@@ -336,6 +338,7 @@ fun ExpenseItem(
     // Delete states
     var showDeleteDialog by remember { mutableStateOf(false) }
     var isVisible by remember { mutableStateOf(true) }
+    var deleteConfirmed by remember { mutableStateOf(false) }
 
     if (showDeleteDialog) {
         androidx.compose.material3.AlertDialog(
@@ -345,6 +348,7 @@ fun ExpenseItem(
             confirmButton = {
                 androidx.compose.material3.TextButton(
                     onClick = {
+                        deleteConfirmed = true
                         showDeleteDialog = false
                         isVisible = false
                     }
@@ -362,11 +366,9 @@ fun ExpenseItem(
 
     // Trigger actual delete after animation
     LaunchedEffect(isVisible) {
-        if (!isVisible) {
+        if (!isVisible && deleteConfirmed) {
             kotlinx.coroutines.delay(300) // Wait for animation
-            if (showDeleteDialog) { // Only delete if dialog confirmed
-                 onDelete(expense.id)
-            }
+            onDelete(expense.id)
         }
     }
 
@@ -456,17 +458,20 @@ fun ExpenseItem(
                         fontWeight = FontWeight.Medium
                     )
                     Text(
-                        text = formattedDate,
+                        text = formattedDate + if (expense.transactionType == com.h2.wellspend.data.TransactionType.INCOME) " • Income" else if (expense.transactionType == com.h2.wellspend.data.TransactionType.TRANSFER) " • Transfer" else "",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(top = 4.dp)
                     )
                 }
 
+                val amountPrefix = if (expense.transactionType == com.h2.wellspend.data.TransactionType.INCOME) "+ " else ""
+                val amountColor = if (expense.transactionType == com.h2.wellspend.data.TransactionType.INCOME) Color(0xFF10b981) else MaterialTheme.colorScheme.onSurface
+                
                 Text(
-                    text = "$currency${String.format("%.2f", expense.amount)}",
+                    text = "$amountPrefix$currency${String.format("%.2f", expense.amount)}",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    color = amountColor,
                     fontWeight = FontWeight.Medium
                 )
             }

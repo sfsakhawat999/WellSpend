@@ -68,36 +68,69 @@ fun MonthlyReport(
     var showCompareDialog by remember { mutableStateOf(false) }
     var comparisonDate by remember { mutableStateOf<LocalDate?>(null) }
 
-    val (currentTotal, prevTotal, percentChange, categoryData) = remember(expenses, currentDate, comparisonDate) {
-        val currentMonthExpenses = expenses.filter {
+    val (incomeTotal, expenseTotal, transferTotal, prevExpenseTotal, expensePercentChange, categoryData) = remember(expenses, currentDate, comparisonDate) {
+        // 1. Filter by Date first
+        val currentMonthTransactions = expenses.filter {
             val date = LocalDate.parse(it.date.substring(0, 10))
             date.month == currentDate.month && date.year == currentDate.year
         }
         
         // Use comparisonDate if set, otherwise default to previous month
         val prevDate = comparisonDate ?: currentDate.minusMonths(1)
-        val prevMonthExpenses = expenses.filter {
+        val prevMonthTransactions = expenses.filter {
             val date = LocalDate.parse(it.date.substring(0, 10))
             date.month == prevDate.month && date.year == prevDate.year
         }
 
-        val cTotal = currentMonthExpenses.sumOf { it.amount }
-        val pTotal = prevMonthExpenses.sumOf { it.amount }
-        val diff = cTotal - pTotal
-        val pChange = if (pTotal == 0.0) 100.0 else (diff / pTotal) * 100.0
+        // 2. Separate by Type for Current Month
+        val currentIncomes = currentMonthTransactions.filter { it.transactionType == com.h2.wellspend.data.TransactionType.INCOME }
+        val currentExpenses = currentMonthTransactions.filter { it.transactionType == com.h2.wellspend.data.TransactionType.EXPENSE }
+        val currentTransfers = currentMonthTransactions.filter { it.transactionType == com.h2.wellspend.data.TransactionType.TRANSFER }
 
-        val currentCatMap = currentMonthExpenses.groupBy { it.category }
-            .mapValues { it.value.sumOf { exp -> exp.amount } }
+        // Totals
+        val incTotal = currentIncomes.sumOf { it.amount }
+        // Expense Total = Expense Amount + ALL Fees (Expense Fees + Transfer Fees + Income Fees)
+        val allFees = currentMonthTransactions.sumOf { it.feeAmount }
+        val expTotal = currentExpenses.sumOf { it.amount } + allFees 
+        val trTotal = currentTransfers.sumOf { it.amount }
+
+        // 3. Comparison specific to EXPENSES (Base Amount + Fees)
+        val prevExpenses = prevMonthTransactions.filter { it.transactionType == com.h2.wellspend.data.TransactionType.EXPENSE }
+        val prevAllFees = prevMonthTransactions.sumOf { it.feeAmount }
+        val prevExpTotal = prevExpenses.sumOf { it.amount } + prevAllFees
         
-        val prevCatMap = prevMonthExpenses.groupBy { it.category }
-            .mapValues { it.value.sumOf { exp -> exp.amount } }
+        val diff = expTotal - prevExpTotal
+        val expChange = if (prevExpTotal == 0.0) 100.0 else (diff / prevExpTotal) * 100.0
+
+        // 4. Category Data (Expenses + Fees)
+        // Base Expenses
+        val currentCatMap = currentExpenses.groupBy { it.category }
+            .mapValues { it.value.sumOf { exp -> exp.amount + exp.feeAmount } }
+            .toMutableMap()
+            
+        // Add Non-Expense Fees to 'TransactionFee' or 'Others' category
+        val otherFees = currentIncomes.sumOf { it.feeAmount } + currentTransfers.sumOf { it.feeAmount }
+        if (otherFees > 0) {
+            val feeCat = com.h2.wellspend.data.Category.TransactionFee
+            currentCatMap[feeCat] = (currentCatMap[feeCat] ?: 0.0) + otherFees
+        }
+
+        val prevCatMap = prevExpenses.groupBy { it.category }
+            .mapValues { it.value.sumOf { exp -> exp.amount + exp.feeAmount } }
+            .toMutableMap()
+        
+        val prevOtherFees = prevMonthTransactions.filter { it.transactionType != com.h2.wellspend.data.TransactionType.EXPENSE }.sumOf { it.feeAmount }
+        if (prevOtherFees > 0) {
+            val feeCat = com.h2.wellspend.data.Category.TransactionFee
+            prevCatMap[feeCat] = (prevCatMap[feeCat] ?: 0.0) + prevOtherFees
+        }
 
         val catData = currentCatMap.map { (cat, amount) ->
             val prevAmount = prevCatMap[cat] ?: 0.0
             CategoryData(cat, amount, prevAmount)
         }.sortedByDescending { it.amount }
 
-        Quadruple(cTotal, pTotal, pChange, catData)
+        ReportData(incTotal, expTotal, trTotal, prevExpTotal, expChange, catData)
     }
 
     // Available months for comparison
@@ -175,9 +208,14 @@ fun MonthlyReport(
                     }
                     val context = androidx.compose.ui.platform.LocalContext.current
                     IconButton(onClick = {
-                        val csvHeader = "Date,Category,Amount,Description,Recurring\n"
-                        val csvData = expenses.joinToString("\n") {
-                            "${it.date},${it.category.name},${it.amount},${it.description},${it.isRecurring}"
+                        val reportExpenses = expenses.filter {
+                            val date = LocalDate.parse(it.date.substring(0, 10))
+                            date.month == currentDate.month && date.year == currentDate.year
+                        }
+                        
+                        val csvHeader = "Date,Category,Type,Amount,Fee,Description,Recurring\n"
+                        val csvData = reportExpenses.joinToString("\n") {
+                            "${it.date},${it.category.name},${it.transactionType},${it.amount},${it.feeAmount},${it.description},${it.isRecurring}"
                         }
                         val csvContent = csvHeader + csvData
 
@@ -242,44 +280,79 @@ fun MonthlyReport(
                     letterSpacing = 1.sp
                 )
                 Text(
-                    text = "$currency${String.format("%.2f", currentTotal)}",
+                    text = "Total Spending",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                    modifier = Modifier.padding(top = 8.dp)
+                )
+                Text(
+                    text = "$currency${String.format("%.2f", expenseTotal)}",
                     style = MaterialTheme.typography.headlineLarge,
                     color = MaterialTheme.colorScheme.onSurface,
                     fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(vertical = 8.dp)
+                    modifier = Modifier.padding(bottom = 8.dp)
                 )
 
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
                         .background(
-                            if (percentChange > 0) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.primaryContainer,
+                            if (expensePercentChange > 0) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.primaryContainer,
                             RoundedCornerShape(100.dp)
                         )
                         .padding(horizontal = 8.dp, vertical = 4.dp)
                 ) {
                     Icon(
-                        imageVector = if (percentChange > 0) Icons.Default.ArrowOutward else Icons.AutoMirrored.Filled.CallReceived, // Using CallReceived as arrow down right approx
+                        imageVector = if (expensePercentChange > 0) Icons.Default.ArrowOutward else Icons.AutoMirrored.Filled.CallReceived, 
                         contentDescription = null,
-                        tint = if (percentChange > 0) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onPrimaryContainer,
+                        tint = if (expensePercentChange > 0) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onPrimaryContainer,
                         modifier = Modifier.size(16.dp)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        text = "${String.format("%.1f", abs(percentChange))}% vs ${
-                            (comparisonDate ?: currentDate.minusMonths(1)).format(DateTimeFormatter.ofPattern("MMM yyyy"))
+                        text = "${String.format("%.1f", abs(expensePercentChange))}% vs ${
+                            (comparisonDate ?: currentDate.minusMonths(1)).format(DateTimeFormatter.ofPattern("MMM"))
                         }",
                         style = MaterialTheme.typography.bodySmall,
-                        color = if (percentChange > 0) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onPrimaryContainer,
+                        color = if (expensePercentChange > 0) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onPrimaryContainer,
                         fontWeight = FontWeight.Medium
                     )
                 }
-                Text(
-                    text = "Previous: $currency${String.format("%.2f", prevTotal)}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 8.dp)
-                )
+                
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                // Income and Transfer Summary
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            text = "Income",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = "+$currency${String.format("%.2f", incomeTotal)}",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = Color(0xFF10b981), // Green
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            text = "Transfers",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = "$currency${String.format("%.2f", transferTotal)}",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = Color(0xFF8b5cf6), // Violet
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
             }
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -396,5 +469,12 @@ fun MonthlyReport(
     }
 }
 
-data class Quadruple<A, B, C, D>(val first: A, val second: B, val third: C, val fourth: D)
+data class ReportData(
+    val income: Double,
+    val expense: Double,
+    val transfer: Double,
+    val prevExpense: Double,
+    val expenseChange: Double,
+    val categoryData: List<CategoryData>
+)
 data class CategoryData(val category: Category, val amount: Double, val prevAmount: Double)

@@ -15,17 +15,19 @@ Track expenses, manage multiple accounts, set budgets, and gain insights into yo
 *   **Safe Deletion**: Smart handling of deleted accounts—orphan transactions are preserved and labeled.
 
 ### 💸 Expense & Income Tracking
-*   **Transaction Types**: Support for **Expenses**, **Income**, and **Transfers**.
+*   **Dedicated Desks**: Separate tabs for **Income** and **Expenses**, with a dedicated page for **Transfers**.
+*   **Transaction Types**: Support for Expenses, Income, and Transfers with "From/To" account tracking.
 *   **Recurring Transactions**: Set up automatic weekly or monthly recurring bills and salary.
-*   **Transaction Fees**: Track extra fees separately from the base amount (e.g., ATM fees, transfer charges).
+*   **Transaction Fees**: Track extra fees separately from the base amount, included in total spending stats.
 *   **Smart Categorization**: Extensive list of built-in categories with color-coded icons.
 *   **Swipe Actions**: Quickly **Edit** or **Delete** transactions and accounts with simple swipe gestures.
 
 ### 📊 Budgets & Analytics
 *   **Budgeting**: Set monthly spending limits for each category.
-*   **Visual Indicators**: Real-time progress bars show how close you are to your limit (turning red when exceeded).
-*   **Donut Chart**: Beautiful visualization of your monthly spending breakdown.
-*   **Monthly Reports**: detailed summary comparing your spending to the previous month.
+*   **Visual Indicators**: Real-time progress bars show how close you are to your limit.
+*   **Donut Chart**: Beautiful visualization of your monthly spending breakdown (Expenses only).
+*   **Monthly Reports**: detailed summary comparing Spending vs Income, with trend arrows.
+*   **CSV Export**: Export detailed monthly reports including fees and categories for external analysis.
 
 ### 🎨 Modern UI/UX
 *   **Material 3 Design**: Fully compliant with the latest Material Design guidelines.
@@ -35,7 +37,7 @@ Track expenses, manage multiple accounts, set budgets, and gain insights into yo
 
 ### 💾 Data & Privacy
 *   **Offline First**: 100% local storage using **Room Database**. No internet required, no data collection.
-*   **Backup & Restore**: Export your data to a secure JSON file and restore it anytime.
+*   **Backup & Restore**: Export full database backups (JSON) and restore anytime.
     *   *Backward compatible with older backup files.*
 
 ---

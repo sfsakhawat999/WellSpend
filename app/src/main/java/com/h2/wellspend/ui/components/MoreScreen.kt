@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Description
@@ -45,7 +46,8 @@ fun MoreScreen(
     onReportClick: () -> Unit,
     onBudgetsClick: () -> Unit,
     onSettingsClick: () -> Unit,
-    onDataManagementClick: () -> Unit
+    onDataManagementClick: () -> Unit,
+    onTransfersClick: () -> Unit
 ) {
     Scaffold(
         content = { padding ->
@@ -72,6 +74,15 @@ fun MoreScreen(
                     subtitle = "Manage category spending limits",
                     onClick = onBudgetsClick,
                     color = Color(0xFF10b981) // Emerald
+                )
+
+                // New Transfer Menu Item
+                MoreMenuItem(
+                    icon = Icons.AutoMirrored.Filled.ArrowForward,
+                    title = "Transfers",
+                    subtitle = "View account transfers",
+                    onClick = onTransfersClick,
+                    color = Color(0xFF8b5cf6) // Violet (distinct from others)
                 )
 
                 MoreMenuItem(
