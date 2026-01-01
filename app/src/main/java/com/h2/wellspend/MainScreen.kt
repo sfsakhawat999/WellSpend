@@ -8,6 +8,9 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -121,7 +124,8 @@ fun MainScreen(viewModel: MainViewModel) {
     val balances by viewModel.accountBalances.collectAsState(initial = emptyMap())
 
     // Handle back button
-    androidx.activity.compose.BackHandler {
+    val canNavigateBack = showAddExpense || showReport || showBudgets || showSettings || showTransfers || currentScreen != Screen.HOME
+    androidx.activity.compose.BackHandler(enabled = canNavigateBack) {
         when {
             showAddExpense -> showAddExpense = false
             showReport -> showReport = false
@@ -129,7 +133,6 @@ fun MainScreen(viewModel: MainViewModel) {
             showSettings -> showSettings = false
             showTransfers -> showTransfers = false
             currentScreen != Screen.HOME -> currentScreen = Screen.HOME
-            else -> { /* Exit app handled by system */ }
         }
     }
 
@@ -243,176 +246,190 @@ fun MainScreen(viewModel: MainViewModel) {
         }
     ) { paddingValues ->
         Box(modifier = Modifier.padding(paddingValues).fillMaxSize()) {
-            when {
-                showAddExpense -> {
-                    val categoryOrder by viewModel.categoryOrder.collectAsState()
-                    AddExpenseForm(
-                        currency = currency,
-                        accounts = accounts,
-                        categories = categoryOrder,
-                        initialExpense = expenseToEdit,
-                        onAdd = { amount, desc, cat, date, isRecurring, freq, type, accId, targetAccId, fee, feeName ->
-                            if (expenseToEdit != null) {
-                                viewModel.updateExpense(
-                                    id = expenseToEdit!!.id, 
-                                    amount = amount, 
-                                    description = desc, 
-                                    category = cat, 
-                                    date = date, 
-                                    isRecurring = isRecurring, 
-                                    frequency = freq,
-                                    transactionType = type,
-                                    accountId = accId,
-                                    targetAccountId = targetAccId,
-                                    feeAmount = fee,
-                                    feeConfigName = feeName
-                                )
-                            } else {
-                                viewModel.addExpense(
-                                    amount = amount, 
-                                    description = desc, 
-                                    category = cat, 
-                                    date = date, 
-                                    isRecurring = isRecurring, 
-                                    frequency = freq,
-                                    transactionType = type,
-                                    accountId = accId,
-                                    targetAccountId = targetAccId,
-                                    feeAmount = fee,
-                                    feeConfigName = feeName
-                                )
-                            }
-                            showAddExpense = false
-                        },
-                        onCancel = { showAddExpense = false },
-                        onReorder = { viewModel.updateCategoryOrder(it) }
-                    )
-                }
-                showReport -> {
-                    MonthlyReport(
-                        expenses = expenses,
-                        currency = currency,
-                        currentDate = currentDate,
-                        onBack = { showReport = false }
-                    )
-                }
-                showBudgets -> {
-                     BudgetScreen(
-                        currentBudgets = budgets,
-                        currency = currency,
-                        onSave = { newBudgets ->
-                             viewModel.updateBudgets(newBudgets, currency)
-                        },
-                        onBack = { showBudgets = false }
-                     )
-                }
-                showTransfers -> {
-                    TransferListScreen(
-                        currentDate = currentDate,
-                        onDateChange = { currentDate = it },
-                        onReportClick = { showReport = true },
-                        expenses = currentMonthTransactions,
-                        accounts = accounts,
-                        currency = currency,
-                        onDelete = { viewModel.deleteExpense(it) },
-                        onEdit = { 
-                            expenseToEdit = it
-                            showAddExpense = true
-                        },
-                        onBack = { showTransfers = false }
-                    )
-                }
-                showSettings -> {
-                     SettingsScreen(
-                        currentCurrency = currency,
-                        currentThemeMode = themeMode,
-                        currentDynamicColor = dynamicColor,
-                        onCurrencyChange = { newCurrency ->
-                             viewModel.updateBudgets(emptyList(), newCurrency)
-                        },
-                        onThemeModeChange = { viewModel.updateThemeMode(it) },
-                        onDynamicColorChange = { viewModel.updateDynamicColor(it) },
-                        onExport = { 
-                            val timestamp = java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd_HHmm"))
-                            exportLauncher.launch("wellspend_backup_$timestamp.json") 
-                        },
-                        onImport = { importLauncher.launch(arrayOf("application/json")) },
-                        onBack = { showSettings = false }
-                     )
-                }
-                else -> {
-                    // Main Screens
-                    when (currentScreen) {
-                        Screen.HOME -> {
-                             DashboardScreen(
-                                currentDate = currentDate,
-                                onDateChange = { currentDate = it },
-                                onReportClick = { showReport = true },
-                                onChartClick = { currentScreen = Screen.EXPENSES },
-                                chartData = chartData,
-                                totalSpend = totalSpend,
-                                currency = currency,
-                                budgets = budgets,
-                                onBudgetClick = { showBudgets = true },
-                                accounts = accounts,
-                                accountBalances = balances,
-                                onAccountClick = { currentScreen = Screen.ACCOUNTS }
-                            )
-                        }
-                        Screen.ACCOUNTS -> {
-                             AccountScreen(
-                                accounts = accounts,
-                                balances = balances,
-                                currency = currency,
-                                onAddAccount = { viewModel.addAccount(it) },
-                                onUpdateAccount = { viewModel.addAccount(it) },
-                                onDeleteAccount = { viewModel.deleteAccount(it) },
-                                isAccountUsed = { accountId -> expenses.any { it.accountId == accountId } }
-                             )
-                        }
-                        Screen.INCOME -> {
-                            IncomeListScreen(
-                                currentDate = currentDate,
-                                onDateChange = { currentDate = it },
-                                onReportClick = { showReport = true },
-                                expenses = currentMonthTransactions,
-                                accounts = accounts,
-                                currency = currency,
-                                onDelete = { viewModel.deleteExpense(it) },
-                                onEdit = { 
-                                    expenseToEdit = it
-                                    showAddExpense = true
+            val targetState = when {
+                showAddExpense -> "OVERLAY_ADD"
+                showReport -> "OVERLAY_REPORT"
+                showBudgets -> "OVERLAY_BUDGETS"
+                showSettings -> "OVERLAY_SETTINGS"
+                showTransfers -> "OVERLAY_TRANSFERS"
+                else -> currentScreen.name
+            }
+
+            AnimatedContent(
+                targetState = targetState,
+                transitionSpec = {
+                    fadeIn(animationSpec = tween(300)) + scaleIn(initialScale = 0.95f, animationSpec = tween(300)) togetherWith
+                    fadeOut(animationSpec = tween(200))
+                },
+                label = "MainContentTransition"
+            ) { state ->
+                when (state) {
+                    "OVERLAY_ADD" -> {
+                        val categoryOrder by viewModel.categoryOrder.collectAsState()
+                        AddExpenseForm(
+                            currency = currency,
+                            accounts = accounts,
+                            categories = categoryOrder,
+                            initialExpense = expenseToEdit,
+                            onAdd = { amount, desc, cat, date, isRecurring, freq, type, accId, targetAccId, fee, feeName ->
+                                if (expenseToEdit != null) {
+                                    viewModel.updateExpense(
+                                        id = expenseToEdit!!.id, 
+                                        amount = amount, 
+                                        description = desc, 
+                                        category = cat, 
+                                        date = date, 
+                                        isRecurring = isRecurring, 
+                                        frequency = freq,
+                                        transactionType = type,
+                                        accountId = accId,
+                                        targetAccountId = targetAccId,
+                                        feeAmount = fee,
+                                        feeConfigName = feeName
+                                    )
+                                } else {
+                                    viewModel.addExpense(
+                                        amount = amount, 
+                                        description = desc, 
+                                        category = cat, 
+                                        date = date, 
+                                        isRecurring = isRecurring, 
+                                        frequency = freq,
+                                        transactionType = type,
+                                        accountId = accId,
+                                        targetAccountId = targetAccId,
+                                        feeAmount = fee,
+                                        feeConfigName = feeName
+                                    )
                                 }
-                            )
-                        }
-                        Screen.EXPENSES -> {
-                             ExpenseListScreen(
-                                currentDate = currentDate,
-                                onDateChange = { currentDate = it },
-                                onReportClick = { showReport = true },
-                                expenses = currentMonthTransactions,
-                                accounts = accounts,
-                                currency = currency,
-                                onDelete = { viewModel.deleteExpense(it) },
-                                onEdit = { 
-                                    expenseToEdit = it
-                                    showAddExpense = true
-                                },
-                                state = listState
-                            )
-                        }
-                        Screen.MORE -> {
-                             MoreScreen(
-                                 onReportClick = { showReport = true },
-                                 onBudgetsClick = { showBudgets = true },
-                                 onSettingsClick = { showSettings = true },
-                                 onDataManagementClick = { showSettings = true }, // Maps to Settings for now
-                                 onTransfersClick = { showTransfers = true }
-                             )
-                        }
+                                showAddExpense = false
+                            },
+                            onCancel = { showAddExpense = false },
+                            onReorder = { viewModel.updateCategoryOrder(it) }
+                        )
+                    }
+                    "OVERLAY_REPORT" -> {
+                        MonthlyReport(
+                            expenses = expenses,
+                            currency = currency,
+                            currentDate = currentDate,
+                            onBack = { showReport = false }
+                        )
+                    }
+                    "OVERLAY_BUDGETS" -> {
+                         BudgetScreen(
+                            currentBudgets = budgets,
+                            currency = currency,
+                            onSave = { newBudgets ->
+                                 viewModel.updateBudgets(newBudgets, currency)
+                            },
+                            onBack = { showBudgets = false }
+                         )
+                    }
+                    "OVERLAY_TRANSFERS" -> {
+                        TransferListScreen(
+                            currentDate = currentDate,
+                            onDateChange = { currentDate = it },
+                            onReportClick = { showReport = true },
+                            expenses = currentMonthTransactions,
+                            accounts = accounts,
+                            currency = currency,
+                            onDelete = { viewModel.deleteExpense(it) },
+                            onEdit = { 
+                                expenseToEdit = it
+                                showAddExpense = true
+                            },
+                            onBack = { showTransfers = false }
+                        )
+                    }
+                    "OVERLAY_SETTINGS" -> {
+                         SettingsScreen(
+                            currentCurrency = currency,
+                            currentThemeMode = themeMode,
+                            currentDynamicColor = dynamicColor,
+                            onCurrencyChange = { newCurrency ->
+                                 viewModel.updateBudgets(emptyList(), newCurrency)
+                            },
+                            onThemeModeChange = { viewModel.updateThemeMode(it) },
+                            onDynamicColorChange = { viewModel.updateDynamicColor(it) },
+                            onExport = { 
+                                val timestamp = java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd_HHmm"))
+                                exportLauncher.launch("wellspend_backup_$timestamp.json") 
+                            },
+                            onImport = { importLauncher.launch(arrayOf("application/json")) },
+                            onBack = { showSettings = false }
+                         )
+                    }
+                    "HOME" -> {
+                         DashboardScreen(
+                            currentDate = currentDate,
+                            onDateChange = { currentDate = it },
+                            onReportClick = { showReport = true },
+                            onChartClick = { currentScreen = Screen.EXPENSES },
+                            chartData = chartData,
+                            totalSpend = totalSpend,
+                            currency = currency,
+                            budgets = budgets,
+                            onBudgetClick = { showBudgets = true },
+                            accounts = accounts,
+                            accountBalances = balances,
+                            onAccountClick = { currentScreen = Screen.ACCOUNTS }
+                        )
+                    }
+                    "ACCOUNTS" -> {
+                         AccountScreen(
+                            accounts = accounts,
+                            balances = balances,
+                            currency = currency,
+                            onAddAccount = { viewModel.addAccount(it) },
+                            onUpdateAccount = { viewModel.addAccount(it) },
+                            onDeleteAccount = { viewModel.deleteAccount(it) },
+                            isAccountUsed = { accountId -> expenses.any { it.accountId == accountId } }
+                         )
+                    }
+                    "INCOME" -> {
+                        IncomeListScreen(
+                            currentDate = currentDate,
+                            onDateChange = { currentDate = it },
+                            onReportClick = { showReport = true },
+                            expenses = currentMonthTransactions,
+                            accounts = accounts,
+                            currency = currency,
+                            onDelete = { viewModel.deleteExpense(it) },
+                            onEdit = { 
+                                expenseToEdit = it
+                                showAddExpense = true
+                            }
+                        )
+                    }
+                    "EXPENSES" -> {
+                         ExpenseListScreen(
+                            currentDate = currentDate,
+                            onDateChange = { currentDate = it },
+                            onReportClick = { showReport = true },
+                            expenses = currentMonthTransactions,
+                            accounts = accounts,
+                            currency = currency,
+                            onDelete = { viewModel.deleteExpense(it) },
+                            onEdit = { 
+                                expenseToEdit = it
+                                showAddExpense = true
+                            },
+                            state = listState
+                        )
+                    }
+                    "MORE" -> {
+                         MoreScreen(
+                             onReportClick = { showReport = true },
+                             onBudgetsClick = { showBudgets = true },
+                             onSettingsClick = { showSettings = true },
+                             onDataManagementClick = { showSettings = true }, // Maps to Settings for now
+                             onTransfersClick = { showTransfers = true }
+                         )
                     }
                 }
             }
+
         }
     }
 }
