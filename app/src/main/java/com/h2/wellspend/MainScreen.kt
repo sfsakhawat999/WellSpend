@@ -156,7 +156,8 @@ fun MainScreen(viewModel: MainViewModel) {
                      validTransactions.sumOf { it.feeAmount }
 
     // For Chart: Only include explicitly categorized EXPENSES (exclude Income/Transfer base amounts)
-    val expensesByCat = currentMonthTransactions
+    // For Chart: Only include explicitly categorized EXPENSES (exclude Income/Transfer base amounts)
+    val expensesByCat = validTransactions
         .filter { it.transactionType == com.h2.wellspend.data.TransactionType.EXPENSE }
         .groupBy { it.category }
         
@@ -169,7 +170,7 @@ fun MainScreen(viewModel: MainViewModel) {
     }.toMutableList()
 
     // Add ALL fees (from Income, Transfer, and Expense) as a single "Transaction Fee" slice
-    val totalFees = currentMonthTransactions.sumOf { it.feeAmount }
+    val totalFees = validTransactions.sumOf { it.feeAmount }
     if (totalFees > 0) {
         chartDataList.add(
             ChartData(
