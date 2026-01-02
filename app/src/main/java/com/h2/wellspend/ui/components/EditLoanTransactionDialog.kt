@@ -25,7 +25,11 @@ import com.h2.wellspend.data.Account
 import com.h2.wellspend.data.Expense
 import com.h2.wellspend.data.Loan
 import com.h2.wellspend.data.LoanType
-
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.material3.Checkbox
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.Alignment
+import androidx.compose.foundation.clickable
 @Composable
 fun EditLoanTransactionDialog(
     transaction: Expense,
@@ -39,6 +43,7 @@ fun EditLoanTransactionDialog(
     var description by remember { mutableStateOf(transaction.description) }
     var selectedAccountId by remember { mutableStateOf(transaction.accountId) }
     var feeAmount by remember { mutableStateOf(transaction.feeAmount.toString()) }
+    var doNotTrack by remember { mutableStateOf(transaction.accountId == null) }
 
     // Determine context for UI textual feedback
     // LOAN TYPE | TX TYPE | CONTEXT
@@ -80,22 +85,32 @@ fun EditLoanTransactionDialog(
                     label = { Text("Description") }
                 )
                 
-                Text("Account", style = MaterialTheme.typography.bodySmall)
-                Row(modifier = Modifier.horizontalScroll(androidx.compose.foundation.rememberScrollState())) {
-                    FilterChip(
-                         selected = selectedAccountId == null,
-                         onClick = { selectedAccountId = null },
-                         label = { Text("None") }
-                    )
-                    Spacer(Modifier.width(4.dp))
-                    accounts.forEach { acc ->
-                        FilterChip(
-                            selected = selectedAccountId == acc.id,
-                            onClick = { selectedAccountId = acc.id },
-                            label = { Text(acc.name) }
-                        )
-                        Spacer(Modifier.width(4.dp))
+                
+                Row(
+                    verticalAlignment = Alignment.CenterVertically, 
+                    modifier = Modifier.fillMaxWidth().clickable { doNotTrack = !doNotTrack }
+                ) {
+                    Checkbox(checked = doNotTrack, onCheckedChange = { doNotTrack = it })
+                    Text("Do not track as transaction")
+                }
+
+                if (!doNotTrack) {
+                    Text("Account", style = MaterialTheme.typography.bodySmall)
+                    Row(modifier = Modifier.horizontalScroll(androidx.compose.foundation.rememberScrollState())) {
+                        accounts.forEach { acc ->
+                            FilterChip(
+                                selected = selectedAccountId == acc.id,
+                                onClick = { selectedAccountId = acc.id },
+                                label = { Text(acc.name) }
+                            )
+                            Spacer(Modifier.width(4.dp))
+                        }
                     }
+                    if (accounts.isNotEmpty() && selectedAccountId == null) {
+                         LaunchedEffect(Unit) { selectedAccountId = accounts.first().id }
+                    }
+                } else {
+                    LaunchedEffect(Unit) { selectedAccountId = null }
                 }
                 
                 if (showFee) {
@@ -114,7 +129,7 @@ fun EditLoanTransactionDialog(
                     val amt = amount.toDoubleOrNull()
                     val fee = feeAmount.toDoubleOrNull() ?: 0.0
                     if (amt != null) {
-                        onConfirm(amt, description, selectedAccountId, fee)
+                        onConfirm(amt, description, if (doNotTrack) null else selectedAccountId, fee)
                     }
                 },
                 enabled = amount.isNotBlank()

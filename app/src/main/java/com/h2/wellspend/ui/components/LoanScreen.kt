@@ -274,6 +274,7 @@ fun AddLoanDialog(
     var selectedAccountId by remember { mutableStateOf<String?>(null) } // Null = No Account
     var feeAmount by remember { mutableStateOf("") }
     var date by remember { mutableStateOf(java.time.LocalDate.now()) }
+    var doNotTrack by remember { mutableStateOf(false) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -300,17 +301,29 @@ fun AddLoanDialog(
                 OutlinedTextField(value = description, onValueChange = { description = it }, label = { Text("Description (Optional)") })
 
                 // Account Selector
-                Text("Source/Dest Account (Optional)")
-                // Simple dropdown or list ?
-                // For simplicity, just a few chips or a click to select logic.
-                // Or "None" + List
-                 Row(modifier = Modifier.horizontalScroll(androidx.compose.foundation.rememberScrollState())) {
-                     FilterChip(selected = selectedAccountId == null, onClick = { selectedAccountId = null }, label = { Text("None") })
-                     accounts.forEach { acc ->
-                         Spacer(Modifier.width(4.dp))
-                         FilterChip(selected = selectedAccountId == acc.id, onClick = { selectedAccountId = acc.id }, label = { Text(acc.name) })
+                
+                Row(
+                    verticalAlignment = Alignment.CenterVertically, 
+                    modifier = Modifier.fillMaxWidth().clickable { doNotTrack = !doNotTrack }
+                ) {
+                    Checkbox(checked = doNotTrack, onCheckedChange = { doNotTrack = it })
+                    Text("Do not track as transaction")
+                }
+
+                if (!doNotTrack) {
+                     Text("Source/Dest Account")
+                     Row(modifier = Modifier.horizontalScroll(androidx.compose.foundation.rememberScrollState())) {
+                         accounts.forEach { acc ->
+                             FilterChip(selected = selectedAccountId == acc.id, onClick = { selectedAccountId = acc.id }, label = { Text(acc.name) })
+                             Spacer(Modifier.width(4.dp))
+                         }
                      }
-                 }
+                     if (selectedAccountId == null && accounts.isNotEmpty()) {
+                        LaunchedEffect(Unit) { selectedAccountId = accounts.first().id }
+                     }
+                } else {
+                    LaunchedEffect(Unit) { selectedAccountId = null }
+                }
                  // Fee Option (Only if Lending)
                 if (selectedType == LoanType.LEND) {
                      OutlinedTextField(value = feeAmount, onValueChange = { feeAmount = it }, label = { Text("Transaction Fee (Optional)") })
@@ -353,7 +366,7 @@ fun AddLoanDialog(
                 val amt = amount.toDoubleOrNull()
                 val fee = feeAmount.toDoubleOrNull() ?: 0.0
                 if (name.isNotBlank() && amt != null) {
-                    onConfirm(name, amt, selectedType, description.ifBlank { null }, selectedAccountId, fee, date)
+                    onConfirm(name, amt, selectedType, description.ifBlank { null }, if (doNotTrack) null else selectedAccountId, fee, date)
                 }
             }) { Text("Create") }
         },
@@ -374,6 +387,7 @@ fun AddLoanTransactionDialog(
     var selectedAccountId by remember { mutableStateOf(accounts.firstOrNull()?.id) }
     var feeAmount by remember { mutableStateOf("") }
     var date by remember { mutableStateOf(java.time.LocalDate.now()) }
+    var doNotTrack by remember { mutableStateOf(false) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -393,18 +407,31 @@ fun AddLoanTransactionDialog(
                 
                 OutlinedTextField(value = amount, onValueChange = { amount = it }, label = { Text("Amount") })
                 
-                Text(if (isPayment) "To/From Account" else "Source/Dest Account")
-                 Row(modifier = Modifier.horizontalScroll(androidx.compose.foundation.rememberScrollState())) {
-                     FilterChip(selected = selectedAccountId == null, onClick = { selectedAccountId = null }, label = { Text("None") })
-                     Spacer(Modifier.width(4.dp))
-                     accounts.forEach { acc ->
-                         FilterChip(selected = selectedAccountId == acc.id, onClick = { selectedAccountId = acc.id }, label = { Text(acc.name) })
-                         Spacer(Modifier.width(4.dp))
+                
+                Row(
+                    verticalAlignment = Alignment.CenterVertically, 
+                    modifier = Modifier.fillMaxWidth().clickable { doNotTrack = !doNotTrack }
+                ) {
+                    Checkbox(checked = doNotTrack, onCheckedChange = { doNotTrack = it })
+                    Text("Do not track as transaction")
+                }
+
+                if (!doNotTrack) {
+                    Text(if (isPayment) "To/From Account" else "Source/Dest Account")
+                     Row(modifier = Modifier.horizontalScroll(androidx.compose.foundation.rememberScrollState())) {
+                         accounts.forEach { acc ->
+                             FilterChip(selected = selectedAccountId == acc.id, onClick = { selectedAccountId = acc.id }, label = { Text(acc.name) })
+                             Spacer(Modifier.width(4.dp))
+                         }
                      }
-                 }
-                 if (accounts.isEmpty()) {
-                     Text("No accounts waiting. You can select None.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
-                 }
+                     if (accounts.isEmpty()) {
+                         Text("No accounts. Add one.", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                     } else if (selectedAccountId == null) {
+                        LaunchedEffect(Unit) { selectedAccountId = accounts.first().id }
+                     }
+                } else {
+                    LaunchedEffect(Unit) { selectedAccountId = null }
+                }
 
                  // Fee Logic
                  // Show fee if: (LEND && Increase (!isPayment)) OR (BORROW && Payment/Repay (isPayment))
@@ -453,7 +480,7 @@ fun AddLoanTransactionDialog(
                 val amt = amount.toDoubleOrNull()
                 val fee = feeAmount.toDoubleOrNull() ?: 0.0
                 if (amt != null) {
-                    onConfirm(amt, isPayment, selectedAccountId, fee, date)
+                    onConfirm(amt, isPayment, if (doNotTrack) null else selectedAccountId, fee, date)
                 }
             }) { Text("Confirm") }
         },
