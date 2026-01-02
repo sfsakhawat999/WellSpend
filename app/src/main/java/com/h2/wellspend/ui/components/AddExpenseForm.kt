@@ -268,7 +268,7 @@ fun AddExpenseForm(
             Text(if (transactionType == com.h2.wellspend.data.TransactionType.INCOME) "To Account" else "From Account", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(modifier = Modifier.height(8.dp))
             Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (accountId == null || (initialExpense != null && initialExpense.accountId == null)) {
+                if (initialExpense != null && initialExpense.accountId == null) {
                     FilterChip(
                         selected = accountId == null,
                         onClick = { accountId = null },
@@ -291,7 +291,7 @@ fun AddExpenseForm(
                 Text("To Account", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(modifier = Modifier.height(8.dp))
                 Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (targetAccountId == null || (initialExpense != null && initialExpense.transferTargetAccountId == null)) {
+                    if (initialExpense != null && initialExpense.transferTargetAccountId == null) {
                         FilterChip(
                             selected = targetAccountId == null,
                             onClick = { targetAccountId = null },
