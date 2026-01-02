@@ -2,6 +2,9 @@ package com.h2.wellspend.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.lazy.LazyColumn
@@ -15,6 +18,7 @@ import androidx.compose.material.icons.filled.AttachMoney
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -145,31 +149,112 @@ fun LoanItem(
     onTransactionClick: (Loan) -> Unit,
     onDeleteClick: () -> Unit
 ) {
-    Card(
-        modifier = Modifier.fillMaxWidth().clickable { onTransactionClick(loan) },
-        elevation = CardDefaults.cardElevation(2.dp)
-    ) {
-        Row(
-            modifier = Modifier.padding(16.dp).fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(text = loan.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                if (!loan.description.isNullOrEmpty()) {
-                    Text(text = loan.description, style = MaterialTheme.typography.bodySmall)
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val actionWidth = 80.dp
+    val actionWidthPx = with(density) { actionWidth.toPx() }
+    val offsetX = remember { androidx.compose.animation.core.Animatable(0f) }
+    val scope = rememberCoroutineScope()
+    
+    // Delete states
+    var showDeleteDialog by remember { mutableStateOf(false) }
+
+    if (showDeleteDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteDialog = false },
+            title = { Text("Delete Loan") },
+            text = { Text("Are you sure you want to delete this loan? Associated transactions will remain but become unlinked.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onDeleteClick()
+                        showDeleteDialog = false
+                    }
+                ) {
+                    Text("Delete", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteDialog = false }) {
+                    Text("Cancel")
                 }
             }
-            Column(horizontalAlignment = Alignment.End) {
-                Text(
-                    text = "$currency${String.format("%.2f", balance)}",
-                    style = MaterialTheme.typography.titleLarge,
-                    color = if (balance > 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(IntrinsicSize.Min)
+            .clip(RoundedCornerShape(12.dp)) // Clip the whole box for corners
+    ) {
+        // Background (Delete Action - Right Side)
+        Row(
+            modifier = Modifier.fillMaxSize(),
+            horizontalArrangement = Arrangement.End, // Only Right Side
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .width(actionWidth)
+                    .fillMaxHeight()
+                    .background(MaterialTheme.colorScheme.error)
+                    .clickable { showDeleteDialog = true },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Delete,
+                    contentDescription = "Delete",
+                    tint = MaterialTheme.colorScheme.onError
                 )
-                 // Delete button small
-                 IconButton(onClick = onDeleteClick, modifier = Modifier.size(24.dp)) {
-                     Icon(Icons.Default.Delete, "Delete", tint = MaterialTheme.colorScheme.error)
-                 }
+            }
+        }
+
+        // Foreground (Content)
+        Card(
+            modifier = Modifier
+                .offset { androidx.compose.ui.unit.IntOffset(offsetX.value.toInt(), 0) }
+                .draggable(
+                    orientation = Orientation.Horizontal,
+                    state = rememberDraggableState { delta ->
+                        scope.launch {
+                            // Allow dragging LEFT (negative) to reveal Right Action
+                            // Block dragging RIGHT (positive) as there is no Left Action
+                            val newValue = (offsetX.value + delta).coerceIn(-actionWidthPx, 0f) 
+                            offsetX.snapTo(newValue)
+                        }
+                    },
+                    onDragStopped = {
+                        val targetOffset = if (offsetX.value < -actionWidthPx / 2) {
+                            -actionWidthPx // Snap Open (Left/Delete)
+                        } else {
+                            0f
+                        }
+                        scope.launch { offsetX.animateTo(targetOffset) }
+                    }
+                )
+                .fillMaxWidth()
+                .clickable { onTransactionClick(loan) },
+            elevation = CardDefaults.cardElevation(2.dp),
+            shape = RoundedCornerShape(12.dp) // Match Clip
+        ) {
+            Row(
+                modifier = Modifier.padding(16.dp).fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(text = loan.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    if (!loan.description.isNullOrEmpty()) {
+                        Text(text = loan.description, style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(
+                        text = "$currency${String.format("%.2f", balance)}",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = if (balance > 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         }
     }
