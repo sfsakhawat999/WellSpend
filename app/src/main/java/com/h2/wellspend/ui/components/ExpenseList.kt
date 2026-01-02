@@ -72,6 +72,8 @@ import kotlinx.coroutines.delay
 @Composable
 fun ExpenseList(
     expenses: List<Expense>,
+    accounts: List<com.h2.wellspend.data.Account>,
+    loans: List<com.h2.wellspend.data.Loan>,
     currency: String,
     onDelete: (String) -> Unit,
     onEdit: (Expense) -> Unit,
@@ -142,6 +144,8 @@ fun ExpenseList(
                     category = category,
                     total = total,
                     items = items,
+                    accounts = accounts,
+                    loans = loans,
                     currency = currency,
                     onDelete = onDelete,
                     onEdit = { expense ->
@@ -180,6 +184,8 @@ fun ExpenseCategoryItem(
     category: Category,
     total: Double,
     items: List<Expense>,
+    accounts: List<com.h2.wellspend.data.Account>,
+    loans: List<com.h2.wellspend.data.Loan>,
     currency: String,
     onDelete: (String) -> Unit,
     onEdit: (Expense) -> Unit
@@ -265,7 +271,14 @@ fun ExpenseCategoryItem(
                 items.forEach { expense ->
                     key(expense.id) {
                         Column {
-                            ExpenseItem(expense = expense, currency = currency, onDelete = onDelete, onEdit = onEdit)
+                            ExpenseItem(
+                                expense = expense,
+                                currency = currency,
+                                accounts = accounts,
+                                loans = loans,
+                                onDelete = onDelete,
+                                onEdit = onEdit
+                            )
                         }
                     }
                 }
@@ -320,6 +333,8 @@ fun FeeItem(
 fun ExpenseItem(
     expense: Expense,
     currency: String,
+    accounts: List<com.h2.wellspend.data.Account>,
+    loans: List<com.h2.wellspend.data.Loan>,
     onDelete: (String) -> Unit,
     onEdit: (Expense) -> Unit
 ) {
@@ -340,6 +355,17 @@ fun ExpenseItem(
     var showDeleteDialog by remember { mutableStateOf(false) }
     var isVisible by remember { mutableStateOf(true) }
     var deleteConfirmed by remember { mutableStateOf(false) }
+
+    // Account & Loan Info
+    val accountName = accounts.find { it.id == expense.accountId }?.name
+    val loanName = if (expense.loanId != null) loans.find { it.id == expense.loanId }?.name else null
+    val extraInfo = buildString {
+        if (expense.transactionType == com.h2.wellspend.data.TransactionType.INCOME) append(" • Income")
+        else if (expense.transactionType == com.h2.wellspend.data.TransactionType.TRANSFER) append(" • Transfer")
+        
+        if (loanName != null) append(" • Loan: $loanName")
+        if (accountName != null) append(" • $accountName")
+    }
 
     if (showDeleteDialog) {
         androidx.compose.material3.AlertDialog(
@@ -459,7 +485,7 @@ fun ExpenseItem(
                         fontWeight = FontWeight.Medium
                     )
                     Text(
-                        text = formattedDate + if (expense.transactionType == com.h2.wellspend.data.TransactionType.INCOME) " • Income" else if (expense.transactionType == com.h2.wellspend.data.TransactionType.TRANSFER) " • Transfer" else "",
+                        text = formattedDate + extraInfo,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(top = 4.dp)

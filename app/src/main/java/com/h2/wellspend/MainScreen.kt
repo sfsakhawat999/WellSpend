@@ -431,6 +431,7 @@ fun MainScreen(viewModel: MainViewModel) {
                             onReportClick = { showReport = true },
                             expenses = currentMonthTransactions,
                             accounts = accounts,
+                            loans = loans,
                             currency = currency,
                             onDelete = { viewModel.deleteExpense(it) },
                             onEdit = { 
@@ -678,12 +679,14 @@ fun DashboardScreen(
 }
 
 @Composable
+
 fun ExpenseListScreen(
     currentDate: LocalDate,
     onDateChange: (LocalDate) -> Unit,
     onReportClick: () -> Unit,
     expenses: List<com.h2.wellspend.data.Expense>,
     accounts: List<com.h2.wellspend.data.Account>,
+    loans: List<com.h2.wellspend.data.Loan>,
     currency: String,
     onDelete: (String) -> Unit,
     onEdit: (Expense) -> Unit,
@@ -702,6 +705,8 @@ fun ExpenseListScreen(
         }
         ExpenseList(
             expenses = expenseList,
+            accounts = accounts,
+            loans = loans,
             currency = currency,
             onDelete = onDelete,
             onEdit = onEdit,
