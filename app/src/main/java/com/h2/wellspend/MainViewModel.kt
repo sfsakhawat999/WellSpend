@@ -82,6 +82,12 @@ class MainViewModel(
         }
     }
 
+    fun updateLoan(loan: com.h2.wellspend.data.Loan) {
+        viewModelScope.launch {
+             repository.addLoan(loan)
+        }
+    }
+
     fun addLoanTransaction(
         loanId: String,
         amount: Double,

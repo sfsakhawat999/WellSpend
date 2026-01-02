@@ -365,6 +365,7 @@ fun MainScreen(viewModel: MainViewModel) {
                             onAddTransaction = { loanId, amount, isPayment, accId, type, fee, date ->
                                 viewModel.addLoanTransaction(loanId, amount, isPayment, accId, type, fee, date)
                             },
+                            onUpdateLoan = { viewModel.updateLoan(it) },
                             onDeleteLoan = { viewModel.deleteLoan(it) },
                             onBack = { showLoans = false }
                         )

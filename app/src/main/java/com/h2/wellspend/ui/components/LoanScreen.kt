@@ -16,6 +16,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.AttachMoney
 import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -43,12 +44,36 @@ fun LoanScreen(
     currency: String,
     onAddLoan: (String, Double, LoanType, String?, String?, Double, java.time.LocalDate) -> Unit, // Double: feeAmount
     onAddTransaction: (String, Double, Boolean, String?, LoanType, Double, java.time.LocalDate) -> Unit, // Double: feeAmount
+    onUpdateLoan: (Loan) -> Unit,
     onDeleteLoan: (Loan) -> Unit,
     onBack: () -> Unit
 ) {
     var selectedTab by remember { mutableIntStateOf(0) } // 0 = Lent, 1 = Borrowed
-    var showAddLoanDialog by remember { mutableStateOf(false) }
+    var isCreatingLoan by remember { mutableStateOf(false) }
+    var editingLoan by remember { mutableStateOf<Loan?>(null) }
     var loanForTransaction by remember { mutableStateOf<Loan?>(null) } // If set, show transaction dialog
+
+    if (isCreatingLoan || editingLoan != null) {
+        LoanInputScreen(
+            initialLoan = editingLoan,
+            accounts = accounts,
+            currency = currency,
+            onSave = { name, amount, type, desc, accId, fee, date ->
+                if (editingLoan != null) {
+                     val updated = editingLoan!!.copy(name = name, amount = amount, description = desc, type = type)
+                     onUpdateLoan(updated)
+                     editingLoan = null
+                } else {
+                     onAddLoan(name, amount, type, desc, accId, fee, date)
+                     isCreatingLoan = false
+                }
+            },
+            onCancel = {
+                isCreatingLoan = false
+                editingLoan = null
+            }
+        )
+    } else {
 
     Scaffold(
         topBar = {
@@ -62,7 +87,7 @@ fun LoanScreen(
             )
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = { showAddLoanDialog = true }) {
+            FloatingActionButton(onClick = { isCreatingLoan = true }) {
                 Icon(Icons.Default.Add, contentDescription = "Add Loan")
             }
         }
@@ -108,7 +133,8 @@ fun LoanScreen(
                             loan = loan,
                             balance = balance,
                             currency = currency,
-                            onTransactionClick = { loanForTransaction = it },
+                            onTransactionClick = { loanForTransaction = loan },
+                            onEditClick = { editingLoan = loan },
                             onDeleteClick = { onDeleteLoan(loan) } // Simple delete for now
                         )
                     }
@@ -116,16 +142,6 @@ fun LoanScreen(
             }
         }
     }
-
-    if (showAddLoanDialog) {
-        AddLoanDialog(
-            accounts = accounts,
-            onDismiss = { showAddLoanDialog = false },
-            onConfirm = { name, amount, type, desc, accId, fee, date ->
-                onAddLoan(name, amount, type, desc, accId, fee, date)
-                showAddLoanDialog = false
-            }
-        )
     }
 
         if (loanForTransaction != null) {
@@ -148,6 +164,7 @@ fun LoanItem(
     balance: Double,
     currency: String,
     onTransactionClick: (Loan) -> Unit,
+    onEditClick: () -> Unit,
     onDeleteClick: () -> Unit
 ) {
     val density = androidx.compose.ui.platform.LocalDensity.current
@@ -255,6 +272,9 @@ fun LoanItem(
                         style = MaterialTheme.typography.titleLarge,
                         color = if (balance > 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                     IconButton(onClick = onEditClick, modifier = Modifier.size(32.dp)) {
+                         Icon(Icons.Default.Edit, "Edit", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
+                     }
                 }
             }
         }
