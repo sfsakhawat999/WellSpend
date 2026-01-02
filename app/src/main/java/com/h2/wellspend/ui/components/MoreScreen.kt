@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.PieChart
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Storage
+import androidx.compose.material.icons.filled.AttachMoney
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -47,7 +48,8 @@ fun MoreScreen(
     onBudgetsClick: () -> Unit,
     onSettingsClick: () -> Unit,
     onDataManagementClick: () -> Unit,
-    onTransfersClick: () -> Unit
+    onTransfersClick: () -> Unit,
+    onLoansClick: () -> Unit
 ) {
     Scaffold(
         content = { padding ->
@@ -76,13 +78,20 @@ fun MoreScreen(
                     color = Color(0xFF10b981) // Emerald
                 )
 
-                // New Transfer Menu Item
                 MoreMenuItem(
                     icon = Icons.AutoMirrored.Filled.ArrowForward,
                     title = "Transfers",
                     subtitle = "View account transfers",
                     onClick = onTransfersClick,
-                    color = Color(0xFF8b5cf6) // Violet (distinct from others)
+                    color = Color(0xFF8b5cf6) // Violet
+                )
+                
+                MoreMenuItem(
+                    icon = Icons.Default.AttachMoney, // Using AttachMoney for Loans
+                    title = "Loans",
+                    subtitle = "Track lent and borrowed money",
+                    onClick = onLoansClick,
+                    color = Color(0xFFec4899) // Pink
                 )
 
                 MoreMenuItem(

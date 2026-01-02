@@ -31,6 +31,108 @@ class MainViewModel(
     val budgets = repository.budgets.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     val recurringConfigs = repository.recurringConfigs.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     val accounts = repository.accounts.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val loans = repository.loans.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+// ... (existing code) ...
+
+    fun addLoan(
+        name: String,
+        amount: Double,
+        type: com.h2.wellspend.data.LoanType,
+        description: String?,
+        accountId: String?
+    ) {
+        viewModelScope.launch {
+            val loanId = UUID.randomUUID().toString()
+            val loan = com.h2.wellspend.data.Loan(
+                id = loanId,
+                name = name,
+                type = type,
+                amount = amount,
+                description = description
+            )
+            repository.addLoan(loan)
+
+            // Initial Transaction
+            // If Account Selected:
+            //   LEND -> EXPENSE (Money Out)
+            //   BORROW -> INCOME (Money In)
+            // If No Account: Still create transaction for history, but accountId=null
+            
+            val transactionType = if (type == com.h2.wellspend.data.LoanType.LEND) {
+                com.h2.wellspend.data.TransactionType.EXPENSE
+            } else {
+                com.h2.wellspend.data.TransactionType.INCOME
+            }
+
+            val expense = Expense(
+                amount = amount,
+                description = "Initial Loan Amount: $name",
+                category = Category.Others,
+                date = java.time.LocalDateTime.now().toString(),
+                timestamp = System.currentTimeMillis(),
+                transactionType = transactionType,
+                accountId = accountId,
+                loanId = loanId
+            )
+            repository.addExpense(expense)
+        }
+    }
+
+    fun addLoanTransaction(
+        loanId: String,
+        amount: Double,
+        isPayment: Boolean, // True = Pay/Receive, False = Increase Loan
+        accountId: String?,
+        loanType: com.h2.wellspend.data.LoanType
+    ) {
+        viewModelScope.launch {
+            // Logic:
+            // LEND (Asset):
+            //   Increase -> I give more money -> EXPENSE
+            //   Pay (Receive) -> I get money back -> INCOME
+            // BORROW (Liability):
+            //   Increase -> I borrow more -> INCOME
+            //   Pay (Repay) -> I pay back -> EXPENSE
+            
+            val transactionType = if (loanType == com.h2.wellspend.data.LoanType.LEND) {
+                if (isPayment) com.h2.wellspend.data.TransactionType.INCOME else com.h2.wellspend.data.TransactionType.EXPENSE
+            } else {
+                if (isPayment) com.h2.wellspend.data.TransactionType.EXPENSE else com.h2.wellspend.data.TransactionType.INCOME
+            }
+            
+            val desc = if (isPayment) "Loan Repayment" else "Loan Increase"
+
+            val expense = Expense(
+                amount = amount,
+                description = desc,
+                category = Category.Others,
+                date = java.time.LocalDateTime.now().toString(),
+                timestamp = System.currentTimeMillis(),
+                transactionType = transactionType,
+                accountId = accountId,
+                loanId = loanId
+            )
+            repository.addExpense(expense)
+        }
+    }
+
+    fun deleteLoan(loan: com.h2.wellspend.data.Loan) {
+        viewModelScope.launch {
+            // Update linked expenses to remove loanId (orphaned history)
+            val allExpenses = repository.getAllExpensesOneShot()
+            val expensesToUpdate = allExpenses.filter { it.loanId == loan.id }.map { 
+                it.copy(loanId = null, description = "${it.description} (Deleted Loan: ${loan.name})") 
+            }
+            
+            if (expensesToUpdate.isNotEmpty()) {
+                repository.addExpenses(expensesToUpdate)
+            }
+            
+            repository.deleteLoan(loan)
+        }
+    }
+
     
     val currency: StateFlow<String> = repository.currency
         .map { it ?: "$" } // Default to $ if null

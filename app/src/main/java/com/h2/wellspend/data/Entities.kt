@@ -33,7 +33,26 @@ data class Expense(
     val accountId: String? = null,
     val transferTargetAccountId: String? = null,
     val feeAmount: Double = 0.0,
-    val feeConfigName: String? = null
+    val feeConfigName: String? = null,
+    
+    // Loan Support
+    val loanId: String? = null
+)
+
+@Keep
+enum class LoanType {
+    LEND, BORROW
+}
+
+@Keep
+@Entity(tableName = "loans")
+data class Loan(
+    @PrimaryKey val id: String = UUID.randomUUID().toString(),
+    val name: String,
+    val type: LoanType,
+    val amount: Double, // Current balance logic might be derived, but initial amount is useful or we just sum transactions
+    val description: String? = null,
+    val createdAt: Long = System.currentTimeMillis()
 )
 
 @Keep

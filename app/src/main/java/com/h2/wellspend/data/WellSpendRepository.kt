@@ -8,6 +8,7 @@ class WellSpendRepository(private val database: AppDatabase) {
     val budgets: Flow<List<Budget>> = database.budgetDao().getAllBudgets()
     val recurringConfigs: Flow<List<RecurringConfig>> = database.recurringDao().getAllRecurringConfigs()
     val accounts: Flow<List<Account>> = database.accountDao().getAllAccounts()
+    val loans: Flow<List<Loan>> = database.loanDao().getAllLoans()
 
     val currency: Flow<String?> = database.settingDao().getSettingFlow("currency")
 
@@ -57,6 +58,14 @@ class WellSpendRepository(private val database: AppDatabase) {
 
     suspend fun getAccountById(id: String): Account? {
         return database.accountDao().getAccountById(id)
+    }
+
+    suspend fun addLoan(loan: Loan) {
+        database.loanDao().insertLoan(loan)
+    }
+
+    suspend fun deleteLoan(loan: Loan) {
+        database.loanDao().deleteLoan(loan)
     }
 
     // Category Sorting

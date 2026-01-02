@@ -7,7 +7,10 @@ import androidx.room.RoomDatabase
 
 import androidx.room.TypeConverters
 
-@Database(entities = [Expense::class, Budget::class, RecurringConfig::class, Setting::class, CategorySortOrder::class, Account::class], version = 5, exportSchema = false)
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
+
+@Database(entities = [Expense::class, Budget::class, RecurringConfig::class, Setting::class, CategorySortOrder::class, Account::class, Loan::class], version = 6, exportSchema = false)
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
 
@@ -17,10 +20,21 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun settingDao(): SettingDao
     abstract fun categoryDao(): CategoryDao
     abstract fun accountDao(): AccountDao
+    abstract fun loanDao(): LoanDao
 
     companion object {
         @Volatile
         private var INSTANCE: AppDatabase? = null
+
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                // Create Loan Table
+                database.execSQL("CREATE TABLE IF NOT EXISTS `loans` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `type` TEXT NOT NULL, `amount` REAL NOT NULL, `description` TEXT, `createdAt` INTEGER NOT NULL, PRIMARY KEY(`id`))")
+                
+                // Add loanId to expenses
+                database.execSQL("ALTER TABLE `expenses` ADD COLUMN `loanId` TEXT DEFAULT NULL")
+            }
+        }
 
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
@@ -29,7 +43,8 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "wellspend_database"
                 )
-                .fallbackToDestructiveMigration() // Removed to prevent data loss. Add migrations for future versions.
+                .addMigrations(MIGRATION_5_6)
+                .fallbackToDestructiveMigration() // Still keep this as failsafe
                 .build()
                 INSTANCE = instance
                 instance

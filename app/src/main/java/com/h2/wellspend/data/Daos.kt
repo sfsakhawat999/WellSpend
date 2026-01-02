@@ -115,3 +115,15 @@ interface AccountDao {
     @Delete
     suspend fun deleteAccount(account: Account)
 }
+
+@Dao
+interface LoanDao {
+    @Query("SELECT * FROM loans")
+    fun getAllLoans(): Flow<List<Loan>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertLoan(loan: Loan)
+
+    @Delete
+    suspend fun deleteLoan(loan: Loan)
+}

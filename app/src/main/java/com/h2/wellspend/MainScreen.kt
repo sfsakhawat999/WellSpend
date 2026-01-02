@@ -94,6 +94,8 @@ import com.h2.wellspend.ui.components.SettingsScreen
 import com.h2.wellspend.ui.components.BudgetScreen
 
 
+import com.h2.wellspend.ui.components.LoanScreen
+
 enum class Screen {
     HOME, ACCOUNTS, INCOME, EXPENSES, MORE
 }
@@ -112,6 +114,7 @@ fun MainScreen(viewModel: MainViewModel) {
     var showBudgets by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
     var showTransfers by remember { mutableStateOf(false) }
+    var showLoans by remember { mutableStateOf(false) }
     var showDataManagement by remember { mutableStateOf(false) } // Maps to Settings for now
 
     // Data
@@ -121,10 +124,11 @@ fun MainScreen(viewModel: MainViewModel) {
     val themeMode by viewModel.themeMode.collectAsState(initial = "SYSTEM")
     val dynamicColor by viewModel.dynamicColor.collectAsState(initial = false)
     val accounts by viewModel.accounts.collectAsState(initial = emptyList())
+    val loans by viewModel.loans.collectAsState(initial = emptyList())
     val balances by viewModel.accountBalances.collectAsState(initial = emptyMap())
 
     // Handle back button
-    val canNavigateBack = showAddExpense || showReport || showBudgets || showSettings || showTransfers || currentScreen != Screen.HOME
+    val canNavigateBack = showAddExpense || showReport || showBudgets || showSettings || showTransfers || showLoans || currentScreen != Screen.HOME
     androidx.activity.compose.BackHandler(enabled = canNavigateBack) {
         when {
             showAddExpense -> showAddExpense = false
@@ -132,6 +136,7 @@ fun MainScreen(viewModel: MainViewModel) {
             showBudgets -> showBudgets = false
             showSettings -> showSettings = false
             showTransfers -> showTransfers = false
+            showLoans -> showLoans = false
             currentScreen != Screen.HOME -> currentScreen = Screen.HOME
         }
     }
@@ -252,6 +257,7 @@ fun MainScreen(viewModel: MainViewModel) {
                 showBudgets -> "OVERLAY_BUDGETS"
                 showSettings -> "OVERLAY_SETTINGS"
                 showTransfers -> "OVERLAY_TRANSFERS"
+                showLoans -> "OVERLAY_LOANS"
                 else -> currentScreen.name
             }
 
@@ -342,6 +348,22 @@ fun MainScreen(viewModel: MainViewModel) {
                             onBack = { showTransfers = false }
                         )
                     }
+                    "OVERLAY_LOANS" -> {
+                        LoanScreen(
+                            loans = loans,
+                            expenses = expenses, // All expenses to calc balance
+                            accounts = accounts,
+                            currency = currency,
+                            onAddLoan = { name, amount, type, desc, accId ->
+                                viewModel.addLoan(name, amount, type, desc, accId)
+                            },
+                            onAddTransaction = { loanId, amount, isPayment, accId, type ->
+                                viewModel.addLoanTransaction(loanId, amount, isPayment, accId, type)
+                            },
+                            onDeleteLoan = { viewModel.deleteLoan(it) },
+                            onBack = { showLoans = false }
+                        )
+                    }
                     "OVERLAY_SETTINGS" -> {
                          SettingsScreen(
                             currentCurrency = currency,
@@ -424,7 +446,8 @@ fun MainScreen(viewModel: MainViewModel) {
                              onBudgetsClick = { showBudgets = true },
                              onSettingsClick = { showSettings = true },
                              onDataManagementClick = { showSettings = true }, // Maps to Settings for now
-                             onTransfersClick = { showTransfers = true }
+                             onTransfersClick = { showTransfers = true },
+                             onLoansClick = { showLoans = true }
                          )
                     }
                 }
