@@ -116,6 +116,7 @@ fun MainScreen(viewModel: MainViewModel) {
     var showTransfers by remember { mutableStateOf(false) }
     var showLoans by remember { mutableStateOf(false) }
     var showDataManagement by remember { mutableStateOf(false) } // Maps to Settings for now
+    var loanTransactionToEdit by remember { mutableStateOf<Expense?>(null) }
 
     // Data
     val expenses by viewModel.expenses.collectAsState(initial = emptyList())
@@ -416,11 +417,16 @@ fun MainScreen(viewModel: MainViewModel) {
                             onReportClick = { showReport = true },
                             expenses = currentMonthTransactions,
                             accounts = accounts,
+                            loans = loans,
                             currency = currency,
                             onDelete = { viewModel.deleteExpense(it) },
                             onEdit = { 
-                                expenseToEdit = it
-                                showAddExpense = true
+                                if (it.loanId != null) {
+                                    loanTransactionToEdit = it
+                                } else {
+                                    expenseToEdit = it
+                                    showAddExpense = true
+                                }
                             }
                         )
                     }
@@ -435,8 +441,12 @@ fun MainScreen(viewModel: MainViewModel) {
                             currency = currency,
                             onDelete = { viewModel.deleteExpense(it) },
                             onEdit = { 
-                                expenseToEdit = it
-                                showAddExpense = true
+                                if (it.loanId != null) {
+                                    loanTransactionToEdit = it
+                                } else {
+                                    expenseToEdit = it
+                                    showAddExpense = true
+                                }
                             },
                             state = listState
                         )
@@ -454,6 +464,39 @@ fun MainScreen(viewModel: MainViewModel) {
                 }
             }
 
+            // Dialog for Editing Loan Transaction
+            if (loanTransactionToEdit != null) {
+                val relatedLoan = loans.find { it.id == loanTransactionToEdit!!.loanId }
+                if (relatedLoan != null) {
+                    com.h2.wellspend.ui.components.EditLoanTransactionDialog(
+                        transaction = loanTransactionToEdit!!,
+                        loan = relatedLoan,
+                        accounts = accounts,
+                        currency = currency,
+                        onDismiss = { loanTransactionToEdit = null },
+                        onConfirm = { amt, desc, accId, fee ->
+                            viewModel.updateExpense(
+                                id = loanTransactionToEdit!!.id,
+                                amount = amt,
+                                description = desc,
+                                category = loanTransactionToEdit!!.category,
+                                date = loanTransactionToEdit!!.date,
+                                isRecurring = false,
+                                frequency = com.h2.wellspend.data.RecurringFrequency.WEEKLY, // Dummy
+                                transactionType = loanTransactionToEdit!!.transactionType,
+                                accountId = accId,
+                                targetAccountId =  loanTransactionToEdit!!.transferTargetAccountId,
+                                feeAmount = fee,
+                                feeConfigName = null,
+                                loanId = loanTransactionToEdit!!.loanId
+                            )
+                            loanTransactionToEdit = null
+                        }
+                    )
+                } else {
+                    loanTransactionToEdit = null
+                }
+            }
         }
     }
 }
@@ -761,12 +804,14 @@ fun TransferListScreen(
 }
 
 @Composable
+
 fun IncomeListScreen(
     currentDate: LocalDate,
     onDateChange: (LocalDate) -> Unit,
     onReportClick: () -> Unit,
     expenses: List<com.h2.wellspend.data.Expense>,
     accounts: List<com.h2.wellspend.data.Account>,
+    loans: List<com.h2.wellspend.data.Loan>,
     currency: String,
     onDelete: (String) -> Unit,
     onEdit: (Expense) -> Unit
@@ -784,6 +829,7 @@ fun IncomeListScreen(
         com.h2.wellspend.ui.components.IncomeList(
             incomes = incomes,
             accounts = accounts,
+            loans = loans,
             currency = currency,
             onDelete = onDelete,
             onEdit = onEdit

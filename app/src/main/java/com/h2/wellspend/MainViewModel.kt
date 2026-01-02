@@ -311,7 +311,8 @@ class MainViewModel(
         accountId: String?,
         targetAccountId: String?,
         feeAmount: Double,
-        feeConfigName: String?
+        feeConfigName: String?,
+        loanId: String? = null
     ) {
         viewModelScope.launch {
             val expense = Expense(
@@ -326,7 +327,8 @@ class MainViewModel(
                 accountId = accountId,
                 transferTargetAccountId = targetAccountId,
                 feeAmount = feeAmount,
-                feeConfigName = feeConfigName
+                feeConfigName = feeConfigName,
+                loanId = loanId
             )
             repository.addExpense(expense) // Room's Insert(onConflict = REPLACE) handles update
 

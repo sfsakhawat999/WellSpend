@@ -39,6 +39,7 @@ import kotlinx.coroutines.delay
 fun IncomeList(
     incomes: List<Expense>,
     accounts: List<Account>,
+    loans: List<com.h2.wellspend.data.Loan>,
     currency: String,
     onDelete: (String) -> Unit,
     onEdit: (Expense) -> Unit
@@ -67,6 +68,7 @@ fun IncomeList(
                 IncomeItem(
                     income = income,
                     accountName = accounts.find { it.id == income.accountId }?.name ?: "Deleted Account",
+                    loans = loans,
                     currency = currency,
                     onEdit = onEdit,
                     onDelete = onDelete
@@ -80,6 +82,7 @@ fun IncomeList(
 fun IncomeItem(
     income: Expense,
     accountName: String,
+    loans: List<com.h2.wellspend.data.Loan>,
     currency: String,
     onEdit: (Expense) -> Unit,
     onDelete: (String) -> Unit
@@ -89,7 +92,14 @@ fun IncomeItem(
     } catch (e: Exception) {
         LocalDate.now()
     }
-    val formattedDate = date.format(DateTimeFormatter.ofPattern("EEE, MMM d"))
+    
+    val loanName = if (income.loanId != null) loans.find { it.id == income.loanId }?.name else null
+    val extraInfo = buildString {
+        if (loanName != null) append(" • Loan: $loanName")
+        append(" • To: $accountName")
+    }
+    
+    val formattedDate = date.format(DateTimeFormatter.ofPattern("EEE, MMM d")) + extraInfo
 
     val density = androidx.compose.ui.platform.LocalDensity.current
     val actionWidth = 80.dp
@@ -213,7 +223,7 @@ fun IncomeItem(
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "$formattedDate • To: $accountName",
+                            text = formattedDate,
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
