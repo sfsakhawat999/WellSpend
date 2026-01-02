@@ -97,10 +97,10 @@ interface CategoryDao {
 
 @Dao
 interface AccountDao {
-    @Query("SELECT * FROM accounts")
+    @Query("SELECT * FROM accounts ORDER BY sortOrder ASC")
     fun getAllAccounts(): Flow<List<Account>>
 
-    @Query("SELECT * FROM accounts")
+    @Query("SELECT * FROM accounts ORDER BY sortOrder ASC")
     suspend fun getAllAccountsOneShot(): List<Account>
 
     @Query("SELECT * FROM accounts WHERE id = :id")

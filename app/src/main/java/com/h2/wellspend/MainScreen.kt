@@ -412,7 +412,8 @@ fun MainScreen(viewModel: MainViewModel) {
                             onAddAccount = { viewModel.addAccount(it) },
                             onUpdateAccount = { viewModel.addAccount(it) },
                             onDeleteAccount = { viewModel.deleteAccount(it) },
-                            isAccountUsed = { accountId -> expenses.any { it.accountId == accountId } }
+                            isAccountUsed = { accountId -> expenses.any { it.accountId == accountId } },
+                            onReorder = { viewModel.reorderAccounts(it) }
                          )
                     }
                     "INCOME" -> {

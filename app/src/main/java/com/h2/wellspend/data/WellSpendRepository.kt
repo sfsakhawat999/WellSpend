@@ -56,6 +56,10 @@ class WellSpendRepository(private val database: AppDatabase) {
         database.accountDao().deleteAccount(account)
     }
 
+    suspend fun updateAccountOrders(accounts: List<Account>) {
+        database.accountDao().insertAccounts(accounts)
+    }
+
     suspend fun getAccountById(id: String): Account? {
         return database.accountDao().getAccountById(id)
     }

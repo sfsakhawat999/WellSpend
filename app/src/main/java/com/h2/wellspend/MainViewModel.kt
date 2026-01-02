@@ -88,6 +88,15 @@ class MainViewModel(
         }
     }
 
+    fun reorderAccounts(accounts: List<com.h2.wellspend.data.Account>) {
+        viewModelScope.launch {
+            val updatedAccounts = accounts.mapIndexed { index, account ->
+                account.copy(sortOrder = index)
+            }
+            repository.updateAccountOrders(updatedAccounts)
+        }
+    }
+
     fun addLoanTransaction(
         loanId: String,
         amount: Double,

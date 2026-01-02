@@ -18,5 +18,6 @@ data class Account(
     @PrimaryKey val id: String = UUID.randomUUID().toString(),
     val name: String,
     val initialBalance: Double,
-    val feeConfigs: List<FeeConfig> // Requires TypeConverter
+    val feeConfigs: List<FeeConfig>, // Requires TypeConverter
+    val sortOrder: Int = 0
 )

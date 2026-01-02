@@ -36,12 +36,17 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.animation.core.Animatable
 import androidx.compose.ui.unit.IntOffset
 import kotlin.math.roundToInt
 import androidx.compose.foundation.layout.offset
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -52,11 +57,17 @@ fun AccountScreen(
     onAddAccount: (Account) -> Unit,
     onUpdateAccount: (Account) -> Unit,
     onDeleteAccount: (Account) -> Unit,
-    isAccountUsed: (String) -> Boolean
+    isAccountUsed: (String) -> Boolean,
+    onReorder: (List<Account>) -> Unit
 ) {
     var showDialog by remember { mutableStateOf(false) }
     var accountToEdit by remember { mutableStateOf<Account?>(null) }
     var accountToDelete by remember { mutableStateOf<Account?>(null) }
+    
+    // Drag state for reordering
+    var draggedAccount by remember { mutableStateOf<Account?>(null) }
+    var draggedIndex by remember { mutableIntStateOf(-1) }
+    var hoverIndex by remember { mutableIntStateOf(-1) }
 
     Scaffold(
         floatingActionButton = {
@@ -73,21 +84,60 @@ fun AccountScreen(
                 Text("No accounts yet. Add one to track balances.", color = MaterialTheme.colorScheme.secondary)
             }
         } else {
+            // Compute display order based on drag state
+            val displayAccounts = remember(accounts, draggedIndex, hoverIndex) {
+                if (draggedIndex != -1 && hoverIndex != -1 && draggedIndex != hoverIndex) {
+                    val mutableList = accounts.toMutableList()
+                    val item = mutableList.removeAt(draggedIndex)
+                    mutableList.add(hoverIndex, item)
+                    mutableList
+                } else {
+                    accounts
+                }
+            }
+
             LazyColumn(
                 modifier = Modifier.fillMaxSize().padding(padding),
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                items(accounts) { account ->
+                items(displayAccounts, key = { it.id }) { account ->
+                    val isDragged = draggedAccount == account
                     AccountItem(
                         account = account,
                         balance = balances[account.id] ?: account.initialBalance,
                         currency = currency,
+                        isDragged = isDragged,
                         onEdit = {
                             accountToEdit = account
                             showDialog = true
                         },
-                        onDelete = { accountToDelete = account }
+                        onDelete = { accountToDelete = account },
+                        onDragStart = {
+                            draggedAccount = account
+                            draggedIndex = accounts.indexOf(account)
+                            hoverIndex = draggedIndex
+                        },
+                        onDrag = { deltaY ->
+                            // Calculate hover index based on drag delta
+                            val itemHeightPx = 80f // Approximate item height in pixels
+                            val indexDelta = (deltaY / itemHeightPx).toInt()
+                            val newHoverIndex = (draggedIndex + indexDelta).coerceIn(0, accounts.size - 1)
+                            if (newHoverIndex != hoverIndex) {
+                                hoverIndex = newHoverIndex
+                            }
+                        },
+                        onDragEnd = {
+                            if (draggedIndex != -1 && hoverIndex != -1 && draggedIndex != hoverIndex) {
+                                val mutableList = accounts.toMutableList()
+                                val item = mutableList.removeAt(draggedIndex)
+                                mutableList.add(hoverIndex, item)
+                                onReorder(mutableList)
+                            }
+                            draggedAccount = null
+                            draggedIndex = -1
+                            hoverIndex = -1
+                        }
                     )
                 }
                 item {
@@ -98,7 +148,7 @@ fun AccountScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = "Swipe left/right to edit or delete",
+                            text = "Long-press and drag to reorder • Swipe to edit/delete",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                         )
@@ -150,35 +200,34 @@ fun AccountItem(
     account: Account,
     balance: Double,
     currency: String,
+    isDragged: Boolean = false,
     onEdit: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onDragStart: () -> Unit = {},
+    onDrag: (Float) -> Unit = {},
+    onDragEnd: () -> Unit = {}
 ) {
     val density = androidx.compose.ui.platform.LocalDensity.current
     val actionWidth = 80.dp
     val actionWidthPx = with(density) { actionWidth.toPx() }
     val offsetX = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
+    val haptic = LocalHapticFeedback.current
     
-    // Delete states
-    var showDeleteDialog by remember { mutableStateOf(false) } // Although parent handles confirm, we trigger it via swipe
-    // Actually parent `AccountScreen` handles the dialog state `accountToDelete`.
-    // So here onDelete just calls the lambda. 
-    // BUT we want to revert swipe if cancelled? 
-    // If parent dialog dismisses, this item remains swiped?
-    // Let's perform the action and let parent handle it. 
-    // Ideally we'd want to close the swipe.
-    // Let's add a LaunchedEffect to close swipe if account is NOT the one being deleted? 
-    // Too complex for now. Simple action trigger is fine.
-    
-    // Trigger action when snapped
-    // Or buttons inside the background?
-    // ExpenseItem has buttons in background. Swipe *reveals* them.
+    // Track cumulative vertical drag for index calculation
+    var cumulativeDragY by remember { mutableFloatStateOf(0f) }
     
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(androidx.compose.foundation.layout.IntrinsicSize.Min)
-            .clip(RoundedCornerShape(12.dp)) // Clip the whole swipeable area
+            .height(IntrinsicSize.Min)
+            .clip(RoundedCornerShape(12.dp))
+            .graphicsLayer {
+                // Visual feedback when dragged
+                alpha = if (isDragged) 0.8f else 1f
+                scaleX = if (isDragged) 1.02f else 1f
+                scaleY = if (isDragged) 1.02f else 1f
+            }
     ) {
         // Background (Actions)
         Row(
@@ -227,10 +276,32 @@ fun AccountItem(
 
         // Foreground (Content)
         Card(
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = if (isDragged) 8.dp else 2.dp),
             shape = RoundedCornerShape(12.dp),
             modifier = Modifier
                 .offset { IntOffset(offsetX.value.roundToInt(), 0) }
+                .pointerInput(Unit) {
+                    detectDragGesturesAfterLongPress(
+                        onDragStart = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            cumulativeDragY = 0f
+                            onDragStart()
+                        },
+                        onDrag = { change, dragAmount ->
+                            change.consume()
+                            cumulativeDragY += dragAmount.y
+                            onDrag(cumulativeDragY)
+                        },
+                        onDragEnd = {
+                            cumulativeDragY = 0f
+                            onDragEnd()
+                        },
+                        onDragCancel = {
+                            cumulativeDragY = 0f
+                            onDragEnd()
+                        }
+                    )
+                }
                 .draggable(
                     orientation = Orientation.Horizontal,
                     state = rememberDraggableState { delta ->
@@ -278,10 +349,6 @@ fun AccountItem(
                         Text(text = "$currency${String.format("%.2f", balance)}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
-                
-                // Remove buttons from here as they are now actions
-                // Add a small hint icon? Or nothing.
-                // Expense list has no indication.
             }
         }
     }
