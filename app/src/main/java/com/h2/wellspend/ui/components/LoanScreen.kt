@@ -15,6 +15,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.AttachMoney
+import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -40,8 +41,8 @@ fun LoanScreen(
     expenses: List<Expense>, // To calc balance
     accounts: List<Account>,
     currency: String,
-    onAddLoan: (String, Double, LoanType, String?, String?, Double) -> Unit, // Double: feeAmount
-    onAddTransaction: (String, Double, Boolean, String?, LoanType, Double) -> Unit, // Double: feeAmount
+    onAddLoan: (String, Double, LoanType, String?, String?, Double, java.time.LocalDate) -> Unit, // Double: feeAmount
+    onAddTransaction: (String, Double, Boolean, String?, LoanType, Double, java.time.LocalDate) -> Unit, // Double: feeAmount
     onDeleteLoan: (Loan) -> Unit,
     onBack: () -> Unit
 ) {
@@ -120,21 +121,21 @@ fun LoanScreen(
         AddLoanDialog(
             accounts = accounts,
             onDismiss = { showAddLoanDialog = false },
-            onConfirm = { name, amount, type, desc, accId, fee ->
-                onAddLoan(name, amount, type, desc, accId, fee)
+            onConfirm = { name, amount, type, desc, accId, fee, date ->
+                onAddLoan(name, amount, type, desc, accId, fee, date)
                 showAddLoanDialog = false
             }
         )
     }
 
-    if (loanForTransaction != null) {
+        if (loanForTransaction != null) {
         AddLoanTransactionDialog(
             loan = loanForTransaction!!,
             accounts = accounts,
             currency = currency,
             onDismiss = { loanForTransaction = null },
-            onConfirm = { amount, isPayment, accId, fee ->
-                onAddTransaction(loanForTransaction!!.id, amount, isPayment, accId, loanForTransaction!!.type, fee)
+            onConfirm = { amount, isPayment, accId, fee, date ->
+                onAddTransaction(loanForTransaction!!.id, amount, isPayment, accId, loanForTransaction!!.type, fee, date)
                 loanForTransaction = null
             }
         )
@@ -264,7 +265,7 @@ fun LoanItem(
 fun AddLoanDialog(
     accounts: List<Account>,
     onDismiss: () -> Unit,
-    onConfirm: (String, Double, LoanType, String?, String?, Double) -> Unit
+    onConfirm: (String, Double, LoanType, String?, String?, Double, java.time.LocalDate) -> Unit
 ) {
     var name by remember { mutableStateOf("") }
     var amount by remember { mutableStateOf("") }
@@ -272,6 +273,7 @@ fun AddLoanDialog(
     var description by remember { mutableStateOf("") }
     var selectedAccountId by remember { mutableStateOf<String?>(null) } // Null = No Account
     var feeAmount by remember { mutableStateOf("") }
+    var date by remember { mutableStateOf(java.time.LocalDate.now()) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -310,8 +312,39 @@ fun AddLoanDialog(
                      }
                  }
                  // Fee Option (Only if Lending)
-                 if (selectedType == LoanType.LEND) {
+                if (selectedType == LoanType.LEND) {
                      OutlinedTextField(value = feeAmount, onValueChange = { feeAmount = it }, label = { Text("Transaction Fee (Optional)") })
+                 }
+
+                 // Date Selector
+                 val context = androidx.compose.ui.platform.LocalContext.current
+                 val dateInteractionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+                 val dateFormatted = remember(date) { date.format(java.time.format.DateTimeFormatter.ofPattern("EEE, MMM d, yyyy")) }
+                 
+                 OutlinedTextField(
+                     value = dateFormatted,
+                     onValueChange = {},
+                     label = { Text("Date") },
+                     readOnly = true,
+                     trailingIcon = { Icon(Icons.Default.DateRange, contentDescription = "Select Date") },
+                     interactionSource = dateInteractionSource
+                 )
+                 
+                 LaunchedEffect(dateInteractionSource) {
+                     dateInteractionSource.interactions.collect { interaction ->
+                         if (interaction is androidx.compose.foundation.interaction.PressInteraction.Release) {
+                             val datePickerDialog = android.app.DatePickerDialog(
+                                 context,
+                                 { _, year, month, dayOfMonth ->
+                                     date = java.time.LocalDate.of(year, month + 1, dayOfMonth)
+                                 },
+                                 date.year,
+                                 date.monthValue - 1,
+                                 date.dayOfMonth
+                             )
+                             datePickerDialog.show()
+                         }
+                     }
                  }
             }
         },
@@ -320,7 +353,7 @@ fun AddLoanDialog(
                 val amt = amount.toDoubleOrNull()
                 val fee = feeAmount.toDoubleOrNull() ?: 0.0
                 if (name.isNotBlank() && amt != null) {
-                    onConfirm(name, amt, selectedType, description.ifBlank { null }, selectedAccountId, fee)
+                    onConfirm(name, amt, selectedType, description.ifBlank { null }, selectedAccountId, fee, date)
                 }
             }) { Text("Create") }
         },
@@ -334,12 +367,13 @@ fun AddLoanTransactionDialog(
     accounts: List<Account>,
     currency: String,
     onDismiss: () -> Unit,
-    onConfirm: (Double, Boolean, String?, Double) -> Unit // Double: feeAmount
+    onConfirm: (Double, Boolean, String?, Double, java.time.LocalDate) -> Unit // Double: feeAmount
 ) {
     var amount by remember { mutableStateOf("") }
     var isPayment by remember { mutableStateOf(true) } // True = Pay/Repay, False = Increase
     var selectedAccountId by remember { mutableStateOf(accounts.firstOrNull()?.id) }
     var feeAmount by remember { mutableStateOf("") }
+    var date by remember { mutableStateOf(java.time.LocalDate.now()) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -379,6 +413,37 @@ fun AddLoanTransactionDialog(
                  if (showFee) {
                      OutlinedTextField(value = feeAmount, onValueChange = { feeAmount = it }, label = { Text("Transaction Fee (Optional)") })
                  }
+
+                 // Date Selector
+                 val context = androidx.compose.ui.platform.LocalContext.current
+                 val dateInteractionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+                 val dateFormatted = remember(date) { date.format(java.time.format.DateTimeFormatter.ofPattern("EEE, MMM d, yyyy")) }
+                 
+                 OutlinedTextField(
+                     value = dateFormatted,
+                     onValueChange = {},
+                     label = { Text("Date") },
+                     readOnly = true,
+                     trailingIcon = { Icon(Icons.Default.DateRange, contentDescription = "Select Date") },
+                     interactionSource = dateInteractionSource
+                 )
+                 
+                 LaunchedEffect(dateInteractionSource) {
+                     dateInteractionSource.interactions.collect { interaction ->
+                         if (interaction is androidx.compose.foundation.interaction.PressInteraction.Release) {
+                             val datePickerDialog = android.app.DatePickerDialog(
+                                 context,
+                                 { _, year, month, dayOfMonth ->
+                                     date = java.time.LocalDate.of(year, month + 1, dayOfMonth)
+                                 },
+                                 date.year,
+                                 date.monthValue - 1,
+                                 date.dayOfMonth
+                             )
+                             datePickerDialog.show()
+                         }
+                     }
+                 }
             }
         },
         confirmButton = {
@@ -388,7 +453,7 @@ fun AddLoanTransactionDialog(
                 val amt = amount.toDoubleOrNull()
                 val fee = feeAmount.toDoubleOrNull() ?: 0.0
                 if (amt != null) {
-                    onConfirm(amt, isPayment, selectedAccountId, fee)
+                    onConfirm(amt, isPayment, selectedAccountId, fee, date)
                 }
             }) { Text("Confirm") }
         },
