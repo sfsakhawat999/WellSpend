@@ -417,7 +417,7 @@ fun AddLoanTransactionDialog(
 ) {
     var amount by remember { mutableStateOf("") }
     var isPayment by remember { mutableStateOf(true) } // True = Pay/Repay, False = Increase
-    var selectedAccountId by remember { mutableStateOf(accounts.firstOrNull()?.id) }
+    var selectedAccountId by remember { mutableStateOf<String?>(null) }
     var feeAmount by remember { mutableStateOf("") }
     var date by remember { mutableStateOf(java.time.LocalDate.now()) }
     var doNotTrack by remember { mutableStateOf(false) }
@@ -466,7 +466,7 @@ fun AddLoanTransactionDialog(
                      if (accounts.isEmpty()) {
                          Text("No accounts. Add one.", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                      } else if (selectedAccountId == null) {
-                        LaunchedEffect(Unit) { selectedAccountId = accounts.first().id }
+                        // LaunchedEffect(Unit) { selectedAccountId = accounts.first().id }
                      }
                 } else {
                     LaunchedEffect(Unit) { selectedAccountId = null }
@@ -514,7 +514,7 @@ fun AddLoanTransactionDialog(
         },
         confirmButton = {
             TextButton(
-                enabled = true,
+                enabled = amount.toDoubleOrNull() != null && (doNotTrack || selectedAccountId != null),
                 onClick = {
                 val amt = amount.toDoubleOrNull()
                 val fee = feeAmount.toDoubleOrNull() ?: 0.0

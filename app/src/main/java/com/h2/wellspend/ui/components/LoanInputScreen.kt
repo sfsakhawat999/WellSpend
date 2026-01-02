@@ -260,9 +260,9 @@ fun LoanInputScreen(
                             )
                         }
                     }
-                     if (selectedAccountId == null && accounts.isNotEmpty()) {
-                        LaunchedEffect(Unit) { selectedAccountId = accounts.first().id }
-                     }
+                     // if (selectedAccountId == null && accounts.isNotEmpty()) {
+                     //    LaunchedEffect(Unit) { selectedAccountId = accounts.first().id }
+                     // }
                 } else {
                     LaunchedEffect(Unit) { selectedAccountId = null }
                 }
@@ -294,7 +294,7 @@ fun LoanInputScreen(
                 },
                 modifier = Modifier.fillMaxWidth().height(56.dp),
                 shape = RoundedCornerShape(16.dp),
-                enabled = name.isNotBlank() && amount.toDoubleOrNull() != null
+                enabled = name.isNotBlank() && amount.toDoubleOrNull() != null && (doNotTrack || selectedAccountId != null || initialLoan != null)
             ) {
                  Icon(Icons.Default.Check, contentDescription = null)
                  Spacer(Modifier.width(8.dp))

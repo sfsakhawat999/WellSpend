@@ -113,8 +113,8 @@ fun AddExpenseForm(
 
     // New State
     var transactionType by remember { mutableStateOf(initialExpense?.transactionType ?: com.h2.wellspend.data.TransactionType.EXPENSE) }
-    var accountId by remember { mutableStateOf(if (initialExpense != null) initialExpense.accountId else accounts.firstOrNull()?.id) }
-    var targetAccountId by remember { mutableStateOf(if (initialExpense != null) initialExpense.transferTargetAccountId else accounts.getOrNull(1)?.id) }
+    var accountId by remember { mutableStateOf(if (initialExpense != null) initialExpense.accountId else null) }
+    var targetAccountId by remember { mutableStateOf(if (initialExpense != null) initialExpense.transferTargetAccountId else null) }
     
     // Fee State
     var selectedFeeConfigName by remember { mutableStateOf<String?>(initialExpense?.feeConfigName) } // "Custom" or config name
@@ -446,7 +446,7 @@ fun AddExpenseForm(
                             transactionType, accountId, targetAccountId, feeVal, selectedFeeConfigName)
                     }
                 },
-                enabled = amount.isNotEmpty() && (accountId != null || initialExpense != null) && (transactionType != com.h2.wellspend.data.TransactionType.TRANSFER || targetAccountId != null || initialExpense != null),
+                enabled = amount.isNotEmpty() && accountId != null && (transactionType != com.h2.wellspend.data.TransactionType.TRANSFER || targetAccountId != null),
                 shape = RoundedCornerShape(16.dp),
                 modifier = Modifier.fillMaxWidth().height(56.dp)
             ) {
