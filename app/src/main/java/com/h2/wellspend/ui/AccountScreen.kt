@@ -5,6 +5,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -13,6 +14,10 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.AccountBalanceWallet
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.SwapVert
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -64,10 +69,8 @@ fun AccountScreen(
     var accountToEdit by remember { mutableStateOf<Account?>(null) }
     var accountToDelete by remember { mutableStateOf<Account?>(null) }
     
-    // Drag state for reordering
-    var draggedAccount by remember { mutableStateOf<Account?>(null) }
-    var draggedIndex by remember { mutableIntStateOf(-1) }
-    var hoverIndex by remember { mutableIntStateOf(-1) }
+    // Reorder mode state
+    var isReorderMode by remember { mutableStateOf(false) }
 
     Scaffold(
         floatingActionButton = {
@@ -84,74 +87,74 @@ fun AccountScreen(
                 Text("No accounts yet. Add one to track balances.", color = MaterialTheme.colorScheme.secondary)
             }
         } else {
-            // Compute display order based on drag state
-            val displayAccounts = remember(accounts, draggedIndex, hoverIndex) {
-                if (draggedIndex != -1 && hoverIndex != -1 && draggedIndex != hoverIndex) {
-                    val mutableList = accounts.toMutableList()
-                    val item = mutableList.removeAt(draggedIndex)
-                    mutableList.add(hoverIndex, item)
-                    mutableList
-                } else {
-                    accounts
-                }
-            }
-
-            LazyColumn(
-                modifier = Modifier.fillMaxSize().padding(padding),
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                items(displayAccounts, key = { it.id }) { account ->
-                    val isDragged = draggedAccount == account
-                    AccountItem(
-                        account = account,
-                        balance = balances[account.id] ?: account.initialBalance,
-                        currency = currency,
-                        isDragged = isDragged,
-                        onEdit = {
-                            accountToEdit = account
-                            showDialog = true
-                        },
-                        onDelete = { accountToDelete = account },
-                        onDragStart = {
-                            draggedAccount = account
-                            draggedIndex = accounts.indexOf(account)
-                            hoverIndex = draggedIndex
-                        },
-                        onDrag = { deltaY ->
-                            // Calculate hover index based on drag delta
-                            val itemHeightPx = 80f // Approximate item height in pixels
-                            val indexDelta = (deltaY / itemHeightPx).toInt()
-                            val newHoverIndex = (draggedIndex + indexDelta).coerceIn(0, accounts.size - 1)
-                            if (newHoverIndex != hoverIndex) {
-                                hoverIndex = newHoverIndex
-                            }
-                        },
-                        onDragEnd = {
-                            if (draggedIndex != -1 && hoverIndex != -1 && draggedIndex != hoverIndex) {
-                                val mutableList = accounts.toMutableList()
-                                val item = mutableList.removeAt(draggedIndex)
-                                mutableList.add(hoverIndex, item)
-                                onReorder(mutableList)
-                            }
-                            draggedAccount = null
-                            draggedIndex = -1
-                            hoverIndex = -1
+            Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+                // Reorder mode toggle
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    FilterChip(
+                        selected = isReorderMode,
+                        onClick = { isReorderMode = !isReorderMode },
+                        label = { Text(if (isReorderMode) "Done" else "Reorder") },
+                        leadingIcon = if (isReorderMode) {
+                            { Icon(Icons.Default.Check, null, modifier = Modifier.size(16.dp)) }
+                        } else {
+                            { Icon(Icons.Default.SwapVert, null, modifier = Modifier.size(16.dp)) }
                         }
                     )
                 }
-                item {
-                     Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 16.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "Long-press and drag to reorder • Swipe to edit/delete",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+
+                LazyColumn(
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    itemsIndexed(accounts, key = { _, account -> account.id }) { index, account ->
+                        AccountItem(
+                            account = account,
+                            balance = balances[account.id] ?: account.initialBalance,
+                            currency = currency,
+                            isReorderMode = isReorderMode,
+                            canMoveUp = index > 0,
+                            canMoveDown = index < accounts.size - 1,
+                            onEdit = {
+                                accountToEdit = account
+                                showDialog = true
+                            },
+                            onDelete = { accountToDelete = account },
+                            onMoveUp = {
+                                if (index > 0) {
+                                    val newList = accounts.toMutableList()
+                                    val item = newList.removeAt(index)
+                                    newList.add(index - 1, item)
+                                    onReorder(newList)
+                                }
+                            },
+                            onMoveDown = {
+                                if (index < accounts.size - 1) {
+                                    val newList = accounts.toMutableList()
+                                    val item = newList.removeAt(index)
+                                    newList.add(index + 1, item)
+                                    onReorder(newList)
+                                }
+                            }
                         )
+                    }
+                    item {
+                         Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 16.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = if (isReorderMode) "Use arrows to reorder" else "Swipe to edit/delete • Tap Reorder to change order",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                            )
+                        }
                     }
                 }
             }
@@ -200,126 +203,98 @@ fun AccountItem(
     account: Account,
     balance: Double,
     currency: String,
-    isDragged: Boolean = false,
+    isReorderMode: Boolean = false,
+    canMoveUp: Boolean = true,
+    canMoveDown: Boolean = true,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
-    onDragStart: () -> Unit = {},
-    onDrag: (Float) -> Unit = {},
-    onDragEnd: () -> Unit = {}
+    onMoveUp: () -> Unit = {},
+    onMoveDown: () -> Unit = {}
 ) {
     val density = androidx.compose.ui.platform.LocalDensity.current
     val actionWidth = 80.dp
     val actionWidthPx = with(density) { actionWidth.toPx() }
     val offsetX = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
-    val haptic = LocalHapticFeedback.current
     
-    // Track cumulative vertical drag for index calculation
-    var cumulativeDragY by remember { mutableFloatStateOf(0f) }
+    // Reset swipe when entering reorder mode
+    LaunchedEffect(isReorderMode) {
+        if (isReorderMode) {
+            offsetX.animateTo(0f)
+        }
+    }
     
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .height(IntrinsicSize.Min)
             .clip(RoundedCornerShape(12.dp))
-            .graphicsLayer {
-                // Visual feedback when dragged
-                alpha = if (isDragged) 0.8f else 1f
-                scaleX = if (isDragged) 1.02f else 1f
-                scaleY = if (isDragged) 1.02f else 1f
-            }
     ) {
-        // Background (Actions)
-        Row(
-            modifier = Modifier.fillMaxSize(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Left Action (Visible when swiped right -> EDIT)
-            Box(
-                modifier = Modifier
-                    .width(actionWidth)
-                    .fillMaxHeight()
-                    .background(MaterialTheme.colorScheme.primary)
-                    .clickable { 
-                        scope.launch { offsetX.animateTo(0f) }
-                        onEdit() 
-                    },
-                contentAlignment = Alignment.Center
+        // Background (Actions) - only visible when NOT in reorder mode
+        if (!isReorderMode) {
+            Row(
+                modifier = Modifier.fillMaxSize(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    imageVector = Icons.Default.Edit,
-                    contentDescription = "Edit",
-                    tint = MaterialTheme.colorScheme.onPrimary
-                )
-            }
+                // Left Action (EDIT)
+                Box(
+                    modifier = Modifier
+                        .width(actionWidth)
+                        .fillMaxHeight()
+                        .background(MaterialTheme.colorScheme.primary)
+                        .clickable { 
+                            scope.launch { offsetX.animateTo(0f) }
+                            onEdit() 
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Default.Edit, "Edit", tint = MaterialTheme.colorScheme.onPrimary)
+                }
 
-            // Right Action (Visible when swiped left -> DELETE)
-            Box(
-                modifier = Modifier
-                    .width(actionWidth)
-                    .fillMaxHeight()
-                    .background(MaterialTheme.colorScheme.error)
-                    .clickable { 
-                        scope.launch { offsetX.animateTo(0f) }
-                        onDelete() 
-                    },
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Delete,
-                    contentDescription = "Delete",
-                    tint = MaterialTheme.colorScheme.onError
-                )
+                // Right Action (DELETE)
+                Box(
+                    modifier = Modifier
+                        .width(actionWidth)
+                        .fillMaxHeight()
+                        .background(MaterialTheme.colorScheme.error)
+                        .clickable { 
+                            scope.launch { offsetX.animateTo(0f) }
+                            onDelete() 
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Default.Delete, "Delete", tint = MaterialTheme.colorScheme.onError)
+                }
             }
         }
 
         // Foreground (Content)
         Card(
-            elevation = CardDefaults.cardElevation(defaultElevation = if (isDragged) 8.dp else 2.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
             shape = RoundedCornerShape(12.dp),
             modifier = Modifier
                 .offset { IntOffset(offsetX.value.roundToInt(), 0) }
-                .pointerInput(Unit) {
-                    detectDragGesturesAfterLongPress(
-                        onDragStart = {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            cumulativeDragY = 0f
-                            onDragStart()
-                        },
-                        onDrag = { change, dragAmount ->
-                            change.consume()
-                            cumulativeDragY += dragAmount.y
-                            onDrag(cumulativeDragY)
-                        },
-                        onDragEnd = {
-                            cumulativeDragY = 0f
-                            onDragEnd()
-                        },
-                        onDragCancel = {
-                            cumulativeDragY = 0f
-                            onDragEnd()
-                        }
-                    )
-                }
-                .draggable(
-                    orientation = Orientation.Horizontal,
-                    state = rememberDraggableState { delta ->
-                        scope.launch {
-                            val newValue = (offsetX.value + delta).coerceIn(-actionWidthPx, actionWidthPx)
-                            offsetX.snapTo(newValue)
-                        }
-                    },
-                    onDragStopped = {
-                        val targetOffset = if (offsetX.value > actionWidthPx / 2) {
-                            actionWidthPx // Snap Open (Right/Edit)
-                        } else if (offsetX.value < -actionWidthPx / 2) {
-                            -actionWidthPx // Snap Open (Left/Delete)
-                        } else {
-                            0f
-                        }
-                        scope.launch { offsetX.animateTo(targetOffset) }
-                    }
+                .then(
+                    if (!isReorderMode) {
+                        Modifier.draggable(
+                            orientation = Orientation.Horizontal,
+                            state = rememberDraggableState { delta ->
+                                scope.launch {
+                                    val newValue = (offsetX.value + delta).coerceIn(-actionWidthPx, actionWidthPx)
+                                    offsetX.snapTo(newValue)
+                                }
+                            },
+                            onDragStopped = {
+                                val targetOffset = when {
+                                    offsetX.value > actionWidthPx / 2 -> actionWidthPx
+                                    offsetX.value < -actionWidthPx / 2 -> -actionWidthPx
+                                    else -> 0f
+                                }
+                                scope.launch { offsetX.animateTo(targetOffset) }
+                            }
+                        )
+                    } else Modifier
                 )
                 .fillMaxWidth()
         ) {
@@ -330,7 +305,7 @@ fun AccountItem(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
                     Box(
                         modifier = Modifier
                             .size(40.dp)
@@ -347,6 +322,32 @@ fun AccountItem(
                     Column {
                         Text(text = account.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                         Text(text = "$currency${String.format("%.2f", balance)}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+                
+                // Reorder buttons - only visible in reorder mode
+                if (isReorderMode) {
+                    Row {
+                        IconButton(
+                            onClick = onMoveUp,
+                            enabled = canMoveUp
+                        ) {
+                            Icon(
+                                Icons.Default.KeyboardArrowUp, 
+                                "Move Up",
+                                tint = if (canMoveUp) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
+                            )
+                        }
+                        IconButton(
+                            onClick = onMoveDown,
+                            enabled = canMoveDown
+                        ) {
+                            Icon(
+                                Icons.Default.KeyboardArrowDown, 
+                                "Move Down",
+                                tint = if (canMoveDown) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
+                            )
+                        }
                     }
                 }
             }
