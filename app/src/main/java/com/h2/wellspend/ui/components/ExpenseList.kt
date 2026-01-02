@@ -88,8 +88,8 @@ fun ExpenseList(
                         amount = expense.feeAmount,
                         category = Category.TransactionFee,
                         description = "Fee for ${expense.description}",
-                         // Ensure generic type if mostly for display; 
-                         // TransactionType is inherited so it might show as "Expense" or "Transfer" which is fine.
+                        feeAmount = 0.0, // Virtual item has no fee on itself
+                        transactionType = com.h2.wellspend.data.TransactionType.EXPENSE // Fees are always Expenses
                     )
                 )
             }
@@ -101,8 +101,9 @@ fun ExpenseList(
     val groupedExpenses = remember(displayExpenses) {
         displayExpenses.groupBy { it.category }
             .mapValues { entry ->
-                val total = entry.value.filter { it.transactionType == com.h2.wellspend.data.TransactionType.EXPENSE }.sumOf { it.amount } +
-                            entry.value.sumOf { it.feeAmount } // Include fees for everything
+                // Sum only Amounts (Virtual fees are now proper Expenses with Amount)
+                // Filter for EXPENSE type to match existing logic (assuming this list is for Expenses)
+                val total = entry.value.filter { it.transactionType == com.h2.wellspend.data.TransactionType.EXPENSE }.sumOf { it.amount } 
 
                 val items = entry.value.sortedWith(
                     compareByDescending<Expense> { it.date.take(10) }

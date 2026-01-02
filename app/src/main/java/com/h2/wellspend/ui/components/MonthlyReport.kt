@@ -103,26 +103,27 @@ fun MonthlyReport(
         val expChange = if (prevExpTotal == 0.0) 100.0 else (diff / prevExpTotal) * 100.0
 
         // 4. Category Data (Expenses + Fees)
-        // Base Expenses
+        // Base Expenses (Amount ONLY)
         val currentCatMap = currentExpenses.groupBy { it.category }
-            .mapValues { it.value.sumOf { exp -> exp.amount + exp.feeAmount } }
+            .mapValues { it.value.sumOf { exp -> exp.amount } } // Bundle fees separately
             .toMutableMap()
             
-        // Add Non-Expense Fees to 'TransactionFee' or 'Others' category
-        val otherFees = currentIncomes.sumOf { it.feeAmount } + currentTransfers.sumOf { it.feeAmount }
-        if (otherFees > 0) {
+        // Add ALL Fees to 'TransactionFee'
+        // Expense Fees + Income Fees + Transfer Fees
+        val allTransactionFees = currentMonthTransactions.sumOf { it.feeAmount }
+        if (allTransactionFees > 0) {
             val feeCat = com.h2.wellspend.data.Category.TransactionFee
-            currentCatMap[feeCat] = (currentCatMap[feeCat] ?: 0.0) + otherFees
+            // If there are existing expenses in TransactionFee category (e.g. manual entry), add to them
+            currentCatMap[feeCat] = (currentCatMap[feeCat] ?: 0.0) + allTransactionFees
         }
 
         val prevCatMap = prevExpenses.groupBy { it.category }
-            .mapValues { it.value.sumOf { exp -> exp.amount + exp.feeAmount } }
+            .mapValues { it.value.sumOf { exp -> exp.amount } }
             .toMutableMap()
         
-        val prevOtherFees = prevMonthTransactions.filter { it.transactionType != com.h2.wellspend.data.TransactionType.EXPENSE }.sumOf { it.feeAmount }
-        if (prevOtherFees > 0) {
+        if (prevAllFees > 0) {
             val feeCat = com.h2.wellspend.data.Category.TransactionFee
-            prevCatMap[feeCat] = (prevCatMap[feeCat] ?: 0.0) + prevOtherFees
+            prevCatMap[feeCat] = (prevCatMap[feeCat] ?: 0.0) + prevAllFees
         }
 
         val catData = currentCatMap.map { (cat, amount) ->
