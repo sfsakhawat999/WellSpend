@@ -311,7 +311,8 @@ fun AddLoanDialog(
                 }
 
                 if (!doNotTrack) {
-                     Text("Source/Dest Account")
+                     val accountLabel = if (selectedType == LoanType.LEND) "Pay From Account" else "Deposit To Account"
+                     Text(accountLabel)
                      Row(modifier = Modifier.horizontalScroll(androidx.compose.foundation.rememberScrollState())) {
                          accounts.forEach { acc ->
                              FilterChip(selected = selectedAccountId == acc.id, onClick = { selectedAccountId = acc.id }, label = { Text(acc.name) })
@@ -417,7 +418,13 @@ fun AddLoanTransactionDialog(
                 }
 
                 if (!doNotTrack) {
-                    Text(if (isPayment) "To/From Account" else "Source/Dest Account")
+                    // Logic:
+                    // Money OUT (Expense): LEND Increase OR BORROW Payment/Repay
+                    // Money IN (Income): LEND Payment/Receive OR BORROW Increase
+                    val isMoneyOut = (loan.type == LoanType.LEND && !isPayment) || (loan.type == LoanType.BORROW && isPayment)
+                    val accountLabel = if (isMoneyOut) "Pay From Account" else "Deposit To Account"
+                    
+                    Text(accountLabel)
                      Row(modifier = Modifier.horizontalScroll(androidx.compose.foundation.rememberScrollState())) {
                          accounts.forEach { acc ->
                              FilterChip(selected = selectedAccountId == acc.id, onClick = { selectedAccountId = acc.id }, label = { Text(acc.name) })
