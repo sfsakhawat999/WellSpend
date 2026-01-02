@@ -80,8 +80,14 @@ fun EditLoanTransactionDialog(
                     label = { Text("Description") }
                 )
                 
-                Text("Account (Required)", style = MaterialTheme.typography.bodySmall)
+                Text("Account", style = MaterialTheme.typography.bodySmall)
                 Row(modifier = Modifier.horizontalScroll(androidx.compose.foundation.rememberScrollState())) {
+                    FilterChip(
+                         selected = selectedAccountId == null,
+                         onClick = { selectedAccountId = null },
+                         label = { Text("None") }
+                    )
+                    Spacer(Modifier.width(4.dp))
                     accounts.forEach { acc ->
                         FilterChip(
                             selected = selectedAccountId == acc.id,
@@ -107,11 +113,11 @@ fun EditLoanTransactionDialog(
                 onClick = {
                     val amt = amount.toDoubleOrNull()
                     val fee = feeAmount.toDoubleOrNull() ?: 0.0
-                    if (amt != null && selectedAccountId != null) {
+                    if (amt != null) {
                         onConfirm(amt, description, selectedAccountId, fee)
                     }
                 },
-                enabled = selectedAccountId != null && amount.isNotBlank()
+                enabled = amount.isNotBlank()
             ) { Text("Save") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }

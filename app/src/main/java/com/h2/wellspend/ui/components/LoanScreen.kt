@@ -359,15 +359,17 @@ fun AddLoanTransactionDialog(
                 
                 OutlinedTextField(value = amount, onValueChange = { amount = it }, label = { Text("Amount") })
                 
-                Text(if (isPayment) "To/From Account (Required)" else "Source/Dest Account (Required)")
+                Text(if (isPayment) "To/From Account" else "Source/Dest Account")
                  Row(modifier = Modifier.horizontalScroll(androidx.compose.foundation.rememberScrollState())) {
+                     FilterChip(selected = selectedAccountId == null, onClick = { selectedAccountId = null }, label = { Text("None") })
+                     Spacer(Modifier.width(4.dp))
                      accounts.forEach { acc ->
                          FilterChip(selected = selectedAccountId == acc.id, onClick = { selectedAccountId = acc.id }, label = { Text(acc.name) })
                          Spacer(Modifier.width(4.dp))
                      }
                  }
                  if (accounts.isEmpty()) {
-                     Text("No accounts waiting. Please create an account first.", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                     Text("No accounts waiting. You can select None.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                  }
 
                  // Fee Logic
@@ -381,11 +383,11 @@ fun AddLoanTransactionDialog(
         },
         confirmButton = {
             TextButton(
-                enabled = selectedAccountId != null,
+                enabled = true,
                 onClick = {
                 val amt = amount.toDoubleOrNull()
                 val fee = feeAmount.toDoubleOrNull() ?: 0.0
-                if (amt != null && selectedAccountId != null) {
+                if (amt != null) {
                     onConfirm(amt, isPayment, selectedAccountId, fee)
                 }
             }) { Text("Confirm") }

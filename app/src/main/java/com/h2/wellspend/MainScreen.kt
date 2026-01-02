@@ -149,8 +149,11 @@ fun MainScreen(viewModel: MainViewModel) {
     }
 
     // Calculate Total Spend: (All Expenses Base Amount) + (All Fees from any transaction type)
-    val totalSpend = currentMonthTransactions.filter { it.transactionType == com.h2.wellspend.data.TransactionType.EXPENSE }.sumOf { it.amount } + 
-                     currentMonthTransactions.sumOf { it.feeAmount }
+    // EXCLUDING Loan transactions with NO Account (Virtual/Cash/Untracked)
+    val validTransactions = currentMonthTransactions.filter { !(it.loanId != null && it.accountId == null) }
+    
+    val totalSpend = validTransactions.filter { it.transactionType == com.h2.wellspend.data.TransactionType.EXPENSE }.sumOf { it.amount } + 
+                     validTransactions.sumOf { it.feeAmount }
 
     // For Chart: Only include explicitly categorized EXPENSES (exclude Income/Transfer base amounts)
     val expensesByCat = currentMonthTransactions
@@ -744,7 +747,8 @@ fun ExpenseListScreen(
         
         // Show Expenses ONLY (Transfers -> More > Transfers, Income -> Bottom Tab)
         val expenseList = expenses.filter { 
-            it.transactionType == com.h2.wellspend.data.TransactionType.EXPENSE
+            it.transactionType == com.h2.wellspend.data.TransactionType.EXPENSE &&
+            !(it.loanId != null && it.accountId == null)
         }
         ExpenseList(
             expenses = expenseList,
@@ -824,7 +828,11 @@ fun IncomeListScreen(
         )
         
         // Filter only Incomes
-        val incomes = expenses.filter { it.transactionType == com.h2.wellspend.data.TransactionType.INCOME }
+        // Filter only Incomes
+        val incomes = expenses.filter { 
+            it.transactionType == com.h2.wellspend.data.TransactionType.INCOME &&
+            !(it.loanId != null && it.accountId == null)
+        }
         
         com.h2.wellspend.ui.components.IncomeList(
             incomes = incomes,

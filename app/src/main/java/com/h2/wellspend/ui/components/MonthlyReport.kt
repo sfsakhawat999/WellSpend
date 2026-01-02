@@ -70,14 +70,17 @@ fun MonthlyReport(
 
     val (incomeTotal, expenseTotal, transferTotal, prevExpenseTotal, expensePercentChange, categoryData) = remember(expenses, currentDate, comparisonDate) {
         // 1. Filter by Date first
-        val currentMonthTransactions = expenses.filter {
+        // Refinement: Exclude untracked loan transactions (No Account)
+        val validExpenses = expenses.filter { !(it.loanId != null && it.accountId == null) }
+        
+        val currentMonthTransactions = validExpenses.filter {
             val date = LocalDate.parse(it.date.substring(0, 10))
             date.month == currentDate.month && date.year == currentDate.year
         }
         
         // Use comparisonDate if set, otherwise default to previous month
         val prevDate = comparisonDate ?: currentDate.minusMonths(1)
-        val prevMonthTransactions = expenses.filter {
+        val prevMonthTransactions = validExpenses.filter {
             val date = LocalDate.parse(it.date.substring(0, 10))
             date.month == prevDate.month && date.year == prevDate.year
         }
