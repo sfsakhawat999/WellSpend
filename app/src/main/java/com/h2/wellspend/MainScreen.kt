@@ -201,7 +201,36 @@ fun MainScreen(viewModel: MainViewModel) {
                     containerColor = MaterialTheme.colorScheme.surfaceVariant,
                     tonalElevation = 0.dp
                 ) {
-// ...
+                    NavigationBarItem(
+                        selected = currentScreen == Screen.HOME,
+                        onClick = { currentScreen = Screen.HOME },
+                        icon = { Icon(Icons.Default.Home, contentDescription = "Home") },
+                        label = { Text("Home") }
+                    )
+                    NavigationBarItem(
+                        selected = currentScreen == Screen.ACCOUNTS,
+                        onClick = { currentScreen = Screen.ACCOUNTS },
+                        icon = { Icon(Icons.Default.AccountBalance, contentDescription = "Accounts") },
+                        label = { Text("Accounts") }
+                    )
+                    NavigationBarItem(
+                        selected = currentScreen == Screen.INCOME,
+                        onClick = { currentScreen = Screen.INCOME },
+                        icon = { Icon(Icons.Default.AttachMoney, contentDescription = "Income") },
+                        label = { Text("Income") }
+                    )
+                    NavigationBarItem(
+                        selected = currentScreen == Screen.EXPENSES,
+                        onClick = { currentScreen = Screen.EXPENSES },
+                        icon = { Icon(Icons.AutoMirrored.Filled.ListIcon, contentDescription = "Expenses") },
+                        label = { Text("Expenses") }
+                    )
+                    NavigationBarItem(
+                        selected = currentScreen == Screen.MORE,
+                        onClick = { currentScreen = Screen.MORE },
+                        icon = { Icon(Icons.Default.MoreHoriz, contentDescription = "More") },
+                        label = { Text("More") }
+                    )
                 }
             }
         },
