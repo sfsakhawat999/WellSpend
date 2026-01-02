@@ -40,8 +40,8 @@ fun LoanScreen(
     expenses: List<Expense>, // To calc balance
     accounts: List<Account>,
     currency: String,
-    onAddLoan: (String, Double, LoanType, String?, String?) -> Unit,
-    onAddTransaction: (String, Double, Boolean, String?, LoanType) -> Unit, // Boolean: isPayment
+    onAddLoan: (String, Double, LoanType, String?, String?, Double) -> Unit, // Double: feeAmount
+    onAddTransaction: (String, Double, Boolean, String?, LoanType, Double) -> Unit, // Double: feeAmount
     onDeleteLoan: (Loan) -> Unit,
     onBack: () -> Unit
 ) {
@@ -120,8 +120,8 @@ fun LoanScreen(
         AddLoanDialog(
             accounts = accounts,
             onDismiss = { showAddLoanDialog = false },
-            onConfirm = { name, amount, type, desc, accId ->
-                onAddLoan(name, amount, type, desc, accId)
+            onConfirm = { name, amount, type, desc, accId, fee ->
+                onAddLoan(name, amount, type, desc, accId, fee)
                 showAddLoanDialog = false
             }
         )
@@ -133,8 +133,8 @@ fun LoanScreen(
             accounts = accounts,
             currency = currency,
             onDismiss = { loanForTransaction = null },
-            onConfirm = { amount, isPayment, accId ->
-                onAddTransaction(loanForTransaction!!.id, amount, isPayment, accId, loanForTransaction!!.type)
+            onConfirm = { amount, isPayment, accId, fee ->
+                onAddTransaction(loanForTransaction!!.id, amount, isPayment, accId, loanForTransaction!!.type, fee)
                 loanForTransaction = null
             }
         )
@@ -264,13 +264,14 @@ fun LoanItem(
 fun AddLoanDialog(
     accounts: List<Account>,
     onDismiss: () -> Unit,
-    onConfirm: (String, Double, LoanType, String?, String?) -> Unit
+    onConfirm: (String, Double, LoanType, String?, String?, Double) -> Unit
 ) {
     var name by remember { mutableStateOf("") }
     var amount by remember { mutableStateOf("") }
     var selectedType by remember { mutableStateOf(LoanType.LEND) }
     var description by remember { mutableStateOf("") }
     var selectedAccountId by remember { mutableStateOf<String?>(null) } // Null = No Account
+    var feeAmount by remember { mutableStateOf("") }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -308,13 +309,18 @@ fun AddLoanDialog(
                          FilterChip(selected = selectedAccountId == acc.id, onClick = { selectedAccountId = acc.id }, label = { Text(acc.name) })
                      }
                  }
+                 // Fee Option (Only if Lending)
+                 if (selectedType == LoanType.LEND) {
+                     OutlinedTextField(value = feeAmount, onValueChange = { feeAmount = it }, label = { Text("Transaction Fee (Optional)") })
+                 }
             }
         },
         confirmButton = {
             TextButton(onClick = {
                 val amt = amount.toDoubleOrNull()
+                val fee = feeAmount.toDoubleOrNull() ?: 0.0
                 if (name.isNotBlank() && amt != null) {
-                    onConfirm(name, amt, selectedType, description.ifBlank { null }, selectedAccountId)
+                    onConfirm(name, amt, selectedType, description.ifBlank { null }, selectedAccountId, fee)
                 }
             }) { Text("Create") }
         },
@@ -328,11 +334,12 @@ fun AddLoanTransactionDialog(
     accounts: List<Account>,
     currency: String,
     onDismiss: () -> Unit,
-    onConfirm: (Double, Boolean, String?) -> Unit
+    onConfirm: (Double, Boolean, String?, Double) -> Unit // Double: feeAmount
 ) {
     var amount by remember { mutableStateOf("") }
     var isPayment by remember { mutableStateOf(true) } // True = Pay/Repay, False = Increase
     var selectedAccountId by remember { mutableStateOf(accounts.firstOrNull()?.id) }
+    var feeAmount by remember { mutableStateOf("") }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -362,6 +369,14 @@ fun AddLoanTransactionDialog(
                  if (accounts.isEmpty()) {
                      Text("No accounts waiting. Please create an account first.", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                  }
+
+                 // Fee Logic
+                 // Show fee if: (LEND && Increase (!isPayment)) OR (BORROW && Payment/Repay (isPayment))
+                 // "when i am sending the money"
+                 val showFee = (loan.type == LoanType.LEND && !isPayment) || (loan.type == LoanType.BORROW && isPayment)
+                 if (showFee) {
+                     OutlinedTextField(value = feeAmount, onValueChange = { feeAmount = it }, label = { Text("Transaction Fee (Optional)") })
+                 }
             }
         },
         confirmButton = {
@@ -369,8 +384,9 @@ fun AddLoanTransactionDialog(
                 enabled = selectedAccountId != null,
                 onClick = {
                 val amt = amount.toDoubleOrNull()
+                val fee = feeAmount.toDoubleOrNull() ?: 0.0
                 if (amt != null && selectedAccountId != null) {
-                    onConfirm(amt, isPayment, selectedAccountId)
+                    onConfirm(amt, isPayment, selectedAccountId, fee)
                 }
             }) { Text("Confirm") }
         },

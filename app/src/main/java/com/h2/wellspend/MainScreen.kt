@@ -354,11 +354,11 @@ fun MainScreen(viewModel: MainViewModel) {
                             expenses = expenses, // All expenses to calc balance
                             accounts = accounts,
                             currency = currency,
-                            onAddLoan = { name, amount, type, desc, accId ->
-                                viewModel.addLoan(name, amount, type, desc, accId)
+                            onAddLoan = { name, amount, type, desc, accId, fee ->
+                                viewModel.addLoan(name, amount, type, desc, accId, fee)
                             },
-                            onAddTransaction = { loanId, amount, isPayment, accId, type ->
-                                viewModel.addLoanTransaction(loanId, amount, isPayment, accId, type)
+                            onAddTransaction = { loanId, amount, isPayment, accId, type, fee ->
+                                viewModel.addLoanTransaction(loanId, amount, isPayment, accId, type, fee)
                             },
                             onDeleteLoan = { viewModel.deleteLoan(it) },
                             onBack = { showLoans = false }

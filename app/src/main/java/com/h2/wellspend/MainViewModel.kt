@@ -40,7 +40,8 @@ class MainViewModel(
         amount: Double,
         type: com.h2.wellspend.data.LoanType,
         description: String?,
-        accountId: String?
+        accountId: String?,
+        feeAmount: Double
     ) {
         viewModelScope.launch {
             val loanId = UUID.randomUUID().toString()
@@ -73,7 +74,8 @@ class MainViewModel(
                 timestamp = System.currentTimeMillis(),
                 transactionType = transactionType,
                 accountId = accountId,
-                loanId = loanId
+                loanId = loanId,
+                feeAmount = feeAmount
             )
             repository.addExpense(expense)
         }
@@ -84,7 +86,8 @@ class MainViewModel(
         amount: Double,
         isPayment: Boolean, // True = Pay/Receive, False = Increase Loan
         accountId: String?,
-        loanType: com.h2.wellspend.data.LoanType
+        loanType: com.h2.wellspend.data.LoanType,
+        feeAmount: Double
     ) {
         viewModelScope.launch {
             // Logic:
@@ -111,7 +114,8 @@ class MainViewModel(
                 timestamp = System.currentTimeMillis(),
                 transactionType = transactionType,
                 accountId = accountId,
-                loanId = loanId
+                loanId = loanId,
+                feeAmount = feeAmount
             )
             repository.addExpense(expense)
         }
