@@ -205,12 +205,29 @@ fun LoanItem(
             .height(IntrinsicSize.Min)
             .clip(RoundedCornerShape(12.dp)) // Clip the whole box for corners
     ) {
-        // Background (Delete Action - Right Side)
+        // Background Actions
         Row(
             modifier = Modifier.fillMaxSize(),
-            horizontalArrangement = Arrangement.End, // Only Right Side
+            horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
+            // Left Action (Edit) - Revealed by swiping RIGHT
+            Box(
+                modifier = Modifier
+                    .width(actionWidth)
+                    .fillMaxHeight()
+                    .background(MaterialTheme.colorScheme.primary)
+                    .clickable { onEditClick() },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Edit,
+                    contentDescription = "Edit",
+                    tint = MaterialTheme.colorScheme.onPrimary
+                )
+            }
+
+            // Right Action (Delete) - Revealed by swiping LEFT
             Box(
                 modifier = Modifier
                     .width(actionWidth)
@@ -235,17 +252,15 @@ fun LoanItem(
                     orientation = Orientation.Horizontal,
                     state = rememberDraggableState { delta ->
                         scope.launch {
-                            // Allow dragging LEFT (negative) to reveal Right Action
-                            // Block dragging RIGHT (positive) as there is no Left Action
-                            val newValue = (offsetX.value + delta).coerceIn(-actionWidthPx, 0f) 
+                            val newValue = (offsetX.value + delta).coerceIn(-actionWidthPx, actionWidthPx)
                             offsetX.snapTo(newValue)
                         }
                     },
                     onDragStopped = {
-                        val targetOffset = if (offsetX.value < -actionWidthPx / 2) {
-                            -actionWidthPx // Snap Open (Left/Delete)
-                        } else {
-                            0f
+                        val targetOffset = when {
+                            offsetX.value > actionWidthPx / 2 -> actionWidthPx // Snap Open (Right/Edit)
+                            offsetX.value < -actionWidthPx / 2 -> -actionWidthPx // Snap Open (Left/Delete)
+                            else -> 0f
                         }
                         scope.launch { offsetX.animateTo(targetOffset) }
                     }
@@ -272,9 +287,6 @@ fun LoanItem(
                         style = MaterialTheme.typography.titleLarge,
                         color = if (balance > 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                     IconButton(onClick = onEditClick, modifier = Modifier.size(32.dp)) {
-                         Icon(Icons.Default.Edit, "Edit", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
-                     }
                 }
             }
         }
