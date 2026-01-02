@@ -32,6 +32,7 @@ import androidx.compose.foundation.rememberScrollState
 import com.h2.wellspend.data.Account
 import com.h2.wellspend.data.FeeConfig
 import java.util.UUID
+import androidx.compose.foundation.ExperimentalFoundationApi
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
@@ -53,7 +54,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun AccountScreen(
     accounts: List<Account>,
@@ -112,35 +113,37 @@ fun AccountScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     itemsIndexed(accounts, key = { _, account -> account.id }) { index, account ->
-                        AccountItem(
-                            account = account,
-                            balance = balances[account.id] ?: account.initialBalance,
-                            currency = currency,
-                            isReorderMode = isReorderMode,
-                            canMoveUp = index > 0,
-                            canMoveDown = index < accounts.size - 1,
-                            onEdit = {
-                                accountToEdit = account
-                                showDialog = true
-                            },
-                            onDelete = { accountToDelete = account },
-                            onMoveUp = {
-                                if (index > 0) {
-                                    val newList = accounts.toMutableList()
-                                    val item = newList.removeAt(index)
-                                    newList.add(index - 1, item)
-                                    onReorder(newList)
+                        Box(modifier = Modifier.animateItemPlacement()) {
+                            AccountItem(
+                                account = account,
+                                balance = balances[account.id] ?: account.initialBalance,
+                                currency = currency,
+                                isReorderMode = isReorderMode,
+                                canMoveUp = index > 0,
+                                canMoveDown = index < accounts.size - 1,
+                                onEdit = {
+                                    accountToEdit = account
+                                    showDialog = true
+                                },
+                                onDelete = { accountToDelete = account },
+                                onMoveUp = {
+                                    if (index > 0) {
+                                        val newList = accounts.toMutableList()
+                                        val item = newList.removeAt(index)
+                                        newList.add(index - 1, item)
+                                        onReorder(newList)
+                                    }
+                                },
+                                onMoveDown = {
+                                    if (index < accounts.size - 1) {
+                                        val newList = accounts.toMutableList()
+                                        val item = newList.removeAt(index)
+                                        newList.add(index + 1, item)
+                                        onReorder(newList)
+                                    }
                                 }
-                            },
-                            onMoveDown = {
-                                if (index < accounts.size - 1) {
-                                    val newList = accounts.toMutableList()
-                                    val item = newList.removeAt(index)
-                                    newList.add(index + 1, item)
-                                    onReorder(newList)
-                                }
-                            }
-                        )
+                            )
+                        }
                     }
                     item {
                          Box(
