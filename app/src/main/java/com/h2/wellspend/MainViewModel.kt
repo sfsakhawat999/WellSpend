@@ -69,7 +69,7 @@ class MainViewModel(
             val expense = Expense(
                 amount = amount,
                 description = "Initial Loan Amount: $name",
-                category = Category.Others,
+                category = Category.Loan,
                 date = java.time.LocalDateTime.now().toString(),
                 timestamp = System.currentTimeMillis(),
                 transactionType = transactionType,
@@ -109,7 +109,7 @@ class MainViewModel(
             val expense = Expense(
                 amount = amount,
                 description = desc,
-                category = Category.Others,
+                category = Category.Loan,
                 date = java.time.LocalDateTime.now().toString(),
                 timestamp = System.currentTimeMillis(),
                 transactionType = transactionType,

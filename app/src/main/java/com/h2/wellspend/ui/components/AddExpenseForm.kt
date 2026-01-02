@@ -138,9 +138,9 @@ fun AddExpenseForm(
         }
     }
 
-    // Filter out TransactionFee from selection
+    // Filter out TransactionFee and Loan from selection
     val filteredCategories = remember(categories) {
-        categories.filter { it != Category.TransactionFee }
+        categories.filter { it != Category.TransactionFee && it != Category.Loan }
     }
 
     // Ensure selected category is valid
