@@ -97,7 +97,8 @@ data class AppData(
     val expenses: List<Expense>,
     val budgets: List<Budget>,
     val accounts: List<Account>? = null,
-    val recurringConfigs: List<RecurringConfig>? = null
+    val recurringConfigs: List<RecurringConfig>? = null,
+    val loans: List<Loan>? = null
 )
 
 @Keep

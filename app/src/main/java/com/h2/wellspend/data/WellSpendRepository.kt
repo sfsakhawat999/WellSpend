@@ -129,11 +129,16 @@ class WellSpendRepository(private val database: AppDatabase) {
         return database.accountDao().getAllAccountsOneShot()
     }
 
+    suspend fun getAllLoansOneShot(): List<Loan> {
+        return database.loanDao().getAllLoansOneShot()
+    }
+
     suspend fun importData(
         expenses: List<Expense>, 
         budgets: List<Budget>, 
         accounts: List<Account>?, 
-        recurringConfigs: List<RecurringConfig>?
+        recurringConfigs: List<RecurringConfig>?,
+        loans: List<Loan>?
     ) {
         if (accounts != null) {
             database.accountDao().insertAccounts(accounts)
@@ -142,6 +147,9 @@ class WellSpendRepository(private val database: AppDatabase) {
         database.budgetDao().insertBudgets(budgets)
         if (recurringConfigs != null) {
             database.recurringDao().insertRecurringConfigs(recurringConfigs)
+        }
+        if (loans != null) {
+            database.loanDao().insertLoans(loans)
         }
     }
 }

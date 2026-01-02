@@ -471,7 +471,8 @@ class MainViewModel(
                 val budgets = repository.getAllBudgetsOneShot()
                 val accounts = repository.getAllAccountsOneShot()
                 val recurringConfigs = repository.getRecurringConfigsOneShot()
-                val appData = com.h2.wellspend.data.AppData(expenses, budgets, accounts, recurringConfigs)
+                val loans = repository.getAllLoansOneShot()
+                val appData = com.h2.wellspend.data.AppData(expenses, budgets, accounts, recurringConfigs, loans)
                 
                 val gson = com.google.gson.Gson()
                 val jsonString = gson.toJson(appData)
@@ -520,8 +521,9 @@ class MainViewModel(
                         // New data has list.
                         
                         val recurringConfigs = importData.recurringConfigs?.map { it.toRecurringConfig() }
+                        val loans = importData.loans
 
-                        repository.importData(expenses, budgets, accounts, recurringConfigs)
+                        repository.importData(expenses, budgets, accounts, recurringConfigs, loans)
                         viewModelScope.launch(kotlinx.coroutines.Dispatchers.Main) {
                             onResult(true, "Import successful")
                         }
@@ -552,7 +554,8 @@ private data class ImportAppData(
     val expenses: List<ImportExpense>,
     val budgets: List<Budget>,
     val accounts: List<com.h2.wellspend.data.Account>? = null,
-    val recurringConfigs: List<ImportRecurringConfig>? = null
+    val recurringConfigs: List<ImportRecurringConfig>? = null,
+    val loans: List<com.h2.wellspend.data.Loan>? = null
 )
 
 @androidx.annotation.Keep
