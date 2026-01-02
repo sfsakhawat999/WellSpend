@@ -332,7 +332,7 @@ fun AddLoanTransactionDialog(
 ) {
     var amount by remember { mutableStateOf("") }
     var isPayment by remember { mutableStateOf(true) } // True = Pay/Repay, False = Increase
-    var selectedAccountId by remember { mutableStateOf<String?>(null) }
+    var selectedAccountId by remember { mutableStateOf(accounts.firstOrNull()?.id) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -352,20 +352,24 @@ fun AddLoanTransactionDialog(
                 
                 OutlinedTextField(value = amount, onValueChange = { amount = it }, label = { Text("Amount") })
                 
-                Text(if (isPayment) "To/From Account" else "Source/Dest Account")
+                Text(if (isPayment) "To/From Account (Required)" else "Source/Dest Account (Required)")
                  Row(modifier = Modifier.horizontalScroll(androidx.compose.foundation.rememberScrollState())) {
-                     FilterChip(selected = selectedAccountId == null, onClick = { selectedAccountId = null }, label = { Text("None") })
                      accounts.forEach { acc ->
-                         Spacer(Modifier.width(4.dp))
                          FilterChip(selected = selectedAccountId == acc.id, onClick = { selectedAccountId = acc.id }, label = { Text(acc.name) })
+                         Spacer(Modifier.width(4.dp))
                      }
+                 }
+                 if (accounts.isEmpty()) {
+                     Text("No accounts waiting. Please create an account first.", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                  }
             }
         },
         confirmButton = {
-            TextButton(onClick = {
+            TextButton(
+                enabled = selectedAccountId != null,
+                onClick = {
                 val amt = amount.toDoubleOrNull()
-                if (amt != null) {
+                if (amt != null && selectedAccountId != null) {
                     onConfirm(amt, isPayment, selectedAccountId)
                 }
             }) { Text("Confirm") }
