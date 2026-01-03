@@ -20,6 +20,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.activity.compose.BackHandler
+import androidx.compose.material3.TopAppBar
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
@@ -48,8 +50,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.unit.sp
 import com.h2.wellspend.data.Account
 import com.h2.wellspend.data.Loan
 import com.h2.wellspend.data.LoanType
@@ -67,6 +68,7 @@ fun AddLoanTransactionScreen(
     onDismiss: () -> Unit,
     onConfirm: (Double, Boolean, String?, Double, String?, LocalDate) -> Unit // feeConfigName added
 ) {
+    BackHandler(onBack = onDismiss)
     var amount by remember { mutableStateOf("") }
     var isPayment by remember { mutableStateOf(true) } // True = Pay/Repay, False = Increase Loan
     var selectedAccountId by remember { mutableStateOf<String?>(null) }
@@ -122,61 +124,37 @@ fun AddLoanTransactionScreen(
         }
     }
 
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
-    ) {
-        Scaffold(
-            topBar = {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(if (isPayment) "Add Payment/Repayment" else "Add Loan Increase") },
+                navigationIcon = {
                     IconButton(onClick = onDismiss) {
-                        Icon(Icons.Default.Close, contentDescription = "Cancel")
+                        Icon(Icons.Default.Close, contentDescription = "Close")
                     }
-                    Text(
-                        text = "Update Loan: ${loan.name}",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Spacer(modifier = Modifier.size(48.dp))
-                }
-            },
-            bottomBar = {
-                 Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp)
-                ) {
-                    Button(
-                        onClick = {
-                            val amt = amount.toDoubleOrNull()
-                            val fee = feeAmount.toDoubleOrNull() ?: 0.0
-                            if (amt != null && selectedAccountId != null) {
-                                onConfirm(amt, isPayment, selectedAccountId, fee, selectedFeeConfigName, date)
-                            }
-                        },
-                        enabled = amount.toDoubleOrNull() != null && selectedAccountId != null,
-                        shape = RoundedCornerShape(16.dp),
-                        modifier = Modifier.fillMaxWidth().height(56.dp)
-                    ) {
-                        Text("Confirm", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                },
+                actions = {
+                    TextButton(onClick = {
+                        val amt = amount.toDoubleOrNull()
+                        val fee = feeAmount.toDoubleOrNull() ?: 0.0
+                        if (amt != null && selectedAccountId != null) {
+                            onConfirm(amt, isPayment, selectedAccountId, fee, selectedFeeConfigName, date)
+                        }
+                    }, enabled = amount.isNotBlank() && selectedAccountId != null) {
+                        Text("Save", fontWeight = FontWeight.Bold)
                     }
                 }
-            }
-        ) { paddingValues ->
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues)
-                    .padding(horizontal = 24.dp)
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
+            )
+        }
+    ) { innerPadding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .verticalScroll(rememberScrollState())
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
                 Row {
                      // LEND: Pay = Receive Money, Increase = Give Money
                      // BORROW: Pay = Give Money, Increase = Receive Money
@@ -294,4 +272,3 @@ fun AddLoanTransactionScreen(
             }
         }
     }
-}

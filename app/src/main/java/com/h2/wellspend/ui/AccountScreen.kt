@@ -27,8 +27,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import androidx.compose.material.icons.filled.Close
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
 import com.h2.wellspend.data.Account
@@ -77,6 +77,20 @@ fun AccountScreen(
     // Reorder mode state
     var isReorderMode by remember { mutableStateOf(false) }
 
+        if (showDialog) {
+            AccountInputScreen(
+                account = accountToEdit,
+                currentBalance = if (accountToEdit != null) balances[accountToEdit!!.id] else null,
+                onDismiss = { showDialog = false },
+                onSave = { account, adjustment ->
+                    onUpdateAccount(account)
+                    if (adjustment != null && adjustment != 0.0) {
+                        onAdjustBalance(account.id, adjustment)
+                    }
+                    showDialog = false
+                }
+            )
+        } else {
     Scaffold(
         floatingActionButton = {
             FloatingActionButton(onClick = {
@@ -189,21 +203,7 @@ fun AccountScreen(
                 }
             )
         }
-
-        if (showDialog) {
-            AccountDialog(
-                account = accountToEdit,
-                currentBalance = if (accountToEdit != null) balances[accountToEdit!!.id] else null,
-                onDismiss = { showDialog = false },
-                onSave = { account, adjustment ->
-                    onUpdateAccount(account)
-                    if (adjustment != null && adjustment != 0.0) {
-                        onAdjustBalance(account.id, adjustment)
-                    }
-                    showDialog = false
-                }
-            )
-        }
+    }
     }
 }
 
@@ -367,12 +367,13 @@ fun AccountItem(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AccountDialog(
+fun AccountInputScreen(
     account: Account?,
     currentBalance: Double? = null,
     onDismiss: () -> Unit,
     onSave: (Account, Double?) -> Unit
 ) {
+    BackHandler(onBack = onDismiss)
     var name by remember { mutableStateOf(account?.name ?: "") }
     // If account exists (Edit), use currentBalance. If new, use initialBalance (empty).
     // but we only track 'displayBalance' for editing.
@@ -394,19 +395,15 @@ fun AccountDialog(
     var newFeeValue by remember { mutableStateOf("") }
     var newFeeIsPercent by remember { mutableStateOf(true) }
 
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
-    ) {
-        Scaffold(
-            topBar = {
-                TopAppBar(
-                    title = { Text(if (account == null) "Add Account" else "Edit Account") },
-                    navigationIcon = {
-                        IconButton(onClick = onDismiss) {
-                            Icon(Icons.Default.Close, contentDescription = "Close")
-                        }
-                    },
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(if (account == null) "Add Account" else "Edit Account") },
+                navigationIcon = {
+                    IconButton(onClick = onDismiss) {
+                        Icon(Icons.Default.Close, contentDescription = "Close")
+                    }
+                },
                     actions = {
                         TextButton(onClick = {
                             if (name.isNotBlank()) {
@@ -535,5 +532,4 @@ fun AccountDialog(
                 }
             }
         }
-    }
 }

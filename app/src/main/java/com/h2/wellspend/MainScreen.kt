@@ -49,6 +49,7 @@ import androidx.compose.material3.Scaffold
 
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -258,6 +259,7 @@ fun MainScreen(viewModel: MainViewModel) {
         Box(modifier = Modifier.padding(paddingValues).fillMaxSize()) {
             val targetState = when {
                 showAddExpense -> "OVERLAY_ADD"
+                loanTransactionToEdit != null -> "OVERLAY_EDIT_LOAN_TRANSACTION"
                 showReport -> "OVERLAY_REPORT"
                 showBudgets -> "OVERLAY_BUDGETS"
                 showSettings -> "OVERLAY_SETTINGS"
@@ -318,6 +320,40 @@ fun MainScreen(viewModel: MainViewModel) {
                             onCancel = { showAddExpense = false },
                             onReorder = { viewModel.updateCategoryOrder(it) }
                         )
+                    }
+                    "OVERLAY_EDIT_LOAN_TRANSACTION" -> {
+                         val transaction = loanTransactionToEdit!!
+                         val relatedLoan = loans.find { it.id == transaction.loanId }
+                         if (relatedLoan != null) {
+                             com.h2.wellspend.ui.components.EditLoanTransactionScreen(
+                                transaction = transaction,
+                                loan = relatedLoan,
+                                accounts = accounts,
+                                currency = currency,
+                                onDismiss = { loanTransactionToEdit = null },
+                                onConfirm = { amt, desc, accId, fee, feeName, date ->
+                                    viewModel.updateExpense(
+                                        id = transaction.id,
+                                        amount = amt,
+                                        description = desc,
+                                        category = transaction.category,
+                                        date = date,
+                                        isRecurring = false,
+                                        frequency = com.h2.wellspend.data.RecurringFrequency.WEEKLY, // Dummy
+                                        transactionType = transaction.transactionType,
+                                        accountId = accId,
+                                        targetAccountId = transaction.transferTargetAccountId,
+                                        feeAmount = fee,
+                                        feeConfigName = feeName,
+                                        loanId = transaction.loanId
+                                    )
+                                    loanTransactionToEdit = null
+                                }
+                             )
+                         } else {
+                             // Should not happen, but reset
+                             LaunchedEffect(Unit) { loanTransactionToEdit = null }
+                         }
                     }
                     "OVERLAY_REPORT" -> {
                         MonthlyReport(
@@ -472,38 +508,6 @@ fun MainScreen(viewModel: MainViewModel) {
             }
 
             // Dialog for Editing Loan Transaction
-            if (loanTransactionToEdit != null) {
-                val relatedLoan = loans.find { it.id == loanTransactionToEdit!!.loanId }
-                if (relatedLoan != null) {
-                    com.h2.wellspend.ui.components.EditLoanTransactionDialog(
-                        transaction = loanTransactionToEdit!!,
-                        loan = relatedLoan,
-                        accounts = accounts,
-                        currency = currency,
-                        onDismiss = { loanTransactionToEdit = null },
-                        onConfirm = { amt, desc, accId, fee, feeName, date ->
-                            viewModel.updateExpense(
-                                id = loanTransactionToEdit!!.id,
-                                amount = amt,
-                                description = desc,
-                                category = loanTransactionToEdit!!.category,
-                                date = date,
-                                isRecurring = false,
-                                frequency = com.h2.wellspend.data.RecurringFrequency.WEEKLY, // Dummy
-                                transactionType = loanTransactionToEdit!!.transactionType,
-                                accountId = accId,
-                                targetAccountId =  loanTransactionToEdit!!.transferTargetAccountId,
-                                feeAmount = fee,
-                                feeConfigName = feeName,
-                                loanId = loanTransactionToEdit!!.loanId
-                            )
-                            loanTransactionToEdit = null
-                        }
-                    )
-                } else {
-                    loanTransactionToEdit = null
-                }
-            }
         }
     }
 }

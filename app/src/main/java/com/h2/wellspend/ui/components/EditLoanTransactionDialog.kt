@@ -20,6 +20,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.activity.compose.BackHandler
+import androidx.compose.material3.TopAppBar
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
@@ -49,8 +51,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.unit.sp
 import com.h2.wellspend.data.Account
 import com.h2.wellspend.data.Expense
 import com.h2.wellspend.data.Loan
@@ -60,7 +61,7 @@ import java.time.ZoneId
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun EditLoanTransactionDialog(
+fun EditLoanTransactionScreen(
     transaction: Expense,
     loan: Loan,
     accounts: List<Account>,
@@ -68,6 +69,7 @@ fun EditLoanTransactionDialog(
     onDismiss: () -> Unit,
     onConfirm: (Double, String, String?, Double, String?, String) -> Unit // amount, desc, accId, fee, feeConfigName, date
 ) {
+    BackHandler(onBack = onDismiss)
     var amount by remember { mutableStateOf(transaction.amount.toString()) }
     var description by remember { mutableStateOf(transaction.description) }
     var selectedAccountId by remember { mutableStateOf(transaction.accountId) }
@@ -143,61 +145,48 @@ fun EditLoanTransactionDialog(
         }
     }
 
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
-    ) {
-        Scaffold(
-            topBar = {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(title, fontWeight = FontWeight.SemiBold) },
+                navigationIcon = {
                     IconButton(onClick = onDismiss) {
-                        Icon(Icons.Default.Close, contentDescription = "Cancel")
+                        Icon(Icons.Default.Close, contentDescription = "Close")
                     }
-                    Text(
-                        text = title,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Spacer(modifier = Modifier.size(48.dp)) // Balance close button
                 }
-            },
-            bottomBar = {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp)
+            )
+        },
+        bottomBar = {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
+            ) {
+                Button(
+                    onClick = {
+                        val amt = amount.toDoubleOrNull()
+                        val fee = feeAmount.toDoubleOrNull() ?: 0.0
+                        if (amt != null && selectedAccountId != null) {
+                            onConfirm(amt, description, selectedAccountId, fee, selectedFeeConfigName, date)
+                        }
+                    },
+                    enabled = amount.isNotBlank() && selectedAccountId != null,
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier.fillMaxWidth().height(56.dp)
                 ) {
-                    Button(
-                        onClick = {
-                            val amt = amount.toDoubleOrNull()
-                            val fee = feeAmount.toDoubleOrNull() ?: 0.0
-                            if (amt != null && selectedAccountId != null) {
-                                onConfirm(amt, description, selectedAccountId, fee, selectedFeeConfigName, date)
-                            }
-                        },
-                        enabled = amount.isNotBlank() && selectedAccountId != null,
-                        shape = RoundedCornerShape(16.dp),
-                        modifier = Modifier.fillMaxWidth().height(56.dp)
-                    ) {
-                        Text("Save Changes", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    }
+                    Text("Save Changes", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 }
             }
-        ) { paddingValues ->
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues)
-                    .padding(horizontal = 24.dp)
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
+        }
+    ) { paddingValues ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+                .padding(horizontal = 24.dp)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
                 // Amount Input
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
@@ -303,4 +292,3 @@ fun EditLoanTransactionDialog(
             }
         }
     }
-}

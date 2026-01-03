@@ -55,7 +55,23 @@ fun LoanScreen(
     var editingLoan by remember { mutableStateOf<Loan?>(null) }
     var loanForTransaction by remember { mutableStateOf<Loan?>(null) } // If set, show transaction dialog
 
-    if (isCreatingLoan || editingLoan != null) {
+    if (loanForTransaction != null) {
+        val loan = loanForTransaction!!
+        val isPayment = true // Should be determined? Oh wait, AddLoanTransactionScreen handles its own logic but we pass it? 
+        // Wait, AddLoanTransactionScreen has 'var isPayment by remember'. It handles it.
+        // We just pass the loan.
+        
+        AddLoanTransactionScreen(
+            loan = loan,
+            accounts = accounts,
+            currency = currency,
+            onDismiss = { loanForTransaction = null },
+            onConfirm = { amount, isPayment, accId, fee, feeName, date ->
+                onAddTransaction(loan.id, amount, isPayment, accId, loan.type, fee, feeName, date)
+                loanForTransaction = null
+            }
+        )
+    } else if (isCreatingLoan || editingLoan != null) {
         LoanInputScreen(
             initialLoan = editingLoan,
             accounts = accounts,
@@ -144,20 +160,7 @@ fun LoanScreen(
             }
         }
     }
-    }
-
-        if (loanForTransaction != null) {
-        AddLoanTransactionScreen(
-            loan = loanForTransaction!!,
-            accounts = accounts,
-            currency = currency,
-            onDismiss = { loanForTransaction = null },
-            onConfirm = { amount, isPayment, accId, fee, feeName, date ->
-                onAddTransaction(loanForTransaction!!.id, amount, isPayment, accId, loanForTransaction!!.type, fee, feeName, date)
-                loanForTransaction = null
-            }
-        )
-    }
+}
 }
 
 @Composable
