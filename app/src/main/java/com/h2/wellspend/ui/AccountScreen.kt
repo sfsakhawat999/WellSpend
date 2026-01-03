@@ -63,8 +63,10 @@ fun AccountScreen(
     onAddAccount: (Account) -> Unit,
     onUpdateAccount: (Account) -> Unit,
     onDeleteAccount: (Account) -> Unit,
+
     isAccountUsed: (String) -> Boolean,
-    onReorder: (List<Account>) -> Unit
+    onReorder: (List<Account>) -> Unit,
+    onAdjustBalance: (String, Double) -> Unit // NEW
 ) {
     var showDialog by remember { mutableStateOf(false) }
     var accountToEdit by remember { mutableStateOf<Account?>(null) }
@@ -189,12 +191,15 @@ fun AccountScreen(
         if (showDialog) {
             AccountDialog(
                 account = accountToEdit,
+                currentBalance = if (accountToEdit != null) balances[accountToEdit!!.id] else null,
                 onDismiss = { showDialog = false },
-                onSave = { account ->
-                    onAddAccount(account)
+                onSave = { account, adjustment ->
+                    onUpdateAccount(account)
+                    if (adjustment != null && adjustment != 0.0) {
+                        onAdjustBalance(account.id, adjustment)
+                    }
                     showDialog = false
-                },
-                isInitialBalanceEditable = accountToEdit?.let { !isAccountUsed(it.id) } ?: true
+                }
             )
         }
     }
@@ -361,12 +366,23 @@ fun AccountItem(
 @Composable
 fun AccountDialog(
     account: Account?,
+    currentBalance: Double? = null,
     onDismiss: () -> Unit,
-    onSave: (Account) -> Unit,
-    isInitialBalanceEditable: Boolean
+    onSave: (Account, Double?) -> Unit
 ) {
     var name by remember { mutableStateOf(account?.name ?: "") }
-    var initialBalance by remember { mutableStateOf(account?.initialBalance?.toString() ?: "") }
+    // If account exists (Edit), use currentBalance. If new, use initialBalance (empty).
+    // but we only track 'displayBalance' for editing.
+    // For saving:
+    // New Account: initialBalance = displayBalance, adjustment = null
+    // Edit Account: initialBalance = account.initialBalance (unchanged), adjustment = displayBalance - currentBalance
+    
+    var displayBalance by remember { 
+        mutableStateOf(
+            if (account != null) (currentBalance?.toString() ?: account.initialBalance.toString()) 
+            else "" 
+        ) 
+    }
     
     // Fee Config State
     var feeConfigs by remember { mutableStateOf(account?.feeConfigs ?: emptyList()) }
@@ -397,12 +413,12 @@ fun AccountDialog(
                 )
 
                 OutlinedTextField(
-                    value = initialBalance,
-                    onValueChange = { initialBalance = it },
-                    label = { Text("Initial Balance") },
+                    value = displayBalance,
+                    onValueChange = { displayBalance = it },
+                    label = { Text(if (account == null) "Initial Balance" else "Current Balance") },
                     modifier = Modifier.fillMaxWidth(),
-                    enabled = isInitialBalanceEditable,
-                    supportingText = if (!isInitialBalanceEditable) { { Text("Cannot edit balance after transactions added") } } else null,
+                    enabled = true,
+                    supportingText = if (account != null) { { Text("Editing this will create a balance adjustment transaction") } } else null,
                     keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number)
                 )
 
@@ -472,14 +488,33 @@ fun AccountDialog(
                     Spacer(modifier = Modifier.width(8.dp))
                     Button(onClick = {
                         if (name.isNotBlank()) {
-                            onSave(
-                                Account(
-                                    id = account?.id ?: UUID.randomUUID().toString(),
-                                    name = name,
-                                    initialBalance = initialBalance.toDoubleOrNull() ?: 0.0,
-                                    feeConfigs = feeConfigs
+                            val newBalanceVal = displayBalance.toDoubleOrNull() ?: 0.0
+                            
+                            if (account == null) {
+                                // NEW Account
+                                onSave(
+                                    Account(
+                                        id = UUID.randomUUID().toString(),
+                                        name = name,
+                                        initialBalance = newBalanceVal,
+                                        feeConfigs = feeConfigs
+                                    ),
+                                    null // No adjustment transaction for new account
                                 )
-                            )
+                            } else {
+                                // EDIT Account
+                                val oldBalance = currentBalance ?: account.initialBalance
+                                val adjustment = newBalanceVal - oldBalance
+                                
+                                onSave(
+                                    account.copy(
+                                        name = name,
+                                        feeConfigs = feeConfigs
+                                        // initialBalance remains unchanged!
+                                    ),
+                                    adjustment
+                                )
+                            }
                         }
                     }) {
                         Text("Save")

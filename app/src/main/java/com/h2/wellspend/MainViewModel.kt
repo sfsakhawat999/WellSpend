@@ -443,6 +443,26 @@ class MainViewModel(
         }
     }
 
+    fun adjustAccountBalance(accountId: String, adjustment: Double) {
+        viewModelScope.launch {
+            val amount = kotlin.math.abs(adjustment)
+            val type = if (adjustment > 0) com.h2.wellspend.data.TransactionType.INCOME else com.h2.wellspend.data.TransactionType.EXPENSE
+            
+            val expense = Expense(
+                amount = amount,
+                description = "Balance Adjustment",
+                category = Category.Others,
+                date = LocalDate.now().atStartOfDay().toString(),
+                timestamp = System.currentTimeMillis(),
+                isRecurring = false,
+                transactionType = type,
+                accountId = accountId,
+                feeAmount = 0.0
+            )
+            repository.addExpense(expense)
+        }
+    }
+
     fun updateBudgets(newBudgets: List<Budget>, newCurrency: String) {
         viewModelScope.launch {
             newBudgets.forEach { repository.setBudget(it) }
