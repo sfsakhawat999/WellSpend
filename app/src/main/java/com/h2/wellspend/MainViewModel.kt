@@ -142,16 +142,25 @@ class MainViewModel(
         }
     }
 
-    fun deleteLoan(loan: com.h2.wellspend.data.Loan) {
+    fun deleteLoan(loan: com.h2.wellspend.data.Loan, deleteTransactions: Boolean = false) {
         viewModelScope.launch {
-            // Update linked expenses to remove loanId (orphaned history)
             val allExpenses = repository.getAllExpensesOneShot()
-            val expensesToUpdate = allExpenses.filter { it.loanId == loan.id }.map { 
-                it.copy(loanId = null, description = "${it.description} (Deleted Loan: ${loan.name})") 
-            }
+            val linkedExpenses = allExpenses.filter { it.loanId == loan.id }
             
-            if (expensesToUpdate.isNotEmpty()) {
-                repository.addExpenses(expensesToUpdate)
+            if (deleteTransactions) {
+                // Delete all linked transactions (this automatically reverts balances)
+                if (linkedExpenses.isNotEmpty()) {
+                    repository.deleteExpenses(linkedExpenses)
+                }
+            } else {
+                // Just unlink transactions (orphaned history)
+                val expensesToUpdate = linkedExpenses.map { 
+                    it.copy(loanId = null, description = "${it.description} (Deleted Loan: ${loan.name})") 
+                }
+                
+                if (expensesToUpdate.isNotEmpty()) {
+                    repository.addExpenses(expensesToUpdate)
+                }
             }
             
             repository.deleteLoan(loan)

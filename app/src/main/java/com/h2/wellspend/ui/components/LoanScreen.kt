@@ -55,7 +55,7 @@ fun LoanScreen(
     onAddLoan: (String, Double, LoanType, String?, String?, Double, String?, java.time.LocalDate) -> Unit, // feeConfigName added
     onAddTransaction: (String, Double, Boolean, String?, LoanType, Double, String?, java.time.LocalDate) -> Unit, // feeConfigName added
     onUpdateLoan: (Loan) -> Unit,
-    onDeleteLoan: (Loan) -> Unit,
+    onDeleteLoan: (Loan, Boolean) -> Unit, // (loan, deleteTransactions)
     onBack: () -> Unit
 ) {
     var selectedTab by remember { mutableIntStateOf(0) } // 0 = Lent, 1 = Borrowed
@@ -168,7 +168,7 @@ fun LoanScreen(
                                         currency = currency,
                                         onTransactionClick = { loanForTransaction = loan },
                                         onEditClick = { editingLoan = loan },
-                                        onDeleteClick = { onDeleteLoan(loan) }
+                                        onDeleteClick = { deleteTransactions -> onDeleteLoan(loan, deleteTransactions) }
                                     )
                                 }
                             }
@@ -187,7 +187,7 @@ fun LoanItem(
     currency: String,
     onTransactionClick: (Loan) -> Unit,
     onEditClick: () -> Unit,
-    onDeleteClick: () -> Unit
+    onDeleteClick: (Boolean) -> Unit // deleteTransactions parameter
 ) {
     val density = androidx.compose.ui.platform.LocalDensity.current
     val actionWidth = 80.dp
@@ -197,24 +197,62 @@ fun LoanItem(
     
     // Delete states
     var showDeleteDialog by remember { mutableStateOf(false) }
+    var revertTransactions by remember { mutableStateOf(false) }
 
     if (showDeleteDialog) {
         AlertDialog(
-            onDismissRequest = { showDeleteDialog = false },
+            onDismissRequest = { 
+                showDeleteDialog = false
+                revertTransactions = false
+            },
             title = { Text("Delete Loan") },
-            text = { Text("Are you sure you want to delete this loan? Associated transactions will remain but become unlinked.") },
+            text = { 
+                Column {
+                    Text("Are you sure you want to delete this loan?")
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { revertTransactions = !revertTransactions }
+                            .padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Checkbox(
+                            checked = revertTransactions,
+                            onCheckedChange = { revertTransactions = it }
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Column {
+                            Text(
+                                "Revert all transactions",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Text(
+                                "Deletes all loan transactions and restores account balances",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            },
             confirmButton = {
                 TextButton(
                     onClick = {
-                        onDeleteClick()
+                        onDeleteClick(revertTransactions)
                         showDeleteDialog = false
+                        revertTransactions = false
                     }
                 ) {
                     Text("Delete", color = MaterialTheme.colorScheme.error)
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showDeleteDialog = false }) {
+                TextButton(onClick = { 
+                    showDeleteDialog = false
+                    revertTransactions = false
+                }) {
                     Text("Cancel")
                 }
             }
