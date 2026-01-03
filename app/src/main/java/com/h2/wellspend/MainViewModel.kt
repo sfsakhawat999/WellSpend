@@ -575,7 +575,8 @@ private data class ImportExpense(
     val accountId: String? = null,
     val transferTargetAccountId: String? = null,
     val feeAmount: Double? = null,
-    val feeConfigName: String? = null
+    val feeConfigName: String? = null,
+    val loanId: String? = null
 ) {
     fun toExpense(): Expense {
         return Expense(
@@ -590,7 +591,8 @@ private data class ImportExpense(
             accountId = accountId,
             transferTargetAccountId = transferTargetAccountId,
             feeAmount = feeAmount ?: 0.0,
-            feeConfigName = feeConfigName
+            feeConfigName = feeConfigName,
+            loanId = loanId
         )
     }
 }
