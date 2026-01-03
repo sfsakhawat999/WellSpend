@@ -27,6 +27,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
 import com.h2.wellspend.data.Account
@@ -363,6 +365,7 @@ fun AccountItem(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AccountDialog(
     account: Account?,
@@ -391,20 +394,71 @@ fun AccountDialog(
     var newFeeValue by remember { mutableStateOf("") }
     var newFeeIsPercent by remember { mutableStateOf(true) }
 
-    Dialog(onDismissRequest = onDismiss) {
-        Card(
-            shape = RoundedCornerShape(16.dp),
-            modifier = Modifier.fillMaxWidth()
-        ) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Scaffold(
+            topBar = {
+                TopAppBar(
+                    title = { Text(if (account == null) "Add Account" else "Edit Account") },
+                    navigationIcon = {
+                        IconButton(onClick = onDismiss) {
+                            Icon(Icons.Default.Close, contentDescription = "Close")
+                        }
+                    },
+                    actions = {
+                        TextButton(onClick = {
+                            if (name.isNotBlank()) {
+                                val newBalanceVal = displayBalance.toDoubleOrNull() ?: 0.0
+                                
+                                if (account == null) {
+                                    // NEW Account
+                                    onSave(
+                                        Account(
+                                            id = UUID.randomUUID().toString(),
+                                            name = name,
+                                            initialBalance = newBalanceVal,
+                                            feeConfigs = feeConfigs
+                                        ),
+                                        null // No adjustment transaction for new account
+                                    )
+                                } else {
+                                    // EDIT Account
+                                    val oldBalance = currentBalance ?: account.initialBalance
+                                    val adjustment = newBalanceVal - oldBalance
+                                    
+                                    onSave(
+                                        account.copy(
+                                            name = name,
+                                            feeConfigs = feeConfigs
+                                            // initialBalance remains unchanged!
+                                        ),
+                                        adjustment
+                                    )
+                                }
+                            }
+                        }) {
+                            Text("Save", fontWeight = FontWeight.Bold)
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surface,
+                        titleContentColor = MaterialTheme.colorScheme.onSurface,
+                        actionIconContentColor = MaterialTheme.colorScheme.primary
+                    )
+                )
+            },
+            containerColor = MaterialTheme.colorScheme.surface
+        ) { innerPadding ->
             Column(
-                modifier = Modifier.padding(16.dp).verticalScroll(androidx.compose.foundation.rememberScrollState()),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding)
+                    .verticalScroll(androidx.compose.foundation.rememberScrollState())
+                    .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                Text(
-                    text = if (account == null) "Add Account" else "Edit Account",
-                    style = MaterialTheme.typography.headlineSmall
-                )
-
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
@@ -422,7 +476,7 @@ fun AccountDialog(
                     keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number)
                 )
 
-                Divider()
+                HorizontalDivider()
                 Text("Transaction Fees", style = MaterialTheme.typography.titleMedium)
                 
                 feeConfigs.forEachIndexed { index, config ->
@@ -477,47 +531,6 @@ fun AccountDialog(
                 } else {
                     OutlinedButton(onClick = { showFeeInput = true }, modifier = Modifier.fillMaxWidth()) {
                         Text("Add Fee Configuration")
-                    }
-                }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
-                ) {
-                    TextButton(onClick = onDismiss) { Text("Cancel") }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Button(onClick = {
-                        if (name.isNotBlank()) {
-                            val newBalanceVal = displayBalance.toDoubleOrNull() ?: 0.0
-                            
-                            if (account == null) {
-                                // NEW Account
-                                onSave(
-                                    Account(
-                                        id = UUID.randomUUID().toString(),
-                                        name = name,
-                                        initialBalance = newBalanceVal,
-                                        feeConfigs = feeConfigs
-                                    ),
-                                    null // No adjustment transaction for new account
-                                )
-                            } else {
-                                // EDIT Account
-                                val oldBalance = currentBalance ?: account.initialBalance
-                                val adjustment = newBalanceVal - oldBalance
-                                
-                                onSave(
-                                    account.copy(
-                                        name = name,
-                                        feeConfigs = feeConfigs
-                                        // initialBalance remains unchanged!
-                                    ),
-                                    adjustment
-                                )
-                            }
-                        }
-                    }) {
-                        Text("Save")
                     }
                 }
             }
