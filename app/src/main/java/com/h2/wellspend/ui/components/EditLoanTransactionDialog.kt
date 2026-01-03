@@ -264,31 +264,31 @@ fun EditLoanTransactionDialog(
                 }
                 
                 if (showFee && !doNotTrack) {
-                    Text("Transaction Fees", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        FilterChip(selected = selectedFeeConfigName == "None" || selectedFeeConfigName == null, onClick = { selectedFeeConfigName = "None"; isCustomFee = false }, label = { Text("None") })
-                        
-                        currentAccount?.feeConfigs?.forEach { config ->
-                            FilterChip(
-                                selected = selectedFeeConfigName == config.name,
-                                onClick = { selectedFeeConfigName = config.name; isCustomFee = false },
-                                label = { Text("${config.name} (${if(config.isPercentage) "${config.value}%" else currency + config.value})") }
-                            )
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Transaction Fees", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            FilterChip(selected = selectedFeeConfigName == "None" || selectedFeeConfigName == null, onClick = { selectedFeeConfigName = "None"; isCustomFee = false }, label = { Text("None") })
+                            
+                            currentAccount?.feeConfigs?.forEach { config ->
+                                FilterChip(
+                                    selected = selectedFeeConfigName == config.name,
+                                    onClick = { selectedFeeConfigName = config.name; isCustomFee = false },
+                                    label = { Text("${config.name} (${if(config.isPercentage) "${config.value}%" else currency + config.value})") }
+                                )
+                            }
+                            
+                            FilterChip(selected = isCustomFee, onClick = { selectedFeeConfigName = "Custom"; isCustomFee = true }, label = { Text("Custom") })
                         }
                         
-                        FilterChip(selected = isCustomFee, onClick = { selectedFeeConfigName = "Custom"; isCustomFee = true }, label = { Text("Custom") })
-                    }
-                    
-                    if (isCustomFee || (feeAmount.toDoubleOrNull() ?: 0.0) > 0) {
-                         Spacer(modifier = Modifier.height(8.dp))
-                         OutlinedTextField(
-                            value = feeAmount,
-                            onValueChange = { feeAmount = it; if(!isCustomFee) isCustomFee = true; selectedFeeConfigName = "Custom" },
-                            label = { Text("Fee Amount") },
-                            modifier = Modifier.fillMaxWidth(),
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-                         )
+                        if (isCustomFee || (feeAmount.toDoubleOrNull() ?: 0.0) > 0) {
+                             OutlinedTextField(
+                                value = feeAmount,
+                                onValueChange = { feeAmount = it; if(!isCustomFee) isCustomFee = true; selectedFeeConfigName = "Custom" },
+                                label = { Text("Fee Amount") },
+                                modifier = Modifier.fillMaxWidth(),
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                             )
+                        }
                     }
                 }
                 
