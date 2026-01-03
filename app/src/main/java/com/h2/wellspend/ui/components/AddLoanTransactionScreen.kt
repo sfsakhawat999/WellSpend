@@ -257,12 +257,7 @@ fun AddLoanTransactionScreen(
                      Text("No accounts. Add one.", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                 }
                 
-                // Auto-select first account if none selected
-                LaunchedEffect(accounts) {
-                    if (selectedAccountId == null && accounts.isNotEmpty()) {
-                        selectedAccountId = accounts.first().id
-                    }
-                }
+
 
                  // Fee Logic
                  val showFee = (loan.type == LoanType.LEND && !isPayment) || (loan.type == LoanType.BORROW && isPayment)

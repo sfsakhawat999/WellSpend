@@ -268,9 +268,7 @@ fun EditLoanTransactionDialog(
                          Spacer(Modifier.width(4.dp))
                      }
                 }
-                if (accounts.isNotEmpty() && selectedAccountId == null) {
-                      LaunchedEffect(Unit) { selectedAccountId = accounts.first().id }
-                }
+
                 
                 if (showFee) {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
