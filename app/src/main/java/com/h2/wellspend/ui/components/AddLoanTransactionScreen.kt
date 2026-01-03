@@ -47,6 +47,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.h2.wellspend.data.Account
@@ -186,13 +187,35 @@ fun AddLoanTransactionScreen(
                     FilterChip(selected = !isPayment, onClick = { isPayment = false }, label = { Text(incText) })
                 }
                 
-                OutlinedTextField(
-                    value = amount, 
-                    onValueChange = { amount = it }, 
-                    label = { Text("Amount") },
-                    modifier = Modifier.fillMaxWidth(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-                )
+                // Amount Input
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = currency,
+                            style = androidx.compose.ui.text.TextStyle(fontSize = 36.sp, color = MaterialTheme.colorScheme.onSurfaceVariant),
+                            modifier = Modifier.padding(end = 8.dp)
+                        )
+                        androidx.compose.material3.TextField(
+                            value = amount,
+                            onValueChange = { amount = it },
+                            textStyle = androidx.compose.ui.text.TextStyle(fontSize = 48.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface),
+                            placeholder = { Text("0", style = androidx.compose.ui.text.TextStyle(fontSize = 48.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f))) },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            colors = androidx.compose.material3.TextFieldDefaults.colors(
+                                focusedContainerColor = androidx.compose.ui.graphics.Color.Transparent,
+                                unfocusedContainerColor = androidx.compose.ui.graphics.Color.Transparent,
+                                focusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent,
+                                unfocusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent,
+                                cursorColor = MaterialTheme.colorScheme.primary
+                            ),
+                            modifier = Modifier.fillMaxWidth(0.6f)
+                        )
+                    }
+                }
                 
                 // Date Field
                 val dateFormatted = remember(date) { date.format(DateTimeFormatter.ofPattern("EEE, MMM d, yyyy")) }
