@@ -48,6 +48,8 @@ import androidx.compose.material.icons.filled.LocalGroceryStore
 import androidx.compose.material.icons.filled.Checkroom
 import androidx.compose.material.icons.filled.Devices
 import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.AccountBalance
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.h2.wellspend.data.Category
@@ -83,7 +85,9 @@ val CategoryColors = mapOf(
     Category.Electronics to Color(0xFF60a5fa),// Blue 400
     Category.Electronics to Color(0xFF60a5fa),// Blue 400
     Category.Hobbies to Color(0xFFfbbf24),     // Amber 400
-    Category.TransactionFee to Color(0xFF9ca3af) // Gray 400
+    Category.TransactionFee to Color(0xFF9ca3af), // Gray 400
+    Category.Loan to Color(0xFF7c3aed), // Violet 600
+    Category.BalanceAdjustment to Color(0xFF64748b) // Slate 500 (Neutral)
 )
 
 val CategoryIcons = mapOf(
@@ -117,7 +121,9 @@ val CategoryIcons = mapOf(
     Category.Electronics to Icons.Default.Devices,
     Category.Electronics to Icons.Default.Devices,
     Category.Hobbies to Icons.Default.Palette,
-    Category.TransactionFee to Icons.Default.AttachMoney
+    Category.TransactionFee to Icons.Default.AttachMoney,
+    Category.Loan to Icons.Default.AccountBalance,
+    Category.BalanceAdjustment to Icons.Default.Tune
 )
 
 fun getCategoryColor(category: Category): Color {
