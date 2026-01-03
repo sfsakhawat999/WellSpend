@@ -80,7 +80,8 @@ fun AddLoanTransactionScreen(
     var showDatePicker by remember { mutableStateOf(false) }
     val datePickerState = rememberDatePickerState()
 
-    var doNotTrack by remember { mutableStateOf(false) }
+    // var doNotTrack by remember { mutableStateOf(false) } // Removed
+
     
     // Calculate Fee Logic
     val currentAccount = accounts.find { it.id == selectedAccountId }
@@ -152,14 +153,14 @@ fun AddLoanTransactionScreen(
                         .padding(16.dp)
                 ) {
                     Button(
-                        enabled = amount.toDoubleOrNull() != null && (doNotTrack || selectedAccountId != null),
                         onClick = {
                             val amt = amount.toDoubleOrNull()
                             val fee = feeAmount.toDoubleOrNull() ?: 0.0
-                            if (amt != null) {
-                                onConfirm(amt, isPayment, if (doNotTrack) null else selectedAccountId, fee, selectedFeeConfigName, date)
+                            if (amt != null && selectedAccountId != null) {
+                                onConfirm(amt, isPayment, selectedAccountId, fee, selectedFeeConfigName, date)
                             }
                         },
+                        enabled = amount.toDoubleOrNull() != null && selectedAccountId != null,
                         shape = RoundedCornerShape(16.dp),
                         modifier = Modifier.fillMaxWidth().height(56.dp)
                     ) {
@@ -237,35 +238,35 @@ fun AddLoanTransactionScreen(
                     )
                 )
                 
-                Row(
-                    verticalAlignment = Alignment.CenterVertically, 
-                    modifier = Modifier.fillMaxWidth().clickable { doNotTrack = !doNotTrack }
-                ) {
-                    Checkbox(checked = doNotTrack, onCheckedChange = { doNotTrack = it })
-                    Text("Do not track as transaction")
-                }
 
-                if (!doNotTrack) {
-                    val isMoneyOut = (loan.type == LoanType.LEND && !isPayment) || (loan.type == LoanType.BORROW && isPayment)
-                    val accountLabel = if (isMoneyOut) "Pay From Account" else "Deposit To Account"
-                    
-                    Text(accountLabel, style = MaterialTheme.typography.bodySmall)
-                     Row(modifier = Modifier.horizontalScroll(rememberScrollState())) {
-                         accounts.forEach { acc ->
-                             FilterChip(selected = selectedAccountId == acc.id, onClick = { selectedAccountId = acc.id }, label = { Text(acc.name) })
-                             Spacer(Modifier.width(4.dp))
-                         }
+
+                // REMOVED Checkbox for doNotTrack
+
+                // Account Selection (Always Visible)
+                val isMoneyOut = (loan.type == LoanType.LEND && !isPayment) || (loan.type == LoanType.BORROW && isPayment)
+                val accountLabel = if (isMoneyOut) "Pay From Account" else "Deposit To Account"
+                
+                Text(accountLabel, style = MaterialTheme.typography.bodySmall)
+                Row(modifier = Modifier.horizontalScroll(rememberScrollState())) {
+                     accounts.forEach { acc ->
+                         FilterChip(selected = selectedAccountId == acc.id, onClick = { selectedAccountId = acc.id }, label = { Text(acc.name) })
+                         Spacer(Modifier.width(4.dp))
                      }
-                     if (accounts.isEmpty()) {
-                         Text("No accounts. Add one.", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-                     }
-                } else {
-                    LaunchedEffect(Unit) { selectedAccountId = null }
+                }
+                if (accounts.isEmpty()) {
+                     Text("No accounts. Add one.", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                }
+                
+                // Auto-select first account if none selected
+                LaunchedEffect(accounts) {
+                    if (selectedAccountId == null && accounts.isNotEmpty()) {
+                        selectedAccountId = accounts.first().id
+                    }
                 }
 
                  // Fee Logic
                  val showFee = (loan.type == LoanType.LEND && !isPayment) || (loan.type == LoanType.BORROW && isPayment)
-                 if (showFee && !doNotTrack) {
+                 if (showFee) {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text("Transaction Fees", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {

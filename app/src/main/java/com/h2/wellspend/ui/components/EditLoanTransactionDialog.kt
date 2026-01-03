@@ -77,7 +77,8 @@ fun EditLoanTransactionDialog(
     var feeAmount by remember { mutableStateOf(transaction.feeAmount.toString()) }
     var isCustomFee by remember { mutableStateOf(transaction.feeConfigName == "Custom") }
 
-    var doNotTrack by remember { mutableStateOf(transaction.accountId == null) }
+    var doNotTrack by remember { mutableStateOf(false) } // Removed/Ignored
+
     
     // Date State
     // Format YYYY-MM-DD from transaction.date
@@ -176,17 +177,11 @@ fun EditLoanTransactionDialog(
                         onClick = {
                             val amt = amount.toDoubleOrNull()
                             val fee = feeAmount.toDoubleOrNull() ?: 0.0
-                            if (amt != null) {
-                                // Note: We are currently NOT passing date back via onConfirm because the signature didn't change in the previous step.
-                                // However, the user request asks for "date field is not same".
-                                // If we change the date here, we MUST update the transaction date.
-                                // But onConfirm signature in MainScreen calls viewModel.updateExpense ...
-                                // Let's check MainScreen.kt call again.
-                                // let's assume we want to keep the time component if needed, but for now just pass YYYY-MM-DD
-                                onConfirm(amt, description, if (doNotTrack) null else selectedAccountId, fee, selectedFeeConfigName, date)
+                            if (amt != null && selectedAccountId != null) {
+                                onConfirm(amt, description, selectedAccountId, fee, selectedFeeConfigName, date)
                             }
                         },
-                        enabled = amount.isNotBlank(),
+                        enabled = amount.isNotBlank() && selectedAccountId != null,
                         shape = RoundedCornerShape(16.dp),
                         modifier = Modifier.fillMaxWidth().height(56.dp)
                     ) {
@@ -259,34 +254,25 @@ fun EditLoanTransactionDialog(
                     )
                 )
                 
-                Row(
-                    verticalAlignment = Alignment.CenterVertically, 
-                    modifier = Modifier.fillMaxWidth().clickable { doNotTrack = !doNotTrack }
-                ) {
-                    Checkbox(checked = doNotTrack, onCheckedChange = { doNotTrack = it })
-                    Text("Do not track as transaction")
-                }
+                // Checkbox removed
 
-                if (!doNotTrack) {
-                    Text("Account", style = MaterialTheme.typography.bodySmall)
-                    Row(modifier = Modifier.horizontalScroll(rememberScrollState())) {
-                        accounts.forEach { acc ->
-                            FilterChip(
-                                selected = selectedAccountId == acc.id,
-                                onClick = { selectedAccountId = acc.id },
-                                label = { Text(acc.name) }
-                            )
-                            Spacer(Modifier.width(4.dp))
-                        }
-                    }
-                    if (accounts.isNotEmpty() && selectedAccountId == null) {
-                         LaunchedEffect(Unit) { selectedAccountId = accounts.first().id }
-                    }
-                } else {
-                    LaunchedEffect(Unit) { selectedAccountId = null }
+                // Account Selection
+                Text("Account", style = MaterialTheme.typography.bodySmall)
+                Row(modifier = Modifier.horizontalScroll(rememberScrollState())) {
+                     accounts.forEach { acc ->
+                         FilterChip(
+                             selected = selectedAccountId == acc.id,
+                             onClick = { selectedAccountId = acc.id },
+                             label = { Text(acc.name) }
+                         )
+                         Spacer(Modifier.width(4.dp))
+                     }
+                }
+                if (accounts.isNotEmpty() && selectedAccountId == null) {
+                      LaunchedEffect(Unit) { selectedAccountId = accounts.first().id }
                 }
                 
-                if (showFee && !doNotTrack) {
+                if (showFee) {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text("Transaction Fees", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
