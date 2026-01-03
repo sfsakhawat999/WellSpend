@@ -102,7 +102,7 @@ fun AddExpenseForm(
     onReorder: (List<Category>) -> Unit,
     initialExpense: Expense? = null
 ) {
-    var amount by remember { mutableStateOf(initialExpense?.amount?.toString() ?: "") }
+    var amount by remember { mutableStateOf(initialExpense?.amount?.let { String.format("%.2f", it).trimEnd('0').trimEnd('.') } ?: "") }
     var description by remember { mutableStateOf(initialExpense?.description ?: "") }
     var category by remember { mutableStateOf(initialExpense?.category ?: Category.Food) }
     var date by remember { mutableStateOf(initialExpense?.date?.substring(0, 10) ?: LocalDate.now().toString()) } // YYYY-MM-DD
@@ -248,7 +248,16 @@ fun AddExpenseForm(
                     )
                     androidx.compose.foundation.text.BasicTextField(
                         value = amount,
-                        onValueChange = { amount = it },
+                        onValueChange = { newValue ->
+                            // Allow only valid decimal input with max 2 decimal places
+                            val filtered = newValue.filter { it.isDigit() || it == '.' }
+                            val parts = filtered.split(".")
+                            amount = when {
+                                parts.size == 1 -> filtered // No decimal point
+                                parts.size == 2 -> "${parts[0]}.${parts[1].take(2)}" // Limit to 2 decimal places
+                                else -> amount // Invalid (multiple dots), keep previous value
+                            }
+                        },
                         textStyle = TextStyle(
                             fontSize = 56.sp,
                             fontWeight = FontWeight.Bold,

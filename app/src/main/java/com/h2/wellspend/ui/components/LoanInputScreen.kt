@@ -46,7 +46,7 @@ fun LoanInputScreen(
     
     // State initialization
     var name by remember { mutableStateOf(initialLoan?.name ?: "") }
-    var amount by remember { mutableStateOf(initialLoan?.amount?.toString() ?: "") }
+    var amount by remember { mutableStateOf(initialLoan?.amount?.let { String.format("%.2f", it).trimEnd('0').trimEnd('.') } ?: "") }
     var selectedType by remember { mutableStateOf(initialLoan?.type ?: LoanType.LEND) }
     var description by remember { mutableStateOf(initialLoan?.description ?: "") }
     var selectedAccountId by remember { mutableStateOf<String?>(null) } 
@@ -148,7 +148,18 @@ fun LoanInputScreen(
                     )
                     androidx.compose.foundation.text.BasicTextField(
                         value = amount,
-                        onValueChange = { if (initialLoan == null) amount = it },
+                        onValueChange = { newValue ->
+                            if (initialLoan == null) {
+                                // Allow only valid decimal input with max 2 decimal places
+                                val filtered = newValue.filter { it.isDigit() || it == '.' }
+                                val parts = filtered.split(".")
+                                amount = when {
+                                    parts.size == 1 -> filtered
+                                    parts.size == 2 -> "${parts[0]}.${parts[1].take(2)}"
+                                    else -> amount
+                                }
+                            }
+                        },
                         textStyle = TextStyle(
                             fontSize = 56.sp,
                             fontWeight = FontWeight.Bold,

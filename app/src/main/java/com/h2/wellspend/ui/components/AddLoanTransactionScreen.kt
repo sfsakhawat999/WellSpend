@@ -212,7 +212,16 @@ fun AddLoanTransactionScreen(
                     )
                     androidx.compose.foundation.text.BasicTextField(
                         value = amount,
-                        onValueChange = { amount = it },
+                        onValueChange = { newValue ->
+                            // Allow only valid decimal input with max 2 decimal places
+                            val filtered = newValue.filter { it.isDigit() || it == '.' }
+                            val parts = filtered.split(".")
+                            amount = when {
+                                parts.size == 1 -> filtered
+                                parts.size == 2 -> "${parts[0]}.${parts[1].take(2)}"
+                                else -> amount
+                            }
+                        },
                         textStyle = TextStyle(
                             fontSize = 56.sp,
                             fontWeight = FontWeight.Bold,

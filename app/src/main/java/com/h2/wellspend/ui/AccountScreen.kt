@@ -371,7 +371,7 @@ fun AccountInputScreen(
         mutableStateOf(
             if (account != null) {
                 val bal = currentBalance ?: account.initialBalance
-                String.format("%.2f", bal)
+                String.format("%.2f", bal).trimEnd('0').trimEnd('.')
             } else "" 
         ) 
     }
@@ -438,7 +438,17 @@ fun AccountInputScreen(
                         )
                         androidx.compose.foundation.text.BasicTextField(
                             value = displayBalance,
-                            onValueChange = { displayBalance = it },
+                            onValueChange = { newValue ->
+                                // Allow only valid decimal input with max 2 decimal places
+                                val filtered = newValue.filter { it.isDigit() || it == '.' || it == '-' }
+                                val parts = filtered.removePrefix("-").split(".")
+                                val prefix = if (filtered.startsWith("-")) "-" else ""
+                                displayBalance = when {
+                                    parts.size == 1 -> prefix + parts[0]
+                                    parts.size == 2 -> prefix + "${parts[0]}.${parts[1].take(2)}"
+                                    else -> displayBalance
+                                }
+                            },
                             textStyle = TextStyle(
                                 fontSize = 56.sp,
                                 fontWeight = FontWeight.Bold,

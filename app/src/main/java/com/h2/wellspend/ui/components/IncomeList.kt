@@ -34,6 +34,7 @@ import androidx.compose.animation.core.Animatable
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
+import com.h2.wellspend.data.Category
 
 @Composable
 fun IncomeList(
@@ -101,6 +102,9 @@ fun IncomeItem(
     
     val formattedDate = date.format(DateTimeFormatter.ofPattern("EEE, MMM d")) + extraInfo
 
+    // Check if this is a balance adjustment (non-editable)
+    val isBalanceAdjustment = income.category == Category.BalanceAdjustment
+
     val density = androidx.compose.ui.platform.LocalDensity.current
     val actionWidth = 80.dp
     val actionWidthPx = with(density) { actionWidth.toPx() }
@@ -160,16 +164,20 @@ fun IncomeItem(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Left Action (Edit)
-                Box(
-                    modifier = Modifier
-                        .width(actionWidth)
-                        .fillMaxHeight()
-                        .background(MaterialTheme.colorScheme.primary)
-                        .clickable { onEdit(income) },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(Icons.Default.Edit, "Edit", tint = MaterialTheme.colorScheme.onPrimary)
+                // Left Action (Edit) - Hidden for BalanceAdjustment
+                if (!isBalanceAdjustment) {
+                    Box(
+                        modifier = Modifier
+                            .width(actionWidth)
+                            .fillMaxHeight()
+                            .background(MaterialTheme.colorScheme.primary)
+                            .clickable { onEdit(income) },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Default.Edit, "Edit", tint = MaterialTheme.colorScheme.onPrimary)
+                    }
+                } else {
+                    Spacer(modifier = Modifier.width(actionWidth))
                 }
 
                 // Right Action (Delete)
@@ -193,7 +201,10 @@ fun IncomeItem(
                         orientation = Orientation.Horizontal,
                         state = rememberDraggableState { delta ->
                             scope.launch {
-                                val newValue = (offsetX.value + delta).coerceIn(-actionWidthPx, actionWidthPx)
+                                // For BalanceAdjustment, only allow swipe left (delete), not right (edit)
+                                val minOffset = -actionWidthPx
+                                val maxOffset = if (isBalanceAdjustment) 0f else actionWidthPx
+                                val newValue = (offsetX.value + delta).coerceIn(minOffset, maxOffset)
                                 offsetX.snapTo(newValue)
                             }
                         },

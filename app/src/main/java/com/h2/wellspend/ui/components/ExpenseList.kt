@@ -359,6 +359,10 @@ fun ExpenseItem(
     // Account & Loan Info
     val accountName = accounts.find { it.id == expense.accountId }?.name
     val loanName = if (expense.loanId != null) loans.find { it.id == expense.loanId }?.name else null
+    
+    // Check if this is a balance adjustment (non-editable)
+    val isBalanceAdjustment = expense.category == Category.BalanceAdjustment
+    
     val extraInfo = buildString {
         if (expense.transactionType == com.h2.wellspend.data.TransactionType.INCOME) append(" • Income")
         else if (expense.transactionType == com.h2.wellspend.data.TransactionType.TRANSFER) append(" • Transfer")
@@ -415,20 +419,24 @@ fun ExpenseItem(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Left Action (Visible when swiped right -> EDIT)
-                Box(
-                    modifier = Modifier
-                        .width(actionWidth)
-                        .fillMaxHeight()
-                        .background(MaterialTheme.colorScheme.primary) // Green-ish/Primary
-                        .clickable { onEdit(expense) },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Edit,
-                        contentDescription = "Edit",
-                        tint = MaterialTheme.colorScheme.onPrimary
-                    )
+                // Left Action (Visible when swiped right -> EDIT) - Hidden for BalanceAdjustment
+                if (!isBalanceAdjustment) {
+                    Box(
+                        modifier = Modifier
+                            .width(actionWidth)
+                            .fillMaxHeight()
+                            .background(MaterialTheme.colorScheme.primary)
+                            .clickable { onEdit(expense) },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Edit,
+                            contentDescription = "Edit",
+                            tint = MaterialTheme.colorScheme.onPrimary
+                        )
+                    }
+                } else {
+                    Spacer(modifier = Modifier.width(actionWidth))
                 }
 
                 // Right Action (Visible when swiped left)
@@ -456,7 +464,10 @@ fun ExpenseItem(
                         orientation = Orientation.Horizontal,
                         state = rememberDraggableState { delta ->
                             scope.launch {
-                                val newValue = (offsetX.value + delta).coerceIn(-actionWidthPx, actionWidthPx)
+                                // For BalanceAdjustment, only allow swipe left (delete), not right (edit)
+                                val minOffset = -actionWidthPx
+                                val maxOffset = if (isBalanceAdjustment) 0f else actionWidthPx
+                                val newValue = (offsetX.value + delta).coerceIn(minOffset, maxOffset)
                                 offsetX.snapTo(newValue)
                             }
                         },

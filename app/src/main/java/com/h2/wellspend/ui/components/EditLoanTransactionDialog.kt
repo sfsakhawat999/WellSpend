@@ -77,7 +77,7 @@ fun EditLoanTransactionScreen(
     onConfirm: (Double, String, String?, Double, String?, String) -> Unit // amount, desc, accId, fee, feeConfigName, date
 ) {
     BackHandler(onBack = onDismiss)
-    var amount by remember { mutableStateOf(transaction.amount.toString()) }
+    var amount by remember { mutableStateOf(String.format("%.2f", transaction.amount).trimEnd('0').trimEnd('.')) }
     var description by remember { mutableStateOf(transaction.description) }
     var selectedAccountId by remember { mutableStateOf(transaction.accountId) }
     
@@ -203,7 +203,16 @@ fun EditLoanTransactionScreen(
                     )
                     androidx.compose.foundation.text.BasicTextField(
                         value = amount,
-                        onValueChange = { amount = it },
+                        onValueChange = { newValue ->
+                            // Allow only valid decimal input with max 2 decimal places
+                            val filtered = newValue.filter { it.isDigit() || it == '.' }
+                            val parts = filtered.split(".")
+                            amount = when {
+                                parts.size == 1 -> filtered
+                                parts.size == 2 -> "${parts[0]}.${parts[1].take(2)}"
+                                else -> amount
+                            }
+                        },
                         textStyle = TextStyle(
                             fontSize = 56.sp,
                             fontWeight = FontWeight.Bold,
