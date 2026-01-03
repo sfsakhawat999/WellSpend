@@ -65,6 +65,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.h2.wellspend.data.Account
 import com.h2.wellspend.data.Category
 import com.h2.wellspend.ui.CategoryColors
 import com.h2.wellspend.ui.components.AddExpenseForm
@@ -117,7 +118,13 @@ fun MainScreen(viewModel: MainViewModel) {
     var showTransfers by remember { mutableStateOf(false) }
     var showLoans by remember { mutableStateOf(false) }
     var showDataManagement by remember { mutableStateOf(false) } // Maps to Settings for now
+
     var loanTransactionToEdit by remember { mutableStateOf<Expense?>(null) }
+    
+    // Account Input State: Wrapper to handle "Add" (null content) vs "Edit" (account content)
+    // If showAccountInput is true, we show the screen. The content depends on accountToEdit.
+    var showAccountInput by remember { mutableStateOf(false) }
+    var accountToEdit by remember { mutableStateOf<Account?>(null) }
 
     // Data
     val expenses by viewModel.expenses.collectAsState(initial = emptyList())
@@ -129,11 +136,11 @@ fun MainScreen(viewModel: MainViewModel) {
     val loans by viewModel.loans.collectAsState(initial = emptyList())
     val balances by viewModel.accountBalances.collectAsState(initial = emptyMap())
 
-    // Handle back button
-    val canNavigateBack = showAddExpense || showReport || showBudgets || showSettings || showTransfers || showLoans || currentScreen != Screen.HOME
+    val canNavigateBack = showAddExpense || showReport || showBudgets || showSettings || showTransfers || showLoans || showAccountInput || currentScreen != Screen.HOME
     androidx.activity.compose.BackHandler(enabled = canNavigateBack) {
         when {
             showAddExpense -> showAddExpense = false
+            showAccountInput -> { showAccountInput = false; accountToEdit = null }
             showReport -> showReport = false
             showBudgets -> showBudgets = false
             showSettings -> showSettings = false
@@ -202,7 +209,7 @@ fun MainScreen(viewModel: MainViewModel) {
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         bottomBar = {
-            if (!showAddExpense && !showReport && !showBudgets && !showSettings && !showTransfers && !showLoans) {
+            if (!showAddExpense && !showReport && !showBudgets && !showSettings && !showTransfers && !showLoans && !showAccountInput && loanTransactionToEdit == null) {
                 NavigationBar(
                     containerColor = MaterialTheme.colorScheme.surfaceVariant,
                     tonalElevation = 0.dp
@@ -241,7 +248,8 @@ fun MainScreen(viewModel: MainViewModel) {
             }
         },
         floatingActionButton = {
-            if ((currentScreen == Screen.HOME || currentScreen == Screen.EXPENSES || currentScreen == Screen.INCOME) && !showAddExpense && !showReport && !showBudgets && !showSettings && !showTransfers && !showLoans) {
+            if ((currentScreen == Screen.HOME || currentScreen == Screen.EXPENSES || currentScreen == Screen.INCOME) && 
+                !showAddExpense && !showReport && !showBudgets && !showSettings && !showTransfers && !showLoans && !showAccountInput && loanTransactionToEdit == null) {
                 FloatingActionButton(
                     onClick = { 
                         expenseToEdit = null
@@ -259,6 +267,7 @@ fun MainScreen(viewModel: MainViewModel) {
         Box(modifier = Modifier.padding(paddingValues).fillMaxSize()) {
             val targetState = when {
                 showAddExpense -> "OVERLAY_ADD"
+                showAccountInput -> "OVERLAY_ACCOUNT_INPUT"
                 loanTransactionToEdit != null -> "OVERLAY_EDIT_LOAN_TRANSACTION"
                 showReport -> "OVERLAY_REPORT"
                 showBudgets -> "OVERLAY_BUDGETS"
@@ -440,18 +449,42 @@ fun MainScreen(viewModel: MainViewModel) {
                             onAccountClick = { currentScreen = Screen.ACCOUNTS }
                         )
                     }
+                    "OVERLAY_ACCOUNT_INPUT" -> {
+                        com.h2.wellspend.ui.AccountInputScreen(
+                            account = accountToEdit,
+                            currentBalance = if (accountToEdit != null) balances[accountToEdit!!.id] else null,
+                            onDismiss = { 
+                                showAccountInput = false 
+                                accountToEdit = null
+                            },
+                            onSave = { account, adjustment ->
+                                viewModel.updateAccount(account)
+                                if (adjustment != null && adjustment != 0.0) {
+                                     viewModel.addAdjustmentTransaction(account.id, adjustment)
+                                }
+                                showAccountInput = false
+                                accountToEdit = null
+                            }
+                        )
+                    }
                     "ACCOUNTS" -> {
-                         AccountScreen(
+                        com.h2.wellspend.ui.AccountScreen(
                             accounts = accounts,
                             balances = balances,
                             currency = currency,
-                            onAddAccount = { viewModel.addAccount(it) },
-                            onUpdateAccount = { viewModel.addAccount(it) },
                             onDeleteAccount = { viewModel.deleteAccount(it) },
-                            isAccountUsed = { accountId -> expenses.any { it.accountId == accountId } },
-                            onReorder = { viewModel.reorderAccounts(it) },
-                            onAdjustBalance = { id, amount -> viewModel.adjustAccountBalance(id, amount) }
-                         )
+                            isAccountUsed = { id -> expenses.any { it.accountId == id } },
+                            onReorder = { viewModel.updateAccountOrder(it) },
+                            onAdjustBalance = { accId, adj -> viewModel.addAdjustmentTransaction(accId, adj) },
+                            onAddAccount = { 
+                                accountToEdit = null
+                                showAccountInput = true 
+                            },
+                            onEditAccount = { acc ->
+                                accountToEdit = acc
+                                showAccountInput = true
+                            }
+                        )
                     }
                     "INCOME" -> {
                         IncomeListScreen(

@@ -62,41 +62,23 @@ fun AccountScreen(
     accounts: List<Account>,
     balances: Map<String, Double>,
     currency: String,
-    onAddAccount: (Account) -> Unit,
-    onUpdateAccount: (Account) -> Unit,
     onDeleteAccount: (Account) -> Unit,
-
     isAccountUsed: (String) -> Boolean,
     onReorder: (List<Account>) -> Unit,
-    onAdjustBalance: (String, Double) -> Unit // NEW
+    onAdjustBalance: (String, Double) -> Unit,
+    onAddAccount: () -> Unit,
+    onEditAccount: (Account) -> Unit
 ) {
-    var showDialog by remember { mutableStateOf(false) }
-    var accountToEdit by remember { mutableStateOf<Account?>(null) }
     var accountToDelete by remember { mutableStateOf<Account?>(null) }
     
     // Reorder mode state
     var isReorderMode by remember { mutableStateOf(false) }
+    
+    // Internal dialog state removed - hoisted to MainScreen
 
-        if (showDialog) {
-            AccountInputScreen(
-                account = accountToEdit,
-                currentBalance = if (accountToEdit != null) balances[accountToEdit!!.id] else null,
-                onDismiss = { showDialog = false },
-                onSave = { account, adjustment ->
-                    onUpdateAccount(account)
-                    if (adjustment != null && adjustment != 0.0) {
-                        onAdjustBalance(account.id, adjustment)
-                    }
-                    showDialog = false
-                }
-            )
-        } else {
     Scaffold(
         floatingActionButton = {
-            FloatingActionButton(onClick = {
-                accountToEdit = null
-                showDialog = true
-            }) {
+            FloatingActionButton(onClick = onAddAccount) {
                 Icon(Icons.Default.Add, contentDescription = "Add Account")
             }
         }
@@ -139,10 +121,7 @@ fun AccountScreen(
                                 isReorderMode = isReorderMode,
                                 canMoveUp = index > 0,
                                 canMoveDown = index < accounts.size - 1,
-                                onEdit = {
-                                    accountToEdit = account
-                                    showDialog = true
-                                },
+                                onEdit = { onEditAccount(account) },
                                 onDelete = { accountToDelete = account },
                                 onMoveUp = {
                                     if (index > 0) {
@@ -203,7 +182,6 @@ fun AccountScreen(
                 }
             )
         }
-    }
     }
 }
 
@@ -383,8 +361,10 @@ fun AccountInputScreen(
     
     var displayBalance by remember { 
         mutableStateOf(
-            if (account != null) (currentBalance?.toString() ?: account.initialBalance.toString()) 
-            else "" 
+            if (account != null) {
+                val bal = currentBalance ?: account.initialBalance
+                String.format("%.2f", bal)
+            } else "" 
         ) 
     }
     
@@ -407,33 +387,25 @@ fun AccountInputScreen(
                     actions = {
                         TextButton(onClick = {
                             if (name.isNotBlank()) {
-                                val newBalanceVal = displayBalance.toDoubleOrNull() ?: 0.0
+                                                            // Save
+                            val bal = displayBalance.toDoubleOrNull() ?: 0.0
+                            if (account == null) {
+                                // New
+                                onSave(Account(id = UUID.randomUUID().toString(), name = name, initialBalance = bal, feeConfigs = feeConfigs), null)
+                            } else {
+                                // Edit
+                                // Calculate adjustment
+                                val current = currentBalance ?: account.initialBalance
+                                // Round to 2 decimals for comparison
+                                val roundedCurrent = (kotlin.math.round(current * 100) / 100.0)
+                                val roundedNew = (kotlin.math.round(bal * 100) / 100.0)
                                 
-                                if (account == null) {
-                                    // NEW Account
-                                    onSave(
-                                        Account(
-                                            id = UUID.randomUUID().toString(),
-                                            name = name,
-                                            initialBalance = newBalanceVal,
-                                            feeConfigs = feeConfigs
-                                        ),
-                                        null // No adjustment transaction for new account
-                                    )
-                                } else {
-                                    // EDIT Account
-                                    val oldBalance = currentBalance ?: account.initialBalance
-                                    val adjustment = newBalanceVal - oldBalance
-                                    
-                                    onSave(
-                                        account.copy(
-                                            name = name,
-                                            feeConfigs = feeConfigs
-                                            // initialBalance remains unchanged!
-                                        ),
-                                        adjustment
-                                    )
-                                }
+                                val adjustment = if (kotlin.math.abs(roundedNew - roundedCurrent) > 0.009) {
+                                    roundedNew - roundedCurrent
+                                } else null
+                                
+                                onSave(account.copy(name = name, feeConfigs = feeConfigs), adjustment)
+                            }
                             }
                         }) {
                             Text("Save", fontWeight = FontWeight.Bold)

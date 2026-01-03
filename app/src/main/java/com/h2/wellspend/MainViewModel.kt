@@ -443,6 +443,18 @@ class MainViewModel(
         }
     }
 
+    fun updateAccount(account: com.h2.wellspend.data.Account) {
+        addAccount(account)
+    }
+
+    fun addAdjustmentTransaction(accountId: String, adjustment: Double) {
+        adjustAccountBalance(accountId, adjustment)
+    }
+
+    fun updateAccountOrder(accounts: List<com.h2.wellspend.data.Account>) {
+        reorderAccounts(accounts)
+    }
+
     fun adjustAccountBalance(accountId: String, adjustment: Double) {
         viewModelScope.launch {
             val amount = kotlin.math.abs(adjustment)
