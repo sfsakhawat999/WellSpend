@@ -359,11 +359,11 @@ fun MainScreen(viewModel: MainViewModel) {
                             expenses = expenses, // All expenses to calc balance
                             accounts = accounts,
                             currency = currency,
-                            onAddLoan = { name, amount, type, desc, accId, fee, date ->
-                                viewModel.addLoan(name, amount, type, desc, accId, fee, date)
+                            onAddLoan = { name, amount, type, desc, accId, fee, feeName, date ->
+                                viewModel.addLoan(name, amount, type, desc, accId, fee, feeName, date)
                             },
-                            onAddTransaction = { loanId, amount, isPayment, accId, type, fee, date ->
-                                viewModel.addLoanTransaction(loanId, amount, isPayment, accId, type, fee, date)
+                            onAddTransaction = { loanId, amount, isPayment, accId, type, fee, feeName, date ->
+                                viewModel.addLoanTransaction(loanId, amount, isPayment, accId, type, fee, feeName, date)
                             },
                             onUpdateLoan = { viewModel.updateLoan(it) },
                             onDeleteLoan = { viewModel.deleteLoan(it) },
@@ -480,7 +480,7 @@ fun MainScreen(viewModel: MainViewModel) {
                         accounts = accounts,
                         currency = currency,
                         onDismiss = { loanTransactionToEdit = null },
-                        onConfirm = { amt, desc, accId, fee ->
+                        onConfirm = { amt, desc, accId, fee, feeName ->
                             viewModel.updateExpense(
                                 id = loanTransactionToEdit!!.id,
                                 amount = amt,
@@ -493,7 +493,7 @@ fun MainScreen(viewModel: MainViewModel) {
                                 accountId = accId,
                                 targetAccountId =  loanTransactionToEdit!!.transferTargetAccountId,
                                 feeAmount = fee,
-                                feeConfigName = null,
+                                feeConfigName = feeName,
                                 loanId = loanTransactionToEdit!!.loanId
                             )
                             loanTransactionToEdit = null

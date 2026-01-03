@@ -42,6 +42,7 @@ class MainViewModel(
         description: String?,
         accountId: String?,
         feeAmount: Double,
+        feeConfigName: String?,
         date: java.time.LocalDate
     ) {
         viewModelScope.launch {
@@ -76,7 +77,8 @@ class MainViewModel(
                 transactionType = transactionType,
                 accountId = accountId,
                 loanId = loanId,
-                feeAmount = feeAmount
+                feeAmount = feeAmount,
+                feeConfigName = feeConfigName
             )
             repository.addExpense(expense)
         }
@@ -104,6 +106,7 @@ class MainViewModel(
         accountId: String?,
         loanType: com.h2.wellspend.data.LoanType,
         feeAmount: Double,
+        feeConfigName: String?,
         date: java.time.LocalDate
     ) {
         viewModelScope.launch {
@@ -132,7 +135,8 @@ class MainViewModel(
                 transactionType = transactionType,
                 accountId = accountId,
                 loanId = loanId,
-                feeAmount = feeAmount
+                feeAmount = feeAmount,
+                feeConfigName = feeConfigName
             )
             repository.addExpense(expense)
         }

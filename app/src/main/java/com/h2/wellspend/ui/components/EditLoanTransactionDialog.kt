@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FilterChip
@@ -37,12 +38,17 @@ fun EditLoanTransactionDialog(
     accounts: List<Account>,
     currency: String,
     onDismiss: () -> Unit,
-    onConfirm: (Double, String, String?, Double) -> Unit // amount, desc, accId, fee
+    onConfirm: (Double, String, String?, Double, String?) -> Unit // amount, desc, accId, fee, feeConfigName
 ) {
     var amount by remember { mutableStateOf(transaction.amount.toString()) }
     var description by remember { mutableStateOf(transaction.description) }
     var selectedAccountId by remember { mutableStateOf(transaction.accountId) }
+    
+    // Fee State
+    var selectedFeeConfigName by remember { mutableStateOf<String?>(transaction.feeConfigName) }
     var feeAmount by remember { mutableStateOf(transaction.feeAmount.toString()) }
+    var isCustomFee by remember { mutableStateOf(transaction.feeConfigName == "Custom") }
+
     var doNotTrack by remember { mutableStateOf(transaction.accountId == null) }
 
     // Determine context for UI textual feedback
@@ -66,6 +72,23 @@ fun EditLoanTransactionDialog(
     }
 
     val showFee = isLendMore || isRepay
+    
+    // Helper to calculate fee based on account rule
+    val currentAccount = accounts.find { it.id == selectedAccountId }
+    
+    // Auto-update fee when account or amount changes, unless custom
+    LaunchedEffect(amount, selectedAccountId, selectedFeeConfigName) {
+        if (!isCustomFee && selectedFeeConfigName != null && selectedFeeConfigName != "None" && selectedFeeConfigName != "Custom") {
+            val config = currentAccount?.feeConfigs?.find { it.name == selectedFeeConfigName }
+            if (config != null) {
+                val amt = amount.toDoubleOrNull() ?: 0.0
+                val calculated = if (config.isPercentage) (amt * config.value / 100) else config.value
+                feeAmount = String.format("%.2f", calculated)
+            }
+        } else if (selectedFeeConfigName == "None") {
+            feeAmount = "0.0"
+        }
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -113,13 +136,33 @@ fun EditLoanTransactionDialog(
                     LaunchedEffect(Unit) { selectedAccountId = null }
                 }
                 
-                if (showFee) {
-                    OutlinedTextField(
-                        value = feeAmount, 
-                        onValueChange = { feeAmount = it }, 
-                        label = { Text("Transaction Fee") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-                    )
+                if (showFee && !doNotTrack) {
+                    Text("Transaction Fees", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(modifier = Modifier.fillMaxWidth().horizontalScroll(androidx.compose.foundation.rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(selected = selectedFeeConfigName == "None" || selectedFeeConfigName == null, onClick = { selectedFeeConfigName = "None"; isCustomFee = false }, label = { Text("None") })
+                        
+                        currentAccount?.feeConfigs?.forEach { config ->
+                            FilterChip(
+                                selected = selectedFeeConfigName == config.name,
+                                onClick = { selectedFeeConfigName = config.name; isCustomFee = false },
+                                label = { Text("${config.name} (${if(config.isPercentage) "${config.value}%" else currency + config.value})") }
+                            )
+                        }
+                        
+                        FilterChip(selected = isCustomFee, onClick = { selectedFeeConfigName = "Custom"; isCustomFee = true }, label = { Text("Custom") })
+                    }
+                    
+                    if (isCustomFee || (feeAmount.toDoubleOrNull() ?: 0.0) > 0) {
+                         Spacer(modifier = Modifier.height(8.dp))
+                         OutlinedTextField(
+                            value = feeAmount,
+                            onValueChange = { feeAmount = it; if(!isCustomFee) isCustomFee = true; selectedFeeConfigName = "Custom" },
+                            label = { Text("Fee Amount") },
+                            modifier = Modifier.fillMaxWidth(),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                         )
+                    }
                 }
             }
         },
@@ -129,7 +172,7 @@ fun EditLoanTransactionDialog(
                     val amt = amount.toDoubleOrNull()
                     val fee = feeAmount.toDoubleOrNull() ?: 0.0
                     if (amt != null) {
-                        onConfirm(amt, description, if (doNotTrack) null else selectedAccountId, fee)
+                        onConfirm(amt, description, if (doNotTrack) null else selectedAccountId, fee, selectedFeeConfigName)
                     }
                 },
                 enabled = amount.isNotBlank()

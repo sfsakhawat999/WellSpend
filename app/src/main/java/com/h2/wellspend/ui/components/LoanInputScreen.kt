@@ -38,7 +38,7 @@ fun LoanInputScreen(
     initialLoan: Loan? = null,
     accounts: List<Account>,
     currency: String,
-    onSave: (String, Double, LoanType, String?, String?, Double, LocalDate) -> Unit, // name, amount, type, desc, accId, fee, date
+    onSave: (String, Double, LoanType, String?, String?, Double, String?, LocalDate) -> Unit, // name, amount, type, desc, accId, fee, feeConfigName, date
     onCancel: () -> Unit
 ) {
     // State initialization
@@ -46,17 +46,36 @@ fun LoanInputScreen(
     var amount by remember { mutableStateOf(initialLoan?.amount?.toString() ?: "") }
     var selectedType by remember { mutableStateOf(initialLoan?.type ?: LoanType.LEND) }
     var description by remember { mutableStateOf(initialLoan?.description ?: "") }
-    // ...
-    // ...
     var selectedAccountId by remember { mutableStateOf<String?>(null) } 
     var doNotTrack by remember { mutableStateOf(false) }
+    
+    // Fee State
+    var selectedFeeConfigName by remember { mutableStateOf<String?>(null) }
     var feeAmount by remember { mutableStateOf("") }
+    var isCustomFee by remember { mutableStateOf(false) }
+
     var date by remember { mutableStateOf(if (initialLoan != null) Instant.ofEpochMilli(initialLoan.createdAt).atZone(ZoneId.systemDefault()).toLocalDate() else LocalDate.now()) }
     
     var showDatePicker by remember { mutableStateOf(false) }
     val datePickerState = rememberDatePickerState(
         initialSelectedDateMillis = date.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
     )
+
+    // Calculate Fee
+    val currentAccount = accounts.find { it.id == selectedAccountId }
+
+    LaunchedEffect(amount, selectedAccountId, selectedFeeConfigName) {
+        if (!isCustomFee && selectedFeeConfigName != null && selectedFeeConfigName != "None" && selectedFeeConfigName != "Custom") {
+            val config = currentAccount?.feeConfigs?.find { it.name == selectedFeeConfigName }
+            if (config != null) {
+                val amt = amount.toDoubleOrNull() ?: 0.0
+                val calculated = if (config.isPercentage) (amt * config.value / 100) else config.value
+                feeAmount = String.format("%.2f", calculated)
+            }
+        } else if (selectedFeeConfigName == "None") {
+            feeAmount = "0.0"
+        }
+    }
 
     if (showDatePicker) {
         DatePickerDialog(
@@ -225,15 +244,8 @@ fun LoanInputScreen(
                     disabledTrailingIconColor = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             )
-            // Need to actually trigger the click
-            // A overlay box is easiest
-            // See AddExpenseForm impl
 
-            // Account Section (Only show for New Loan? Or allow editing context implied? 
-            // Usually editing a loan doesn't change the source account of the initial transaction easily. 
-            // For now, let's HIDE account/fee for EDIT mode to simplify, as requested "edit loans" usually means rename/amount.
-            // If user wants to change account, they edit the specific transaction.)
-            
+            // Account Section
             if (initialLoan == null) {
                 // Account Selector
                 
@@ -260,9 +272,6 @@ fun LoanInputScreen(
                             )
                         }
                     }
-                     // if (selectedAccountId == null && accounts.isNotEmpty()) {
-                     //    LaunchedEffect(Unit) { selectedAccountId = accounts.first().id }
-                     // }
                 } else {
                     LaunchedEffect(Unit) { selectedAccountId = null }
                 }
@@ -270,14 +279,33 @@ fun LoanInputScreen(
                 // Fee (Only if Lending AND not tracking? No, Fee applies to transaction.)
                 if (selectedType == LoanType.LEND && !doNotTrack) {
                     Spacer(Modifier.height(16.dp))
-                     Text("Transaction Fee (Optional)", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                     OutlinedTextField(
-                        value = feeAmount, 
-                        onValueChange = { feeAmount = it }, 
-                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                        shape = RoundedCornerShape(12.dp),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-                    )
+                     Text("Transaction Fees", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(modifier = Modifier.fillMaxWidth().horizontalScroll(androidx.compose.foundation.rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(selected = selectedFeeConfigName == "None" || selectedFeeConfigName == null, onClick = { selectedFeeConfigName = "None"; isCustomFee = false }, label = { Text("None") })
+                        
+                        currentAccount?.feeConfigs?.forEach { config ->
+                            FilterChip(
+                                selected = selectedFeeConfigName == config.name,
+                                onClick = { selectedFeeConfigName = config.name; isCustomFee = false },
+                                label = { Text("${config.name} (${if(config.isPercentage) "${config.value}%" else currency + config.value})") }
+                            )
+                        }
+                        
+                        FilterChip(selected = isCustomFee, onClick = { selectedFeeConfigName = "Custom"; isCustomFee = true }, label = { Text("Custom") })
+                    }
+                    
+                    if (isCustomFee || (feeAmount.toDoubleOrNull() ?: 0.0) > 0) {
+                         Spacer(modifier = Modifier.height(8.dp))
+                         OutlinedTextField(
+                            value = feeAmount,
+                            onValueChange = { feeAmount = it; if(!isCustomFee) isCustomFee = true; selectedFeeConfigName = "Custom" },
+                            label = { Text("Fee Amount") },
+                            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                         )
+                    }
                 }
             }
         }
@@ -289,7 +317,7 @@ fun LoanInputScreen(
                     val amt = amount.toDoubleOrNull()
                     val fee = feeAmount.toDoubleOrNull() ?: 0.0
                     if (name.isNotBlank() && amt != null) {
-                        onSave(name, amt, selectedType, description.ifBlank { null }, if (doNotTrack) null else selectedAccountId, fee, date)
+                        onSave(name, amt, selectedType, description.ifBlank { null }, if (doNotTrack) null else selectedAccountId, fee, selectedFeeConfigName, date)
                     }
                 },
                 modifier = Modifier.fillMaxWidth().height(56.dp),
