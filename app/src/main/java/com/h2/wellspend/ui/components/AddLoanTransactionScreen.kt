@@ -44,66 +44,46 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.h2.wellspend.data.Account
-import com.h2.wellspend.data.Expense
 import com.h2.wellspend.data.Loan
 import com.h2.wellspend.data.LoanType
 import java.time.Instant
+import java.time.LocalDate
 import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun EditLoanTransactionDialog(
-    transaction: Expense,
+fun AddLoanTransactionScreen(
     loan: Loan,
     accounts: List<Account>,
     currency: String,
     onDismiss: () -> Unit,
-    onConfirm: (Double, String, String?, Double, String?, String) -> Unit // amount, desc, accId, fee, feeConfigName, date
+    onConfirm: (Double, Boolean, String?, Double, String?, LocalDate) -> Unit // feeConfigName added
 ) {
-    var amount by remember { mutableStateOf(transaction.amount.toString()) }
-    var description by remember { mutableStateOf(transaction.description) }
-    var selectedAccountId by remember { mutableStateOf(transaction.accountId) }
+    var amount by remember { mutableStateOf("") }
+    var isPayment by remember { mutableStateOf(true) } // True = Pay/Repay, False = Increase Loan
+    var selectedAccountId by remember { mutableStateOf<String?>(null) }
     
     // Fee State
-    var selectedFeeConfigName by remember { mutableStateOf<String?>(transaction.feeConfigName) }
-    var feeAmount by remember { mutableStateOf(transaction.feeAmount.toString()) }
-    var isCustomFee by remember { mutableStateOf(transaction.feeConfigName == "Custom") }
+    var selectedFeeConfigName by remember { mutableStateOf<String?>("None") }
+    var feeAmount by remember { mutableStateOf("") }
+    var isCustomFee by remember { mutableStateOf(false) }
 
-    var doNotTrack by remember { mutableStateOf(transaction.accountId == null) }
-    
-    // Date State
-    // Format YYYY-MM-DD from transaction.date
-    var date by remember { mutableStateOf(transaction.date.substring(0, 10)) }
+    var date by remember { mutableStateOf(LocalDate.now()) }
     var showDatePicker by remember { mutableStateOf(false) }
     val datePickerState = rememberDatePickerState()
 
-    // Determine context for UI textual feedback
-    val isLendMore = loan.type == LoanType.LEND && transaction.transactionType == com.h2.wellspend.data.TransactionType.EXPENSE
-    val isReceivePay = loan.type == LoanType.LEND && transaction.transactionType == com.h2.wellspend.data.TransactionType.INCOME
-    val isBorrowMore = loan.type == LoanType.BORROW && transaction.transactionType == com.h2.wellspend.data.TransactionType.INCOME
-    val isRepay = loan.type == LoanType.BORROW && transaction.transactionType == com.h2.wellspend.data.TransactionType.EXPENSE
+    var doNotTrack by remember { mutableStateOf(false) }
     
-    val title = when {
-        isLendMore -> "Edit Lending"
-        isReceivePay -> "Edit Received Payment"
-        isBorrowMore -> "Edit Borrowing"
-        isRepay -> "Edit Repayment"
-        else -> "Edit Transaction"
-    }
-
-    val showFee = isLendMore || isRepay
-    
-    // Helper to calculate fee based on account rule
+    // Calculate Fee Logic
     val currentAccount = accounts.find { it.id == selectedAccountId }
-    
-    // Auto-update fee when account or amount changes, unless custom
+
     LaunchedEffect(amount, selectedAccountId, selectedFeeConfigName) {
         if (!isCustomFee && selectedFeeConfigName != null && selectedFeeConfigName != "None" && selectedFeeConfigName != "Custom") {
             val config = currentAccount?.feeConfigs?.find { it.name == selectedFeeConfigName }
@@ -117,14 +97,13 @@ fun EditLoanTransactionDialog(
         }
     }
 
-    // Date Picker Logic
     if (showDatePicker) {
         DatePickerDialog(
             onDismissRequest = { showDatePicker = false },
             confirmButton = {
                 TextButton(onClick = {
                     datePickerState.selectedDateMillis?.let { millis ->
-                        date = Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault()).toLocalDate().toString()
+                        date = Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault()).toLocalDate()
                     }
                     showDatePicker = false
                 }) {
@@ -158,38 +137,32 @@ fun EditLoanTransactionDialog(
                         Icon(Icons.Default.Close, contentDescription = "Cancel")
                     }
                     Text(
-                        text = title,
+                        text = "Update Loan: ${loan.name}",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold
                     )
-                    Spacer(modifier = Modifier.size(48.dp)) // Balance close button
+                    Spacer(modifier = Modifier.size(48.dp))
                 }
             },
             bottomBar = {
-                Box(
+                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(16.dp)
                 ) {
                     Button(
+                        enabled = amount.toDoubleOrNull() != null && (doNotTrack || selectedAccountId != null),
                         onClick = {
                             val amt = amount.toDoubleOrNull()
                             val fee = feeAmount.toDoubleOrNull() ?: 0.0
                             if (amt != null) {
-                                // Note: We are currently NOT passing date back via onConfirm because the signature didn't change in the previous step.
-                                // However, the user request asks for "date field is not same".
-                                // If we change the date here, we MUST update the transaction date.
-                                // But onConfirm signature in MainScreen calls viewModel.updateExpense ...
-                                // Let's check MainScreen.kt call again.
-                                // let's assume we want to keep the time component if needed, but for now just pass YYYY-MM-DD
-                                onConfirm(amt, description, if (doNotTrack) null else selectedAccountId, fee, selectedFeeConfigName, date)
+                                onConfirm(amt, isPayment, if (doNotTrack) null else selectedAccountId, fee, selectedFeeConfigName, date)
                             }
                         },
-                        enabled = amount.isNotBlank(),
                         shape = RoundedCornerShape(16.dp),
                         modifier = Modifier.fillMaxWidth().height(56.dp)
                     ) {
-                        Text("Save Changes", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Text("Confirm", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -202,6 +175,17 @@ fun EditLoanTransactionDialog(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
+                Row {
+                     // LEND: Pay = Receive Money, Increase = Give Money
+                     // BORROW: Pay = Give Money, Increase = Receive Money
+                     val payText = if (loan.type == LoanType.LEND) "Receive Payment" else "Repay Loan"
+                     val incText = if (loan.type == LoanType.LEND) "Lend More" else "Borrow More"
+                     
+                    FilterChip(selected = isPayment, onClick = { isPayment = true }, label = { Text(payText) })
+                    Spacer(Modifier.width(8.dp))
+                    FilterChip(selected = !isPayment, onClick = { isPayment = false }, label = { Text(incText) })
+                }
+                
                 OutlinedTextField(
                     value = amount, 
                     onValueChange = { amount = it }, 
@@ -210,25 +194,19 @@ fun EditLoanTransactionDialog(
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
                 )
                 
-                OutlinedTextField(
-                    value = description, 
-                    onValueChange = { description = it }, 
-                    label = { Text("Description") },
-                    modifier = Modifier.fillMaxWidth()
-                )
-                
                 // Date Field
+                val dateFormatted = remember(date) { date.format(DateTimeFormatter.ofPattern("EEE, MMM d, yyyy")) }
                 OutlinedTextField(
-                    value = date,
+                    value = dateFormatted,
                     onValueChange = {},
                     label = { Text("Date") },
                     readOnly = true,
-                    enabled = false, // To make it look like read-only click target
+                    enabled = false,
                     trailingIcon = { Icon(Icons.Default.DateRange, contentDescription = "Select Date") },
                     modifier = Modifier
                         .fillMaxWidth()
                         .clickable { showDatePicker = true },
-                    colors = OutlinedTextFieldDefaults.colors(
+                     colors = OutlinedTextFieldDefaults.colors(
                         disabledTextColor = MaterialTheme.colorScheme.onSurface,
                         disabledBorderColor = MaterialTheme.colorScheme.outline,
                         disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -245,25 +223,26 @@ fun EditLoanTransactionDialog(
                 }
 
                 if (!doNotTrack) {
-                    Text("Account", style = MaterialTheme.typography.bodySmall)
-                    Row(modifier = Modifier.horizontalScroll(rememberScrollState())) {
-                        accounts.forEach { acc ->
-                            FilterChip(
-                                selected = selectedAccountId == acc.id,
-                                onClick = { selectedAccountId = acc.id },
-                                label = { Text(acc.name) }
-                            )
-                            Spacer(Modifier.width(4.dp))
-                        }
-                    }
-                    if (accounts.isNotEmpty() && selectedAccountId == null) {
-                         LaunchedEffect(Unit) { selectedAccountId = accounts.first().id }
-                    }
+                    val isMoneyOut = (loan.type == LoanType.LEND && !isPayment) || (loan.type == LoanType.BORROW && isPayment)
+                    val accountLabel = if (isMoneyOut) "Pay From Account" else "Deposit To Account"
+                    
+                    Text(accountLabel, style = MaterialTheme.typography.bodySmall)
+                     Row(modifier = Modifier.horizontalScroll(rememberScrollState())) {
+                         accounts.forEach { acc ->
+                             FilterChip(selected = selectedAccountId == acc.id, onClick = { selectedAccountId = acc.id }, label = { Text(acc.name) })
+                             Spacer(Modifier.width(4.dp))
+                         }
+                     }
+                     if (accounts.isEmpty()) {
+                         Text("No accounts. Add one.", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                     }
                 } else {
                     LaunchedEffect(Unit) { selectedAccountId = null }
                 }
-                
-                if (showFee && !doNotTrack) {
+
+                 // Fee Logic
+                 val showFee = (loan.type == LoanType.LEND && !isPayment) || (loan.type == LoanType.BORROW && isPayment)
+                 if (showFee && !doNotTrack) {
                     Text("Transaction Fees", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Spacer(modifier = Modifier.height(8.dp))
                     Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -290,9 +269,9 @@ fun EditLoanTransactionDialog(
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
                          )
                     }
-                }
-                
-                Spacer(modifier = Modifier.height(100.dp)) // Bottom padding
+                 }
+                 
+                 Spacer(modifier = Modifier.height(100.dp))
             }
         }
     }

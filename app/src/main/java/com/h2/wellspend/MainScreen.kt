@@ -480,13 +480,13 @@ fun MainScreen(viewModel: MainViewModel) {
                         accounts = accounts,
                         currency = currency,
                         onDismiss = { loanTransactionToEdit = null },
-                        onConfirm = { amt, desc, accId, fee, feeName ->
+                        onConfirm = { amt, desc, accId, fee, feeName, date ->
                             viewModel.updateExpense(
                                 id = loanTransactionToEdit!!.id,
                                 amount = amt,
                                 description = desc,
                                 category = loanTransactionToEdit!!.category,
-                                date = loanTransactionToEdit!!.date,
+                                date = date,
                                 isRecurring = false,
                                 frequency = com.h2.wellspend.data.RecurringFrequency.WEEKLY, // Dummy
                                 transactionType = loanTransactionToEdit!!.transactionType,
