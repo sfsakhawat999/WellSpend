@@ -26,6 +26,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.material.icons.filled.Close
 import androidx.activity.compose.BackHandler
@@ -38,6 +39,10 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
@@ -348,6 +353,7 @@ fun AccountItem(
 fun AccountInputScreen(
     account: Account?,
     currentBalance: Double? = null,
+    currency: String,
     onDismiss: () -> Unit,
     onSave: (Account, Double?) -> Unit
 ) {
@@ -435,15 +441,62 @@ fun AccountInputScreen(
                     modifier = Modifier.fillMaxWidth()
                 )
 
-                OutlinedTextField(
-                    value = displayBalance,
-                    onValueChange = { displayBalance = it },
-                    label = { Text(if (account == null) "Initial Balance" else "Current Balance") },
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = true,
-                    supportingText = if (account != null) { { Text("Editing this will create a balance adjustment transaction") } } else null,
-                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number)
-                )
+                // Big Balance Input
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp)
+                ) {
+                    Text(
+                        text = if (account == null) "Initial Balance" else "Current Balance",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = currency,
+                            style = TextStyle(fontSize = 36.sp, color = MaterialTheme.colorScheme.onSurfaceVariant),
+                            modifier = Modifier.padding(end = 8.dp)
+                        )
+                        TextField(
+                            value = displayBalance,
+                            onValueChange = { displayBalance = it },
+                            textStyle = TextStyle(
+                                fontSize = 56.sp,
+                                fontWeight = FontWeight.Bold,
+                                textAlign = TextAlign.Center,
+                                color = MaterialTheme.colorScheme.primary
+                            ),
+                            placeholder = { 
+                                Text(
+                                    "0.00", 
+                                    style = TextStyle(
+                                        fontSize = 56.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        textAlign = TextAlign.Center,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
+                                    )
+                                ) 
+                            },
+                            singleLine = true,
+                            colors = TextFieldDefaults.colors(
+                                focusedContainerColor = Color.Transparent,
+                                unfocusedContainerColor = Color.Transparent,
+                                focusedIndicatorColor = Color.Transparent,
+                                unfocusedIndicatorColor = Color.Transparent
+                            ),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            modifier = Modifier.width(200.dp)
+                        )
+                    }
+                    if (account != null) {
+                        Text(
+                            text = "Editing this will create a balance adjustment transaction",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
 
                 HorizontalDivider()
                 Text("Transaction Fees", style = MaterialTheme.typography.titleMedium)

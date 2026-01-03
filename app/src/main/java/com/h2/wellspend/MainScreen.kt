@@ -453,6 +453,7 @@ fun MainScreen(viewModel: MainViewModel) {
                         com.h2.wellspend.ui.AccountInputScreen(
                             account = accountToEdit,
                             currentBalance = if (accountToEdit != null) balances[accountToEdit!!.id] else null,
+                            currency = currency,
                             onDismiss = { 
                                 showAccountInput = false 
                                 accountToEdit = null
