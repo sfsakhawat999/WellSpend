@@ -24,6 +24,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -40,7 +42,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.style.TextAlign
+
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.animation.fadeIn
@@ -381,69 +383,46 @@ fun AccountInputScreen(
     var newFeeValue by remember { mutableStateOf("") }
     var newFeeIsPercent by remember { mutableStateOf(true) }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(if (account == null) "Add Account" else "Edit Account") },
-                navigationIcon = {
-                    IconButton(onClick = onDismiss) {
-                        Icon(Icons.Default.Close, contentDescription = "Close")
-                    }
-                },
-                    actions = {
-                        TextButton(onClick = {
-                            if (name.isNotBlank()) {
-                                                            // Save
-                            val bal = displayBalance.toDoubleOrNull() ?: 0.0
-                            if (account == null) {
-                                // New
-                                onSave(Account(id = UUID.randomUUID().toString(), name = name, initialBalance = bal, feeConfigs = feeConfigs), null)
-                            } else {
-                                // Edit
-                                // Calculate adjustment
-                                val current = currentBalance ?: account.initialBalance
-                                // Round to 2 decimals for comparison
-                                val roundedCurrent = (kotlin.math.round(current * 100) / 100.0)
-                                val roundedNew = (kotlin.math.round(bal * 100) / 100.0)
-                                
-                                val adjustment = if (kotlin.math.abs(roundedNew - roundedCurrent) > 0.009) {
-                                    roundedNew - roundedCurrent
-                                } else null
-                                
-                                onSave(account.copy(name = name, feeConfigs = feeConfigs), adjustment)
-                            }
-                            }
-                        }) {
-                            Text("Save", fontWeight = FontWeight.Bold)
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.surface,
-                        titleContentColor = MaterialTheme.colorScheme.onSurface,
-                        actionIconContentColor = MaterialTheme.colorScheme.primary
-                    )
-                )
-            },
-            containerColor = MaterialTheme.colorScheme.surface
-        ) { innerPadding ->
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding)
-                    .verticalScroll(androidx.compose.foundation.rememberScrollState())
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { Text("Account Name") },
-                    modifier = Modifier.fillMaxWidth()
-                )
+    // Layout similar to AddExpenseForm
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+    ) {
+        // Header
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(onClick = onDismiss) {
+                Icon(Icons.Default.Close, contentDescription = "Close", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Text(
+                text = if (account == null) "Add Account" else "Edit Account",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                fontWeight = FontWeight.SemiBold
+            )
+            Spacer(modifier = Modifier.size(32.dp))
+        }
+
+        // Content
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .verticalScroll(androidx.compose.foundation.rememberScrollState())
+                .padding(horizontal = 24.dp)
+                .padding(top = 16.dp, bottom = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+
 
                 // Big Balance Input
                 Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
+                    horizontalAlignment = Alignment.Start,
                     modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp)
                 ) {
                     Text(
@@ -457,35 +436,35 @@ fun AccountInputScreen(
                             style = TextStyle(fontSize = 36.sp, color = MaterialTheme.colorScheme.onSurfaceVariant),
                             modifier = Modifier.padding(end = 8.dp)
                         )
-                        TextField(
+                        androidx.compose.foundation.text.BasicTextField(
                             value = displayBalance,
                             onValueChange = { displayBalance = it },
                             textStyle = TextStyle(
                                 fontSize = 56.sp,
                                 fontWeight = FontWeight.Bold,
-                                textAlign = TextAlign.Center,
+                                textAlign = TextAlign.Start,
                                 color = MaterialTheme.colorScheme.primary
                             ),
-                            placeholder = { 
-                                Text(
-                                    "0.00", 
-                                    style = TextStyle(
-                                        fontSize = 56.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        textAlign = TextAlign.Center,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
-                                    )
-                                ) 
+                            decorationBox = { innerTextField ->
+                                Box(contentAlignment = Alignment.CenterStart) {
+                                    if (displayBalance.isEmpty()) {
+                                        Text(
+                                            "0",
+                                            style = TextStyle(
+                                                fontSize = 56.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                textAlign = TextAlign.Start,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
+                                            )
+                                        )
+                                    }
+                                    innerTextField()
+                                }
                             },
                             singleLine = true,
-                            colors = TextFieldDefaults.colors(
-                                focusedContainerColor = Color.Transparent,
-                                unfocusedContainerColor = Color.Transparent,
-                                focusedIndicatorColor = Color.Transparent,
-                                unfocusedIndicatorColor = Color.Transparent
-                            ),
+                            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            modifier = Modifier.width(200.dp)
+                            modifier = Modifier.widthIn(min = 200.dp)
                         )
                     }
                     if (account != null) {
@@ -496,6 +475,19 @@ fun AccountInputScreen(
                             textAlign = TextAlign.Center
                         )
                     }
+                }
+
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = "Account Name",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    OutlinedTextField(
+                        value = name,
+                        onValueChange = { name = it },
+                        modifier = Modifier.fillMaxWidth()
+                    )
                 }
 
                 HorizontalDivider()
@@ -523,38 +515,83 @@ fun AccountInputScreen(
                             .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(8.dp))
                             .padding(8.dp)
                     ) {
-                        OutlinedTextField(value = newFeeName, onValueChange = { newFeeName = it }, label = { Text("Fee Name") }, modifier = Modifier.fillMaxWidth())
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            OutlinedTextField(
-                                value = newFeeValue, 
-                                onValueChange = { newFeeValue = it }, 
-                                label = { Text("Value") }, 
-                                modifier = Modifier.weight(1f),
-                                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            FilterChip(
-                                selected = newFeeIsPercent,
-                                onClick = { newFeeIsPercent = !newFeeIsPercent },
-                                label = { Text(if(newFeeIsPercent) "%" else "Fixed") }
-                            )
-                        }
-                        Button(onClick = {
-                            if (newFeeName.isNotBlank() && newFeeValue.toDoubleOrNull() != null) {
-                                feeConfigs = feeConfigs + FeeConfig(newFeeName, newFeeValue.toDouble(), newFeeIsPercent)
-                                newFeeName = ""
-                                newFeeValue = ""
-                                showFeeInput = false
-                            }
-                        }) {
-                            Text("Add Fee Rule")
-                        }
+                     Row(verticalAlignment = Alignment.CenterVertically) {
+                         OutlinedTextField(
+                            value = newFeeName,
+                            onValueChange = { newFeeName = it },
+                            label = { Text("Fee Name") },
+                            modifier = Modifier.weight(1f)
+                         )
+                         Spacer(modifier = Modifier.width(8.dp))
+                         OutlinedTextField(
+                            value = newFeeValue,
+                            onValueChange = { newFeeValue = it },
+                            label = { Text("Value") },
+                            modifier = Modifier.width(80.dp),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                         )
+                         Spacer(modifier = Modifier.width(8.dp))
+                         // Toggle % / Fixed
+                         Box(modifier = Modifier.clickable { newFeeIsPercent = !newFeeIsPercent }.background(MaterialTheme.colorScheme.secondaryContainer, RoundedCornerShape(8.dp)).padding(8.dp)) {
+                             Text(if(newFeeIsPercent) "%" else currency, color = MaterialTheme.colorScheme.onSecondaryContainer)
+                         }
+                         Spacer(modifier = Modifier.width(8.dp))
+                         IconButton(onClick = {
+                             if (newFeeName.isNotBlank() && newFeeValue.toDoubleOrNull() != null) {
+                                 val newConfig = FeeConfig(newFeeName, newFeeValue.toDouble(), newFeeIsPercent)
+                                 feeConfigs = feeConfigs + newConfig
+                                 newFeeName = ""
+                                 newFeeValue = ""
+                                 showFeeInput = false
+                             }
+                         }) {
+                             Icon(Icons.Default.Check, "Add")
+                         }
+                     }
                     }
                 } else {
-                    OutlinedButton(onClick = { showFeeInput = true }, modifier = Modifier.fillMaxWidth()) {
-                        Text("Add Fee Configuration")
+                    TextButton(onClick = { showFeeInput = true }) {
+                        Icon(Icons.Default.Add, null)
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Add Fee Rule")
                     }
                 }
             }
+        
+        // Save Button
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+        ) {
+            Button(
+                onClick = {
+                    if (name.isNotBlank()) {
+                        val bal = displayBalance.toDoubleOrNull() ?: 0.0
+                        if (account == null) {
+                            onSave(Account(id = UUID.randomUUID().toString(), name = name, initialBalance = bal, feeConfigs = feeConfigs), null)
+                        } else {
+                            val current = currentBalance ?: account.initialBalance
+                            val roundedCurrent = (kotlin.math.round(current * 100) / 100.0)
+                            val roundedNew = (kotlin.math.round(bal * 100) / 100.0)
+                            
+                            val adjustment = if (kotlin.math.abs(roundedNew - roundedCurrent) > 0.009) {
+                                roundedNew - roundedCurrent
+                            } else null
+                            
+                            onSave(account.copy(name = name, feeConfigs = feeConfigs), adjustment)
+                        }
+                    }
+                },
+                enabled = name.isNotBlank(),
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier.fillMaxWidth().height(56.dp)
+            ) {
+                Icon(Icons.Default.Check, contentDescription = null)
+                Spacer(modifier = Modifier.size(8.dp))
+                Text("Save Account", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            }
         }
+    }
 }
+

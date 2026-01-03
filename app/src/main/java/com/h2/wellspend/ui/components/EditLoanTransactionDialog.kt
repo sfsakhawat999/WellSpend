@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -37,6 +38,10 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.material.icons.filled.AccountBalanceWallet
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -46,12 +51,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.unit.sp
+
 import com.h2.wellspend.data.Account
 import com.h2.wellspend.data.Expense
 import com.h2.wellspend.data.Loan
@@ -145,77 +152,87 @@ fun EditLoanTransactionScreen(
         }
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(title, fontWeight = FontWeight.SemiBold) },
-                navigationIcon = {
-                    IconButton(onClick = onDismiss) {
-                        Icon(Icons.Default.Close, contentDescription = "Close")
-                    }
-                }
-            )
-        },
-        bottomBar = {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp)
-            ) {
-                Button(
-                    onClick = {
-                        val amt = amount.toDoubleOrNull()
-                        val fee = feeAmount.toDoubleOrNull() ?: 0.0
-                        if (amt != null && selectedAccountId != null) {
-                            onConfirm(amt, description, selectedAccountId, fee, selectedFeeConfigName, date)
-                        }
-                    },
-                    enabled = amount.isNotBlank() && selectedAccountId != null,
-                    shape = RoundedCornerShape(16.dp),
-                    modifier = Modifier.fillMaxWidth().height(56.dp)
-                ) {
-                    Text("Save Changes", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                }
+    // Layout similar to AddExpenseForm
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+    ) {
+        // Header
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(onClick = onDismiss) {
+                Icon(Icons.Default.Close, contentDescription = "Close", tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                fontWeight = FontWeight.SemiBold
+            )
+            Spacer(modifier = Modifier.size(32.dp))
         }
-    ) { paddingValues ->
+
+        // Content
         Column(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
+                .weight(1f)
+                .verticalScroll(rememberScrollState())
                 .padding(horizontal = 24.dp)
-                .verticalScroll(rememberScrollState()),
+                .padding(top = 16.dp, bottom = 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-                // Amount Input
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp)
+            // Big Amount Input - Left aligned to match expense form
+            Column(
+                horizontalAlignment = Alignment.Start,
+                modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Start
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = currency,
-                            style = androidx.compose.ui.text.TextStyle(fontSize = 36.sp, color = MaterialTheme.colorScheme.onSurfaceVariant),
-                            modifier = Modifier.padding(end = 8.dp)
-                        )
-                        androidx.compose.material3.TextField(
-                            value = amount,
-                            onValueChange = { amount = it },
-                            textStyle = androidx.compose.ui.text.TextStyle(fontSize = 48.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface),
-                            placeholder = { Text("0", style = androidx.compose.ui.text.TextStyle(fontSize = 48.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f))) },
-                            singleLine = true,
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            colors = androidx.compose.material3.TextFieldDefaults.colors(
-                                focusedContainerColor = androidx.compose.ui.graphics.Color.Transparent,
-                                unfocusedContainerColor = androidx.compose.ui.graphics.Color.Transparent,
-                                focusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent,
-                                unfocusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent,
-                                cursorColor = MaterialTheme.colorScheme.primary
-                            ),
-                            modifier = Modifier.fillMaxWidth(0.6f)
-                        )
-                    }
+                    Text(
+                        text = currency,
+                        style = androidx.compose.ui.text.TextStyle(fontSize = 36.sp, color = MaterialTheme.colorScheme.onSurfaceVariant),
+                        modifier = Modifier.padding(end = 8.dp)
+                    )
+                    androidx.compose.foundation.text.BasicTextField(
+                        value = amount,
+                        onValueChange = { amount = it },
+                        textStyle = TextStyle(
+                            fontSize = 56.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary,
+                            textAlign = TextAlign.Start
+                        ),
+                        decorationBox = { innerTextField ->
+                            Box(contentAlignment = Alignment.CenterStart) {
+                                if (amount.isEmpty()) {
+                                    Text(
+                                        "0",
+                                        style = TextStyle(
+                                            fontSize = 56.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
+                                            textAlign = TextAlign.Start
+                                        )
+                                    )
+                                }
+                                innerTextField()
+                            }
+                        },
+                        singleLine = true,
+                        cursorBrush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.primary),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.widthIn(min = 200.dp)
+                    )
                 }
+            }
                 
                 OutlinedTextField(
                     value = description, 
@@ -288,7 +305,32 @@ fun EditLoanTransactionScreen(
                     }
                 }
                 
-                Spacer(modifier = Modifier.height(100.dp)) // Bottom padding
+                Spacer(modifier = Modifier.height(16.dp))
+            }
+
+        // Save Button
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+        ) {
+            Button(
+                onClick = {
+                     val amt = amount.toDoubleOrNull()
+                     if (amt != null) {
+                         val fee = feeAmount.toDoubleOrNull() ?: 0.0
+                         val config = if(isCustomFee) "Custom" else selectedFeeConfigName
+                         onConfirm(amt, description, selectedAccountId, fee, config, date)
+                     }
+                },
+                enabled = amount.isNotEmpty() && amount.toDoubleOrNull() != null && selectedAccountId != null,
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier.fillMaxWidth().height(56.dp)
+            ) {
+                 Icon(Icons.Default.Check, contentDescription = null)
+                 Spacer(modifier = Modifier.size(8.dp))
+                 Text("Save Changes", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             }
         }
     }
+}

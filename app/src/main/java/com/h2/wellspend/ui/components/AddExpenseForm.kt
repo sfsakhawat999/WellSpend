@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -236,7 +237,7 @@ fun AddExpenseForm(
         ) {
             // Amount Input
             Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
+                horizontalAlignment = Alignment.Start,
                 modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp)
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -245,21 +246,35 @@ fun AddExpenseForm(
                         style = TextStyle(fontSize = 36.sp, color = MaterialTheme.colorScheme.onSurfaceVariant),
                         modifier = Modifier.padding(end = 8.dp)
                     )
-                    TextField(
+                    androidx.compose.foundation.text.BasicTextField(
                         value = amount,
                         onValueChange = { amount = it },
-                        textStyle = TextStyle(fontSize = 48.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface),
-                        placeholder = { Text("0", style = TextStyle(fontSize = 48.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f))) },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        colors = TextFieldDefaults.colors(
-                            focusedContainerColor = Color.Transparent,
-                            unfocusedContainerColor = Color.Transparent,
-                            focusedIndicatorColor = Color.Transparent,
-                            unfocusedIndicatorColor = Color.Transparent,
-                            cursorColor = MaterialTheme.colorScheme.primary
+                        textStyle = TextStyle(
+                            fontSize = 56.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Start
                         ),
-                        modifier = Modifier.fillMaxWidth(0.6f)
+                        decorationBox = { innerTextField ->
+                            Box(contentAlignment = Alignment.CenterStart) {
+                                if (amount.isEmpty()) {
+                                    Text(
+                                        "0",
+                                        style = TextStyle(
+                                            fontSize = 56.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
+                                            textAlign = androidx.compose.ui.text.style.TextAlign.Start
+                                        )
+                                    )
+                                }
+                                innerTextField()
+                            }
+                        },
+                        singleLine = true,
+                        cursorBrush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.primary),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.widthIn(min = 200.dp)
                     )
                 }
             }

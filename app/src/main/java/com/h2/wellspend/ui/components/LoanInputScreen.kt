@@ -24,6 +24,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.activity.compose.BackHandler
 import com.h2.wellspend.data.Account
 import com.h2.wellspend.data.Loan
 import com.h2.wellspend.data.LoanType
@@ -41,6 +42,8 @@ fun LoanInputScreen(
     onSave: (String, Double, LoanType, String?, String?, Double, String?, LocalDate) -> Unit, // name, amount, type, desc, accId, fee, feeConfigName, date
     onCancel: () -> Unit
 ) {
+    BackHandler(onBack = onCancel)
+    
     // State initialization
     var name by remember { mutableStateOf(initialLoan?.name ?: "") }
     var amount by remember { mutableStateOf(initialLoan?.amount?.toString() ?: "") }
@@ -127,39 +130,52 @@ fun LoanInputScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 24.dp)
         ) {
-            // Amount Input - Big & Center
+            // Amount Input - Big & Left aligned to match expense form
             Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
+                horizontalAlignment = Alignment.Start,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(vertical = 24.dp)
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                     Text(
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Start
+                ) {
+                    Text(
                         text = currency,
                         style = TextStyle(fontSize = 36.sp, color = MaterialTheme.colorScheme.onSurfaceVariant),
                         modifier = Modifier.padding(end = 8.dp)
                     )
-                    // Using basic TextField for cleaner look
-                    TextField(
+                    androidx.compose.foundation.text.BasicTextField(
                         value = amount,
-                        onValueChange = { amount = it },
-                        textStyle = TextStyle(fontSize = 48.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface),
-                        placeholder = { Text("0", style = TextStyle(fontSize = 48.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f))) },
+                        onValueChange = { if (initialLoan == null) amount = it },
+                        textStyle = TextStyle(
+                            fontSize = 56.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (initialLoan == null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Start
+                        ),
+                        decorationBox = { innerTextField ->
+                            Box(contentAlignment = Alignment.CenterStart) {
+                                if (amount.isEmpty()) {
+                                    Text(
+                                        "0",
+                                        style = TextStyle(
+                                            fontSize = 56.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
+                                            textAlign = androidx.compose.ui.text.style.TextAlign.Start
+                                        )
+                                    )
+                                }
+                                innerTextField()
+                            }
+                        },
                         singleLine = true,
                         enabled = initialLoan == null,
+                        cursorBrush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.primary),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        colors = TextFieldDefaults.colors(
-                            focusedContainerColor = Color.Transparent,
-                            unfocusedContainerColor = Color.Transparent,
-                            focusedIndicatorColor = Color.Transparent,
-                            unfocusedIndicatorColor = Color.Transparent,
-                            cursorColor = MaterialTheme.colorScheme.primary,
-                            disabledTextColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                            disabledIndicatorColor = Color.Transparent,
-                            disabledContainerColor = Color.Transparent
-                        ),
-                        modifier = Modifier.width(IntrinsicSize.Min)
+                        modifier = Modifier.widthIn(min = 200.dp)
                     )
                 }
                 if (initialLoan != null) {
