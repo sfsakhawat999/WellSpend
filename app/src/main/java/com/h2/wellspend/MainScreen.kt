@@ -11,6 +11,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
+import androidx.compose.animation.SizeTransform
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -136,9 +137,10 @@ fun MainScreen(viewModel: MainViewModel) {
     val loans by viewModel.loans.collectAsState(initial = emptyList())
     val balances by viewModel.accountBalances.collectAsState(initial = emptyMap())
 
-    val canNavigateBack = showAddExpense || showReport || showBudgets || showSettings || showTransfers || showLoans || showAccountInput || currentScreen != Screen.HOME
+    val canNavigateBack = showAddExpense || showReport || showBudgets || showSettings || showTransfers || showLoans || showAccountInput || loanTransactionToEdit != null || currentScreen != Screen.HOME
     androidx.activity.compose.BackHandler(enabled = canNavigateBack) {
         when {
+            loanTransactionToEdit != null -> loanTransactionToEdit = null
             showAddExpense -> showAddExpense = false
             showAccountInput -> { showAccountInput = false; accountToEdit = null }
             showReport -> showReport = false
@@ -280,8 +282,9 @@ fun MainScreen(viewModel: MainViewModel) {
             AnimatedContent(
                 targetState = targetState,
                 transitionSpec = {
-                    fadeIn(animationSpec = tween(300)) + scaleIn(initialScale = 0.95f, animationSpec = tween(300)) togetherWith
-                    fadeOut(animationSpec = tween(200))
+                    (fadeIn(animationSpec = tween(300)) + scaleIn(initialScale = 0.95f, animationSpec = tween(300))) togetherWith
+                    (fadeOut(animationSpec = tween(200)) + scaleOut(targetScale = 0.95f, animationSpec = tween(200))) using
+                    SizeTransform(clip = false)
                 },
                 label = "MainContentTransition"
             ) { state ->
@@ -331,38 +334,39 @@ fun MainScreen(viewModel: MainViewModel) {
                         )
                     }
                     "OVERLAY_EDIT_LOAN_TRANSACTION" -> {
-                         val transaction = loanTransactionToEdit!!
-                         val relatedLoan = loans.find { it.id == transaction.loanId }
-                         if (relatedLoan != null) {
-                             com.h2.wellspend.ui.components.EditLoanTransactionScreen(
-                                transaction = transaction,
-                                loan = relatedLoan,
-                                accounts = accounts,
-                                currency = currency,
-                                onDismiss = { loanTransactionToEdit = null },
-                                onConfirm = { amt, desc, accId, fee, feeName, date ->
-                                    viewModel.updateExpense(
-                                        id = transaction.id,
-                                        amount = amt,
-                                        description = desc,
-                                        category = transaction.category,
-                                        date = date,
-                                        isRecurring = false,
-                                        frequency = com.h2.wellspend.data.RecurringFrequency.WEEKLY, // Dummy
-                                        transactionType = transaction.transactionType,
-                                        accountId = accId,
-                                        targetAccountId = transaction.transferTargetAccountId,
-                                        feeAmount = fee,
-                                        feeConfigName = feeName,
-                                        loanId = transaction.loanId
-                                    )
-                                    loanTransactionToEdit = null
-                                }
-                             )
-                         } else {
-                             // Should not happen, but reset
-                             LaunchedEffect(Unit) { loanTransactionToEdit = null }
+                         // Capture transaction safely - during exit animation, loanTransactionToEdit may be null
+                         val transaction = loanTransactionToEdit
+                         if (transaction != null) {
+                             val relatedLoan = loans.find { it.id == transaction.loanId }
+                             if (relatedLoan != null) {
+                                 com.h2.wellspend.ui.components.EditLoanTransactionScreen(
+                                    transaction = transaction,
+                                    loan = relatedLoan,
+                                    accounts = accounts,
+                                    currency = currency,
+                                    onDismiss = { loanTransactionToEdit = null },
+                                    onConfirm = { amt, desc, accId, fee, feeName, date ->
+                                        viewModel.updateExpense(
+                                            id = transaction.id,
+                                            amount = amt,
+                                            description = desc,
+                                            category = transaction.category,
+                                            date = date,
+                                            isRecurring = false,
+                                            frequency = com.h2.wellspend.data.RecurringFrequency.WEEKLY, // Dummy
+                                            transactionType = transaction.transactionType,
+                                            accountId = accId,
+                                            targetAccountId = transaction.transferTargetAccountId,
+                                            feeAmount = fee,
+                                            feeConfigName = feeName,
+                                            loanId = transaction.loanId
+                                        )
+                                        loanTransactionToEdit = null
+                                    }
+                                 )
+                             }
                          }
+                         // Empty composable during exit animation when transaction is null
                     }
                     "OVERLAY_REPORT" -> {
                         MonthlyReport(

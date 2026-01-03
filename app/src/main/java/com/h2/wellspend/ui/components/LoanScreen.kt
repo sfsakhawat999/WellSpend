@@ -1,5 +1,13 @@
 package com.h2.wellspend.ui.components
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.Orientation
@@ -55,112 +63,121 @@ fun LoanScreen(
     var editingLoan by remember { mutableStateOf<Loan?>(null) }
     var loanForTransaction by remember { mutableStateOf<Loan?>(null) } // If set, show transaction dialog
 
-    if (loanForTransaction != null) {
-        val loan = loanForTransaction!!
-        val isPayment = true // Should be determined? Oh wait, AddLoanTransactionScreen handles its own logic but we pass it? 
-        // Wait, AddLoanTransactionScreen has 'var isPayment by remember'. It handles it.
-        // We just pass the loan.
-        
-        AddLoanTransactionScreen(
-            loan = loan,
-            accounts = accounts,
-            currency = currency,
-            onDismiss = { loanForTransaction = null },
-            onConfirm = { amount, isPayment, accId, fee, feeName, date ->
-                onAddTransaction(loan.id, amount, isPayment, accId, loan.type, fee, feeName, date)
-                loanForTransaction = null
-            }
-        )
-    } else if (isCreatingLoan || editingLoan != null) {
-        LoanInputScreen(
-            initialLoan = editingLoan,
-            accounts = accounts,
-            currency = currency,
-            onSave = { name, amount, type, desc, accId, fee, feeName, date ->
-                if (editingLoan != null) {
-                     val updated = editingLoan!!.copy(name = name, amount = amount, description = desc, type = type)
-                     onUpdateLoan(updated)
-                     editingLoan = null
-                } else {
-                     onAddLoan(name, amount, type, desc, accId, fee, feeName, date)
-                     isCreatingLoan = false
-                }
-            },
-            onCancel = {
-                isCreatingLoan = false
-                editingLoan = null
-            }
-        )
-    } else {
+    // Determine current screen state for animation
+    val screenState = when {
+        loanForTransaction != null -> "TRANSACTION"
+        isCreatingLoan || editingLoan != null -> "INPUT"
+        else -> "LIST"
+    }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Loans") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                }
-            )
+    AnimatedContent(
+        targetState = screenState,
+        transitionSpec = {
+            (fadeIn(animationSpec = tween(300)) + scaleIn(initialScale = 0.95f, animationSpec = tween(300))) togetherWith
+            (fadeOut(animationSpec = tween(200)) + scaleOut(targetScale = 0.95f, animationSpec = tween(200))) using
+            SizeTransform(clip = false)
         },
-        floatingActionButton = {
-            FloatingActionButton(onClick = { isCreatingLoan = true }) {
-                Icon(Icons.Default.Add, contentDescription = "Add Loan")
+        label = "LoanScreenTransition"
+    ) { state ->
+        when (state) {
+            "TRANSACTION" -> {
+                val loan = loanForTransaction!!
+                AddLoanTransactionScreen(
+                    loan = loan,
+                    accounts = accounts,
+                    currency = currency,
+                    onDismiss = { loanForTransaction = null },
+                    onConfirm = { amount, isPayment, accId, fee, feeName, date ->
+                        onAddTransaction(loan.id, amount, isPayment, accId, loan.type, fee, feeName, date)
+                        loanForTransaction = null
+                    }
+                )
             }
-        }
-    ) { padding ->
-        Column(modifier = Modifier.padding(padding)) {
-            TabRow(selectedTabIndex = selectedTab) {
-                Tab(selected = selectedTab == 0, onClick = { selectedTab = 0 }, text = { Text("Lent (Assets)") })
-                Tab(selected = selectedTab == 1, onClick = { selectedTab = 1 }, text = { Text("Borrowed (Debts)") })
-            }
-
-            val filteredLoans = loans.filter { 
-                if (selectedTab == 0) it.type == LoanType.LEND else it.type == LoanType.BORROW 
-            }
-
-            if (filteredLoans.isEmpty()) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("No loans found.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            } else {
-                LazyColumn(
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    items(filteredLoans) { loan ->
-                        // Calculate Balance
-                        // LEND: Init (Expense) + Increase (Expense) - Pay (Income)
-                        // BORROW: Init (Income) + Increase (Income) - Pay (Expense)
-                        // Actually, logic is simpler:
-                        // LEND: Sum(Expense) - Sum(Income)
-                        // BORROW: Sum(Income) - Sum(Expense)
-                        
-                        val loanExpenses = expenses.filter { it.loanId == loan.id }
-                        val sumExpense = loanExpenses.filter { it.transactionType == TransactionType.EXPENSE }.sumOf { it.amount }
-                        val sumIncome = loanExpenses.filter { it.transactionType == TransactionType.INCOME }.sumOf { it.amount }
-                        
-                        val balance = if (loan.type == LoanType.LEND) {
-                             sumExpense - sumIncome
+            "INPUT" -> {
+                LoanInputScreen(
+                    initialLoan = editingLoan,
+                    accounts = accounts,
+                    currency = currency,
+                    onSave = { name, amount, type, desc, accId, fee, feeName, date ->
+                        if (editingLoan != null) {
+                            val updated = editingLoan!!.copy(name = name, amount = amount, description = desc, type = type)
+                            onUpdateLoan(updated)
+                            editingLoan = null
                         } else {
-                             sumIncome - sumExpense
+                            onAddLoan(name, amount, type, desc, accId, fee, feeName, date)
+                            isCreatingLoan = false
+                        }
+                    },
+                    onCancel = {
+                        isCreatingLoan = false
+                        editingLoan = null
+                    }
+                )
+            }
+            "LIST" -> {
+                Scaffold(
+                    topBar = {
+                        TopAppBar(
+                            title = { Text("Loans") },
+                            navigationIcon = {
+                                IconButton(onClick = onBack) {
+                                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                                }
+                            }
+                        )
+                    },
+                    floatingActionButton = {
+                        FloatingActionButton(onClick = { isCreatingLoan = true }) {
+                            Icon(Icons.Default.Add, contentDescription = "Add Loan")
+                        }
+                    }
+                ) { padding ->
+                    Column(modifier = Modifier.padding(padding)) {
+                        TabRow(selectedTabIndex = selectedTab) {
+                            Tab(selected = selectedTab == 0, onClick = { selectedTab = 0 }, text = { Text("Lent (Assets)") })
+                            Tab(selected = selectedTab == 1, onClick = { selectedTab = 1 }, text = { Text("Borrowed (Debts)") })
                         }
 
-                        LoanItem(
-                            loan = loan,
-                            balance = balance,
-                            currency = currency,
-                            onTransactionClick = { loanForTransaction = loan },
-                            onEditClick = { editingLoan = loan },
-                            onDeleteClick = { onDeleteLoan(loan) } // Simple delete for now
-                        )
+                        val filteredLoans = loans.filter { 
+                            if (selectedTab == 0) it.type == LoanType.LEND else it.type == LoanType.BORROW 
+                        }
+
+                        if (filteredLoans.isEmpty()) {
+                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                Text("No loans found.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        } else {
+                            LazyColumn(
+                                contentPadding = PaddingValues(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                items(filteredLoans) { loan ->
+                                    val loanExpenses = expenses.filter { it.loanId == loan.id }
+                                    val sumExpense = loanExpenses.filter { it.transactionType == TransactionType.EXPENSE }.sumOf { it.amount }
+                                    val sumIncome = loanExpenses.filter { it.transactionType == TransactionType.INCOME }.sumOf { it.amount }
+                                    
+                                    val balance = if (loan.type == LoanType.LEND) {
+                                        sumExpense - sumIncome
+                                    } else {
+                                        sumIncome - sumExpense
+                                    }
+
+                                    LoanItem(
+                                        loan = loan,
+                                        balance = balance,
+                                        currency = currency,
+                                        onTransactionClick = { loanForTransaction = loan },
+                                        onEditClick = { editingLoan = loan },
+                                        onDeleteClick = { onDeleteLoan(loan) }
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }
         }
     }
-}
 }
 
 @Composable
