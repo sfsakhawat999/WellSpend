@@ -70,7 +70,7 @@ class MainViewModel(
 
             val expense = Expense(
                 amount = amount,
-                description = "Initial Loan Amount: $name",
+                description = "New Loan: $name",
                 category = Category.Loan,
                 date = date.atStartOfDay().toString(),
                 timestamp = System.currentTimeMillis(),
@@ -101,6 +101,7 @@ class MainViewModel(
 
     fun addLoanTransaction(
         loanId: String,
+        loanName: String,
         amount: Double,
         isPayment: Boolean, // True = Pay/Receive, False = Increase Loan
         accountId: String?,
@@ -110,35 +111,39 @@ class MainViewModel(
         date: java.time.LocalDate
     ) {
         viewModelScope.launch {
-            // Logic:
-            // LEND (Asset):
-            //   Increase -> I give more money -> EXPENSE
-            //   Pay (Receive) -> I get money back -> INCOME
-            // BORROW (Liability):
-            //   Increase -> I borrow more -> INCOME
-            //   Pay (Repay) -> I pay back -> EXPENSE
-            
-            val transactionType = if (loanType == com.h2.wellspend.data.LoanType.LEND) {
-                if (isPayment) com.h2.wellspend.data.TransactionType.INCOME else com.h2.wellspend.data.TransactionType.EXPENSE
-            } else {
-                if (isPayment) com.h2.wellspend.data.TransactionType.EXPENSE else com.h2.wellspend.data.TransactionType.INCOME
-            }
-            
-            val desc = if (isPayment) "Loan Repayment" else "Loan Increase"
+            try {
+                // Logic:
+                // LEND (Asset):
+                //   Increase -> I give more money -> EXPENSE
+                //   Pay (Receive) -> I get money back -> INCOME
+                // BORROW (Liability):
+                //   Increase -> I borrow more -> INCOME
+                //   Pay (Repay) -> I pay back -> EXPENSE
+                
+                val transactionType = if (loanType == com.h2.wellspend.data.LoanType.LEND) {
+                    if (isPayment) com.h2.wellspend.data.TransactionType.INCOME else com.h2.wellspend.data.TransactionType.EXPENSE
+                } else {
+                    if (isPayment) com.h2.wellspend.data.TransactionType.EXPENSE else com.h2.wellspend.data.TransactionType.INCOME
+                }
+                
+                val desc = if (isPayment) "Loan Payment: $loanName" else "Loan Increase: $loanName"
 
-            val expense = Expense(
-                amount = amount,
-                description = desc,
-                category = Category.Loan,
-                date = date.atStartOfDay().toString(),
-                timestamp = System.currentTimeMillis(),
-                transactionType = transactionType,
-                accountId = accountId,
-                loanId = loanId,
-                feeAmount = feeAmount,
-                feeConfigName = feeConfigName
-            )
-            repository.addExpense(expense)
+                val expense = Expense(
+                    amount = amount,
+                    description = desc,
+                    category = Category.Loan,
+                    date = date.atStartOfDay().toString(),
+                    timestamp = System.currentTimeMillis(),
+                    transactionType = transactionType,
+                    accountId = accountId,
+                    loanId = loanId,
+                    feeAmount = feeAmount,
+                    feeConfigName = feeConfigName
+                )
+                repository.addExpense(expense)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
         }
     }
 
@@ -456,22 +461,22 @@ class MainViewModel(
         addAccount(account)
     }
 
-    fun addAdjustmentTransaction(accountId: String, adjustment: Double) {
-        adjustAccountBalance(accountId, adjustment)
+    fun addAdjustmentTransaction(accountId: String, accountName: String, adjustment: Double) {
+        adjustAccountBalance(accountId, accountName, adjustment)
     }
 
     fun updateAccountOrder(accounts: List<com.h2.wellspend.data.Account>) {
         reorderAccounts(accounts)
     }
 
-    fun adjustAccountBalance(accountId: String, adjustment: Double) {
+    fun adjustAccountBalance(accountId: String, accountName: String, adjustment: Double) {
         viewModelScope.launch {
             val amount = kotlin.math.abs(adjustment)
             val type = if (adjustment > 0) com.h2.wellspend.data.TransactionType.INCOME else com.h2.wellspend.data.TransactionType.EXPENSE
             
             val expense = Expense(
                 amount = amount,
-                description = "Balance Adjustment",
+                description = "Balance Adjustment: $accountName",
                 category = Category.BalanceAdjustment,
                 date = LocalDate.now().atStartOfDay().toString(),
                 timestamp = System.currentTimeMillis(),

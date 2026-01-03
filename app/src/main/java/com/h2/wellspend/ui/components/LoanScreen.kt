@@ -53,7 +53,7 @@ fun LoanScreen(
     accounts: List<Account>,
     currency: String,
     onAddLoan: (String, Double, LoanType, String?, String?, Double, String?, java.time.LocalDate) -> Unit, // feeConfigName added
-    onAddTransaction: (String, Double, Boolean, String?, LoanType, Double, String?, java.time.LocalDate) -> Unit, // feeConfigName added
+    onAddTransaction: (String, String, Double, Boolean, String?, LoanType, Double, String?, java.time.LocalDate) -> Unit, // loanId, loanName, amount, isPayment, ...
     onUpdateLoan: (Loan) -> Unit,
     onDeleteLoan: (Loan, Boolean) -> Unit, // (loan, deleteTransactions)
     onBack: () -> Unit
@@ -81,17 +81,22 @@ fun LoanScreen(
     ) { state ->
         when (state) {
             "TRANSACTION" -> {
-                val loan = loanForTransaction!!
-                AddLoanTransactionScreen(
-                    loan = loan,
-                    accounts = accounts,
-                    currency = currency,
-                    onDismiss = { loanForTransaction = null },
-                    onConfirm = { amount, isPayment, accId, fee, feeName, date ->
-                        onAddTransaction(loan.id, amount, isPayment, accId, loan.type, fee, feeName, date)
-                        loanForTransaction = null
-                    }
-                )
+                val loan = loanForTransaction
+                if (loan != null) {
+                    AddLoanTransactionScreen(
+                        loan = loan,
+                        accounts = accounts,
+                        currency = currency,
+                        onDismiss = { loanForTransaction = null },
+                        onConfirm = { amount, isPayment, accId, fee, feeName, date ->
+                            onAddTransaction(loan.id, loan.name, amount, isPayment, accId, loan.type, fee, feeName, date)
+                            loanForTransaction = null
+                        }
+                    )
+                } else {
+                    // Fallback (Should typically not happen if state logic is perfect, but handles the transition race)
+                    Box(Modifier.fillMaxSize()) 
+                }
             }
             "INPUT" -> {
                 LoanInputScreen(
@@ -266,41 +271,43 @@ fun LoanItem(
             .clip(RoundedCornerShape(12.dp)) // Clip the whole box for corners
     ) {
         // Background Actions
-        Row(
-            modifier = Modifier.fillMaxSize(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+        Box(modifier = Modifier.matchParentSize()) {
             // Left Action (Edit) - Revealed by swiping RIGHT
             Box(
                 modifier = Modifier
-                    .width(actionWidth)
+                    .align(Alignment.CenterStart)
+                    .width(actionWidth + 24.dp)
                     .fillMaxHeight()
                     .background(MaterialTheme.colorScheme.primary)
                     .clickable { onEditClick() },
-                contentAlignment = Alignment.Center
+                contentAlignment = Alignment.CenterStart
             ) {
-                Icon(
-                    imageVector = Icons.Default.Edit,
-                    contentDescription = "Edit",
-                    tint = MaterialTheme.colorScheme.onPrimary
-                )
+                Box(modifier = Modifier.width(actionWidth), contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = Icons.Default.Edit,
+                        contentDescription = "Edit",
+                        tint = MaterialTheme.colorScheme.onPrimary
+                    )
+                }
             }
 
             // Right Action (Delete) - Revealed by swiping LEFT
             Box(
                 modifier = Modifier
-                    .width(actionWidth)
+                    .align(Alignment.CenterEnd)
+                    .width(actionWidth + 24.dp)
                     .fillMaxHeight()
                     .background(MaterialTheme.colorScheme.error)
                     .clickable { showDeleteDialog = true },
-                contentAlignment = Alignment.Center
+                contentAlignment = Alignment.CenterEnd
             ) {
-                Icon(
-                    imageVector = Icons.Default.Delete,
-                    contentDescription = "Delete",
-                    tint = MaterialTheme.colorScheme.onError
-                )
+                Box(modifier = Modifier.width(actionWidth), contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = "Delete",
+                        tint = MaterialTheme.colorScheme.onError
+                    )
+                }
             }
         }
 

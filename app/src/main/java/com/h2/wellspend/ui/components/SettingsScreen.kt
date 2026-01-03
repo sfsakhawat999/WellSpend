@@ -44,6 +44,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.DropdownMenuItem
 
 val AVAILABLE_CURRENCIES = listOf("$", "€", "£", "₹", "¥", "৳")
 
@@ -150,33 +153,60 @@ fun SettingsScreen(
             ) {
                 // Theme Mode
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text("Theme Mode", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Medium)
                     
-                    Row(
-                        modifier = Modifier
-                            .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(8.dp))
-                            .padding(4.dp),
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    var themeExpanded by remember { mutableStateOf(false) }
+                    val themeOptions = listOf("System Default" to "SYSTEM", "Light" to "LIGHT", "Dark" to "DARK")
+                    val selectedThemeLabel = themeOptions.find { it.second == currentThemeMode }?.first ?: "System Default"
+
+                    ExposedDropdownMenuBox(
+                        expanded = themeExpanded,
+                        onExpandedChange = { themeExpanded = it }
                     ) {
-                        listOf("DARK", "LIGHT", "SYSTEM").forEach { mode ->
-                            val isSelected = currentThemeMode == mode
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(6.dp))
-                                    .background(if (isSelected) MaterialTheme.colorScheme.background else Color.Transparent)
-                                    .clickable { onThemeModeChange(mode) }
-                                    .padding(horizontal = 12.dp, vertical = 6.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
+                        Row(
+                            modifier = Modifier
+                                .menuAnchor()
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                                .clickable { themeExpanded = true }
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.CenterStart) {
                                 Text(
-                                    text = mode,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = if (isSelected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
-                                    fontWeight = FontWeight.Bold
+                                    text = "System Default",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Medium,
+                                    color = Color.Transparent
+                                )
+                                Text(
+                                    text = selectedThemeLabel,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    fontWeight = FontWeight.Medium,
+                                    maxLines = 1
+                                )
+                            }
+                            ExposedDropdownMenuDefaults.TrailingIcon(expanded = themeExpanded)
+                        }
+
+                        ExposedDropdownMenu(
+                            expanded = themeExpanded,
+                            onDismissRequest = { themeExpanded = false }
+                        ) {
+                            themeOptions.forEach { (label, mode) ->
+                                DropdownMenuItem(
+                                    text = { Text(label) },
+                                    onClick = {
+                                        onThemeModeChange(mode)
+                                        themeExpanded = false
+                                    },
+                                    contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding
                                 )
                             }
                         }

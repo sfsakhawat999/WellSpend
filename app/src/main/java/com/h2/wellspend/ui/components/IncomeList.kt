@@ -159,37 +159,37 @@ fun IncomeItem(
                 .clip(RoundedCornerShape(16.dp)) 
         ) {
             // Background (Actions)
-            Row(
-                modifier = Modifier.fillMaxSize(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Left Action (Edit) - Hidden for BalanceAdjustment
+            Box(modifier = Modifier.matchParentSize()) {
+                // Left Action (Edit)
                 if (!isBalanceAdjustment) {
                     Box(
                         modifier = Modifier
-                            .width(actionWidth)
+                            .align(Alignment.CenterStart)
+                            .width(actionWidth + 24.dp)
                             .fillMaxHeight()
                             .background(MaterialTheme.colorScheme.primary)
                             .clickable { onEdit(income) },
-                        contentAlignment = Alignment.Center
+                        contentAlignment = Alignment.CenterStart
                     ) {
-                        Icon(Icons.Default.Edit, "Edit", tint = MaterialTheme.colorScheme.onPrimary)
+                        Box(modifier = Modifier.width(actionWidth), contentAlignment = Alignment.Center) {
+                            Icon(Icons.Default.Edit, "Edit", tint = MaterialTheme.colorScheme.onPrimary)
+                        }
                     }
-                } else {
-                    Spacer(modifier = Modifier.width(actionWidth))
                 }
 
                 // Right Action (Delete)
                 Box(
                     modifier = Modifier
-                        .width(actionWidth)
+                        .align(Alignment.CenterEnd)
+                        .width(actionWidth + 24.dp)
                         .fillMaxHeight()
                         .background(MaterialTheme.colorScheme.error)
                         .clickable { showDeleteDialog = true },
-                    contentAlignment = Alignment.Center
+                    contentAlignment = Alignment.CenterEnd
                 ) {
-                    Icon(Icons.Default.Delete, "Delete", tint = MaterialTheme.colorScheme.onError)
+                    Box(modifier = Modifier.width(actionWidth), contentAlignment = Alignment.Center) {
+                        Icon(Icons.Default.Delete, "Delete", tint = MaterialTheme.colorScheme.onError)
+                    }
                 }
             }
 

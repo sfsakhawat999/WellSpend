@@ -12,6 +12,11 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -98,6 +103,21 @@ import com.h2.wellspend.ui.components.BudgetScreen
 
 
 import com.h2.wellspend.ui.components.LoanScreen
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
+import androidx.compose.animation.core.Animatable
+import androidx.compose.ui.unit.IntOffset
+import kotlin.math.roundToInt
+import androidx.compose.foundation.layout.offset
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
+import kotlinx.coroutines.delay
+import androidx.compose.ui.draw.clip
 
 enum class Screen {
     HOME, ACCOUNTS, INCOME, EXPENSES, MORE
@@ -136,6 +156,19 @@ fun MainScreen(viewModel: MainViewModel) {
     val accounts by viewModel.accounts.collectAsState(initial = emptyList())
     val loans by viewModel.loans.collectAsState(initial = emptyList())
     val balances by viewModel.accountBalances.collectAsState(initial = emptyMap())
+    
+    // Track if initial data has loaded (show skeleton until first real data arrives)
+    var isDataLoaded by remember { mutableStateOf(false) }
+    LaunchedEffect(expenses, accounts) {
+        // Consider data loaded once we have attempted to fetch (even if empty after load)
+        // We use a small delay to ensure skeleton shows briefly for smooth UX
+        if (!isDataLoaded && (expenses.isNotEmpty() || accounts.isNotEmpty())) {
+            isDataLoaded = true
+        }
+        // Also mark as loaded after a timeout to handle empty database case
+        kotlinx.coroutines.delay(500)
+        isDataLoaded = true
+    }
 
     val canNavigateBack = showAddExpense || showReport || showBudgets || showSettings || showTransfers || showLoans || showAccountInput || loanTransactionToEdit != null || currentScreen != Screen.HOME
     androidx.activity.compose.BackHandler(enabled = canNavigateBack) {
@@ -411,8 +444,8 @@ fun MainScreen(viewModel: MainViewModel) {
                             onAddLoan = { name, amount, type, desc, accId, fee, feeName, date ->
                                 viewModel.addLoan(name, amount, type, desc, accId, fee, feeName, date)
                             },
-                            onAddTransaction = { loanId, amount, isPayment, accId, type, fee, feeName, date ->
-                                viewModel.addLoanTransaction(loanId, amount, isPayment, accId, type, fee, feeName, date)
+                            onAddTransaction = { loanId, loanName, amount, isPayment, accId, type, fee, feeName, date ->
+                                viewModel.addLoanTransaction(loanId, loanName, amount, isPayment, accId, type, fee, feeName, date)
                             },
                             onUpdateLoan = { viewModel.updateLoan(it) },
                             onDeleteLoan = { loan, deleteTransactions -> viewModel.deleteLoan(loan, deleteTransactions) },
@@ -438,19 +471,69 @@ fun MainScreen(viewModel: MainViewModel) {
                          )
                     }
                     "HOME" -> {
-                         DashboardScreen(
+                        // Filter out virtual loan transactions (same logic as expense/income pages)
+                        val validTransactionsForDisplay = currentMonthTransactions.filter {
+                            !(it.loanId != null && it.accountId == null)
+                        }
+                        
+                        // Calculate balance at end of selected month
+                        // Filter all expenses up to end of current month
+                        val monthEnd = currentDate.withDayOfMonth(currentDate.lengthOfMonth())
+                        val transactionsUpToMonthEnd = expenses.filter { exp ->
+                            val expDate = try { LocalDate.parse(exp.date.take(10)) } catch(e: Exception) { LocalDate.now() }
+                            !expDate.isAfter(monthEnd)
+                        }
+                        
+                        val monthEndBalance = accounts.sumOf { account ->
+                            val initial = account.initialBalance
+                            val acctTransactions = transactionsUpToMonthEnd
+                            
+                            val accountExpenses = acctTransactions.filter { it.accountId == account.id && it.transactionType == com.h2.wellspend.data.TransactionType.EXPENSE }
+                            val transfersOut = acctTransactions.filter { it.accountId == account.id && it.transactionType == com.h2.wellspend.data.TransactionType.TRANSFER }
+                            val transfersIn = acctTransactions.filter { it.transferTargetAccountId == account.id && it.transactionType == com.h2.wellspend.data.TransactionType.TRANSFER }
+                            val incomes = acctTransactions.filter { it.accountId == account.id && it.transactionType == com.h2.wellspend.data.TransactionType.INCOME }
+                            
+                            val totalExpense = accountExpenses.sumOf { it.amount + it.feeAmount }
+                            val totalTransferOut = transfersOut.sumOf { it.amount + it.feeAmount }
+                            val totalIncomeNet = incomes.sumOf { it.amount - it.feeAmount }
+                            val totalTransferIn = transfersIn.sumOf { it.amount }
+                            
+                            initial + totalIncomeNet - totalExpense - totalTransferOut + totalTransferIn
+                        }
+                        
+                        // Calculate income for this month (excluding virtual loan transactions)
+                        val totalIncome = validTransactionsForDisplay
+                            .filter { it.transactionType == com.h2.wellspend.data.TransactionType.INCOME }
+                            .sumOf { it.amount - it.feeAmount }
+                        
+                        // All transactions for lazy loading (sorted by date desc)
+                        val allMonthTransactions = validTransactionsForDisplay
+                            .sortedByDescending { it.timestamp }
+                        
+                        DashboardScreen(
                             currentDate = currentDate,
                             onDateChange = { currentDate = it },
                             onReportClick = { showReport = true },
-                            onChartClick = { currentScreen = Screen.EXPENSES },
-                            chartData = chartData,
-                            totalSpend = totalSpend,
                             currency = currency,
-                            budgets = budgets,
-                            onBudgetClick = { showBudgets = true },
                             accounts = accounts,
                             accountBalances = balances,
-                            onAccountClick = { currentScreen = Screen.ACCOUNTS }
+                            onAccountClick = { currentScreen = Screen.ACCOUNTS },
+                            totalBalance = monthEndBalance,
+                            totalIncome = totalIncome,
+                            totalExpense = totalSpend,
+                            recentTransactions = allMonthTransactions,
+                            allAccounts = accounts,
+                            loans = loans,
+                            isLoading = !isDataLoaded,
+                            onEdit = { transaction ->
+                                if (transaction.loanId != null) {
+                                    loanTransactionToEdit = transaction
+                                } else {
+                                    expenseToEdit = transaction
+                                    showAddExpense = true
+                                }
+                            },
+                            onDelete = { id -> viewModel.deleteExpense(id) }
                         )
                     }
                     "OVERLAY_ACCOUNT_INPUT" -> {
@@ -465,7 +548,7 @@ fun MainScreen(viewModel: MainViewModel) {
                             onSave = { account, adjustment ->
                                 viewModel.updateAccount(account)
                                 if (adjustment != null && adjustment != 0.0) {
-                                     viewModel.addAdjustmentTransaction(account.id, adjustment)
+                                     viewModel.addAdjustmentTransaction(account.id, account.name, adjustment)
                                 }
                                 showAccountInput = false
                                 accountToEdit = null
@@ -480,7 +563,10 @@ fun MainScreen(viewModel: MainViewModel) {
                             onDeleteAccount = { viewModel.deleteAccount(it) },
                             isAccountUsed = { id -> expenses.any { it.accountId == id } },
                             onReorder = { viewModel.updateAccountOrder(it) },
-                            onAdjustBalance = { accId, adj -> viewModel.addAdjustmentTransaction(accId, adj) },
+                            onAdjustBalance = { accId, adj -> 
+                                val accName = accounts.find { it.id == accId }?.name ?: "Unknown"
+                                viewModel.addAdjustmentTransaction(accId, accName, adj) 
+                            },
                             onAddAccount = { 
                                 accountToEdit = null
                                 showAccountInput = true 
@@ -529,7 +615,9 @@ fun MainScreen(viewModel: MainViewModel) {
                                     showAddExpense = true
                                 }
                             },
-                            state = listState
+                            state = listState,
+                            chartData = chartData,
+                            totalSpend = totalSpend
                         )
                     }
                     "MORE" -> {
@@ -589,15 +677,19 @@ fun DashboardScreen(
     currentDate: LocalDate,
     onDateChange: (LocalDate) -> Unit,
     onReportClick: () -> Unit,
-    onChartClick: () -> Unit,
-    chartData: List<ChartData>,
-    totalSpend: Double,
     currency: String,
-    budgets: List<com.h2.wellspend.data.Budget>,
-    onBudgetClick: () -> Unit,
     accounts: List<com.h2.wellspend.data.Account>,
     accountBalances: Map<String, Double>,
-    onAccountClick: () -> Unit
+    onAccountClick: () -> Unit,
+    totalBalance: Double,
+    totalIncome: Double,
+    totalExpense: Double,
+    recentTransactions: List<com.h2.wellspend.data.Expense>,
+    allAccounts: List<com.h2.wellspend.data.Account>,
+    loans: List<com.h2.wellspend.data.Loan>,
+    isLoading: Boolean = false,
+    onEdit: (com.h2.wellspend.data.Expense) -> Unit,
+    onDelete: (String) -> Unit
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         TopBar(
@@ -606,172 +698,506 @@ fun DashboardScreen(
             onReportClick = onReportClick
         )
 
-        Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-            DonutChart(
-                data = chartData,
-                totalAmount = totalSpend,
-                currency = currency,
-                onCenterClick = onChartClick
+        if (isLoading) {
+            // Skeleton Loading UI with shimmer effect
+            val transition = rememberInfiniteTransition(label = "shimmer")
+            val shimmerAlpha by transition.animateFloat(
+                initialValue = 0.3f,
+                targetValue = 0.7f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(durationMillis = 800),
+                    repeatMode = RepeatMode.Reverse
+                ),
+                label = "shimmer_alpha"
             )
             
-            // Accounts Section
-            Column(modifier = Modifier.padding(16.dp)) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp)
+            ) {
+                // Summary skeleton
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
                 ) {
-                    Text(
-                        text = "ACCOUNTS",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 1.sp
+                    Box(
+                        modifier = Modifier
+                            .width(80.dp)
+                            .height(16.dp)
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = shimmerAlpha), RoundedCornerShape(4.dp))
+                    )
+                }
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(72.dp)
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = shimmerAlpha), RoundedCornerShape(16.dp))
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(72.dp)
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = shimmerAlpha), RoundedCornerShape(16.dp))
+                    )
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(72.dp)
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = shimmerAlpha), RoundedCornerShape(16.dp))
                     )
                 }
                 
-                if (accounts.isEmpty()) {
-                     Box(
+                Spacer(modifier = Modifier.height(24.dp))
+                
+                // Accounts skeleton
+                Row(modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
+                    Box(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
-                            .clickable { onAccountClick() }
-                            .padding(16.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text("No accounts. Add one.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                } else {
-                    Row(
-                        modifier = Modifier.horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        accounts.forEach { acc ->
-                             // Calculate Balance (Incomplete: Currently only initialBalance is shown properly without full calculation logic in VM)
-                             // Ideally we should pass a Map<String, Double> of balances or enrich Account object.
-                             // For now, let's just show initialBalance as placeholder or just name.
-                             // Actually, user wants to see balances. 
-                             // I should assume the Account entity or a separate flow provides the calculated balance.
-                             // But my repository only provides `getAllAccounts` which returns `List<Account>`. 
-                             // The `Account` entity only has `initialBalance`.
-                             // Wait, I missed the balance calculation logic in Repository!
-                             // My plan said: "Implement Repository Logic (Balances...)".
-                             // I checked `WellSpendRepository.kt` in the beginning and it had `getAllAccounts`.
-                             // Did I implement `getAccountBalances`?
-                             // I need to check `WellSpendRepository.kt`.
-                             // If I didn't, I need to do it.
-                             // For now, I'll display "Tap to see balance" or just initial balance.
-                             // Actually, let's display the name and a placeholder.
-                             
-                             Card(
-                                shape = RoundedCornerShape(16.dp),
-                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                                elevation = CardDefaults.cardElevation(2.dp),
-                                modifier = Modifier.width(140.dp)
-                             ) {
-                                 Column(modifier = Modifier.padding(16.dp)) {
-                                     Text(acc.name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, maxLines = 1)
-                                     Spacer(modifier = Modifier.height(8.dp))
-                                     val bal = accountBalances[acc.id] ?: acc.initialBalance
-                                     Text("$currency${String.format("%.2f", bal)}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                                 }
-                             }
-                        }
-                    }
-                }
-            }
-
-            Column(modifier = Modifier.padding(16.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "SPENDING & BUDGETS",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 1.sp
+                            .width(80.dp)
+                            .height(16.dp)
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = shimmerAlpha), RoundedCornerShape(4.dp))
                     )
                 }
-
-                // Budget List
-                if (chartData.isEmpty()) {
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    repeat(3) {
+                        Box(
+                            modifier = Modifier
+                                .width(140.dp)
+                                .height(80.dp)
+                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = shimmerAlpha), RoundedCornerShape(16.dp))
+                        )
+                    }
+                }
+                
+                Spacer(modifier = Modifier.height(24.dp))
+                
+                // Transactions skeleton
+                Row(modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
+                    Box(
+                        modifier = Modifier
+                            .width(120.dp)
+                            .height(16.dp)
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = shimmerAlpha), RoundedCornerShape(4.dp))
+                    )
+                }
+                repeat(5) {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
-                            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(12.dp))
-                            .padding(24.dp),
-                        contentAlignment = Alignment.Center
+                            .height(64.dp)
+                            .padding(vertical = 4.dp)
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = shimmerAlpha), RoundedCornerShape(12.dp))
+                    )
+                }
+            }
+        } else {
+            androidx.compose.foundation.lazy.LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 96.dp)
+            ) {
+            // Summary Cards Section
+            item {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("No expenses this month. Tap + to add one.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(
+                            text = "SUMMARY",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 1.sp
+                        )
                     }
-                } else {
-                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        chartData.forEach { item ->
-                            val budget = budgets.find { it.category.name == item.name }
-                            val limit = budget?.limitAmount ?: 0.0
-                            val percent = if (limit > 0) (item.value / limit) * 100 else 0.0
-                            val isOver = limit > 0 && item.value > limit
-
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(12.dp))
-                                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(12.dp))
-                                    .padding(16.dp)
-                            ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Box(modifier = Modifier.size(12.dp).background(item.color, CircleShape))
-                                        Spacer(modifier = Modifier.size(8.dp))
-                                        Text(item.name, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Medium)
-                                    }
-                                    Text("$currency${String.format("%.2f", item.value)}", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold)
-                                }
-
-                                if (limit > 0) {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
-                                        horizontalArrangement = Arrangement.End
-                                    ) {
-                                        Text(
-                                            text = if (isOver) "Over Budget" else "${percent.toInt()}% of $currency${String.format("%.2f", limit)}",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = if (isOver) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    }
-                                    // Progress Bar
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(8.dp)
-                                            .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(4.dp))
-                                    ) {
-                                        Box(
-                                            modifier = Modifier
-                                                .fillMaxWidth(minOf(percent / 100, 1.0).toFloat())
-                                                .height(8.dp)
-                                                .background(if (isOver) MaterialTheme.colorScheme.error else item.color, RoundedCornerShape(4.dp))
-                                        )
-                                    }
-                                }
+                    
+                    // Summary Cards Row
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        // Total Balance Card
+                        Card(
+                            shape = RoundedCornerShape(16.dp),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Text(
+                                    "Total Balance",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    "$currency${String.format("%.2f", totalBalance)}",
+                                    style = MaterialTheme.typography.headlineSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                            }
+                        }
+                    }
+                    
+                    Spacer(modifier = Modifier.height(12.dp))
+                    
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        // Income Card
+                        Card(
+                            shape = RoundedCornerShape(16.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFF1B5E20).copy(alpha = 0.15f)),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Text(
+                                    "Income",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = Color(0xFF4CAF50)
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    "+$currency${String.format("%.2f", totalIncome)}",
+                                    style = MaterialTheme.typography.headlineSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF4CAF50)
+                                )
+                            }
+                        }
+                        
+                        // Expense Card
+                        Card(
+                            shape = RoundedCornerShape(16.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFFB71C1C).copy(alpha = 0.15f)),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Text(
+                                    "Expenses",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = Color(0xFFF44336)
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    "-$currency${String.format("%.2f", totalExpense)}",
+                                    style = MaterialTheme.typography.headlineSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFFF44336)
+                                )
                             }
                         }
                     }
                 }
             }
-            Spacer(modifier = Modifier.height(96.dp))
+            
+            // Accounts Section
+            item {
+                Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "ACCOUNTS",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 1.sp
+                        )
+                    }
+                    
+                    if (accounts.isEmpty()) {
+                         Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
+                                .clickable { onAccountClick() }
+                                .padding(16.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("No accounts. Add one.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    } else {
+                        Row(
+                            modifier = Modifier.horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            accounts.forEach { acc ->
+                                 Card(
+                                    shape = RoundedCornerShape(16.dp),
+                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
+                                    elevation = CardDefaults.cardElevation(0.dp),
+                                    modifier = Modifier.width(140.dp)
+                                 ) {
+                                     Column(modifier = Modifier.padding(16.dp)) {
+                                         Text(acc.name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, maxLines = 1, color = MaterialTheme.colorScheme.onSecondaryContainer)
+                                         Spacer(modifier = Modifier.height(8.dp))
+                                         val bal = accountBalances[acc.id] ?: acc.initialBalance
+                                         Text("$currency${String.format("%.2f", bal)}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSecondaryContainer)
+                                     }
+                                 }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Transactions Section Header
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "TRANSACTIONS",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.sp
+                    )
+                }
+            }
+
+            if (recentTransactions.isEmpty()) {
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp)
+                            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
+                            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(12.dp))
+                            .padding(24.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("No transactions this month. Tap + to add one.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            } else {
+                items(recentTransactions.size) { index ->
+                    val transaction = recentTransactions[index]
+                    val sourceAccountName = allAccounts.find { it.id == transaction.accountId }?.name ?: "No Account"
+                    val targetAccountName = allAccounts.find { it.id == transaction.transferTargetAccountId }?.name
+                    val loanName = if (transaction.loanId != null) {
+                        loans.find { it.id == transaction.loanId }?.name
+                    } else null
+                    
+                    val isIncome = transaction.transactionType == com.h2.wellspend.data.TransactionType.INCOME
+                    val isTransfer = transaction.transactionType == com.h2.wellspend.data.TransactionType.TRANSFER
+                    
+                    // Check if this is a balance adjustment (non-editable)
+                    val isBalanceAdjustment = transaction.category == Category.BalanceAdjustment
+                    
+                    // Display text for description: "Category: Description" format
+                    val displayDesc = when {
+                        isTransfer && targetAccountName != null -> "Transfer: $sourceAccountName → $targetAccountName"
+                        isTransfer -> "Transfer: $sourceAccountName → ?"
+                        loanName != null -> transaction.description.ifEmpty { transaction.category.name }
+                        isBalanceAdjustment -> transaction.description.ifEmpty { transaction.category.name }
+                        transaction.description.isNotEmpty() -> "${transaction.category.name}: ${transaction.description}"
+                        else -> transaction.category.name
+                    }
+                    
+                    val dateStr = try {
+                        val date = LocalDate.parse(transaction.date.take(10))
+                        date.format(DateTimeFormatter.ofPattern("MMM d"))
+                    } catch (e: Exception) { "" }
+                    
+                    // Color coding: Green for income, Red for expense, Blue for transfer
+                    val amountColor = when {
+                        isIncome -> Color(0xFF4CAF50) // Green
+                        isTransfer -> Color(0xFF2196F3) // Blue
+                        else -> Color(0xFFF44336) // Red
+                    }
+                    val amountPrefix = when {
+                        isIncome -> "+"
+                        isTransfer -> "↔"
+                        else -> "-"
+                    }
+                    
+                    // Swipe gesture state
+                    val density = androidx.compose.ui.platform.LocalDensity.current
+                    val actionWidth = 70.dp
+                    val actionWidthPx = with(density) { actionWidth.toPx() }
+                    val offsetX = remember { Animatable(0f) }
+                    val scope = rememberCoroutineScope()
+                    var showDeleteDialog by remember { mutableStateOf(false) }
+                    
+                    // Delete confirmation dialog
+                    if (showDeleteDialog) {
+                        androidx.compose.material3.AlertDialog(
+                            onDismissRequest = { showDeleteDialog = false },
+                            title = { Text("Delete Transaction") },
+                            text = { Text("Are you sure you want to delete this transaction?") },
+                            confirmButton = {
+                                androidx.compose.material3.TextButton(
+                                    onClick = {
+                                        showDeleteDialog = false
+                                        onDelete(transaction.id)
+                                    }
+                                ) {
+                                    Text("Delete", color = MaterialTheme.colorScheme.error)
+                                }
+                            },
+                            dismissButton = {
+                                androidx.compose.material3.TextButton(onClick = { showDeleteDialog = false }) {
+                                    Text("Cancel")
+                                }
+                            }
+                        )
+                    }
+                    
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 4.dp)
+                            .height(IntrinsicSize.Min)
+                    ) {
+                        // Background Actions
+                        Box(modifier = Modifier.matchParentSize()) {
+                            // Left Action (Edit)
+                            if (!isBalanceAdjustment) {
+                                Box(
+                                    modifier = Modifier
+                                        .align(Alignment.CenterStart)
+                                        .width(actionWidth + 24.dp)
+                                        .fillMaxHeight()
+                                        .clip(RoundedCornerShape(topStart = 12.dp, bottomStart = 12.dp))
+                                        .background(MaterialTheme.colorScheme.primary)
+                                        .clickable { onEdit(transaction) },
+                                    contentAlignment = Alignment.CenterStart
+                                ) {
+                                    Box(modifier = Modifier.width(actionWidth), contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            imageVector = Icons.Default.Edit,
+                                            contentDescription = "Edit",
+                                            tint = MaterialTheme.colorScheme.onPrimary
+                                        )
+                                    }
+                                }
+                            }
+                            
+                            // Right Action (Delete)
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.CenterEnd)
+                                    .width(actionWidth + 24.dp)
+                                    .fillMaxHeight()
+                                    .clip(RoundedCornerShape(topEnd = 12.dp, bottomEnd = 12.dp))
+                                    .background(MaterialTheme.colorScheme.error)
+                                    .clickable { showDeleteDialog = true },
+                                contentAlignment = Alignment.CenterEnd
+                            ) {
+                                Box(modifier = Modifier.width(actionWidth), contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Default.Delete,
+                                        contentDescription = "Delete",
+                                        tint = MaterialTheme.colorScheme.onError
+                                    )
+                                }
+                            }
+                        }
+                        
+                        // Foreground Content (Swipeable)
+                        Row(
+                            modifier = Modifier
+                                .offset { IntOffset(offsetX.value.roundToInt(), 0) }
+                                .draggable(
+                                    orientation = Orientation.Horizontal,
+                                    state = rememberDraggableState { delta ->
+                                        scope.launch {
+                                            val minOffset = -actionWidthPx
+                                            val maxOffset = if (isBalanceAdjustment) 0f else actionWidthPx
+                                            val newValue = (offsetX.value + delta).coerceIn(minOffset, maxOffset)
+                                            offsetX.snapTo(newValue)
+                                        }
+                                    },
+                                    onDragStopped = {
+                                        val targetOffset = if (offsetX.value > actionWidthPx / 2) {
+                                            actionWidthPx
+                                        } else if (offsetX.value < -actionWidthPx / 2) {
+                                            -actionWidthPx
+                                        } else {
+                                            0f
+                                        }
+                                        scope.launch { offsetX.animateTo(targetOffset) }
+                                    }
+                                )
+                                .fillMaxWidth()
+                                .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(12.dp))
+                                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(12.dp))
+                                .padding(12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    displayDesc,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Medium,
+                                    maxLines = 1,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    if (!isTransfer) {
+                                        Text(
+                                            sourceAccountName,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                        Text(
+                                            "•",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                    Text(
+                                        dateStr,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                            Text(
+                                "$amountPrefix$currency${String.format("%.2f", transaction.amount)}",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = amountColor
+                            )
+                        }
+                    }
+                }
+            }
+            
+            // Footer showing end of transactions
+            if (recentTransactions.isNotEmpty()) {
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            "No more transactions",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                        )
+                    }
+                }
+            }
+            }
         }
     }
 }
 
 @Composable
-
 fun ExpenseListScreen(
     currentDate: LocalDate,
     onDateChange: (LocalDate) -> Unit,
@@ -782,7 +1208,9 @@ fun ExpenseListScreen(
     currency: String,
     onDelete: (String) -> Unit,
     onEdit: (Expense) -> Unit,
-    state: LazyListState
+    state: LazyListState,
+    chartData: List<ChartData>,
+    totalSpend: Double
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         TopBar(
@@ -803,7 +1231,16 @@ fun ExpenseListScreen(
             currency = currency,
             onDelete = onDelete,
             onEdit = onEdit,
-            state = state
+            state = state,
+            headerContent = {
+                // Donut Chart at the top (scrollable)
+                DonutChart(
+                    data = chartData,
+                    totalAmount = totalSpend,
+                    currency = currency,
+                    onCenterClick = { /* Already on details page */ }
+                )
+            }
         )
     }
 }

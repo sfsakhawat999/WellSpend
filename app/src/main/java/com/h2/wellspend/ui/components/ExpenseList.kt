@@ -77,7 +77,8 @@ fun ExpenseList(
     currency: String,
     onDelete: (String) -> Unit,
     onEdit: (Expense) -> Unit,
-    state: LazyListState = rememberLazyListState()
+    state: LazyListState = rememberLazyListState(),
+    headerContent: @Composable () -> Unit = {}
 ) {
     // Flatten expenses to include virtual fees
     val displayExpenses = remember(expenses) {
@@ -104,7 +105,6 @@ fun ExpenseList(
         displayExpenses.groupBy { it.category }
             .mapValues { entry ->
                 // Sum only Amounts (Virtual fees are now proper Expenses with Amount)
-                // Filter for EXPENSE type to match existing logic (assuming this list is for Expenses)
                 val total = entry.value.filter { it.transactionType == com.h2.wellspend.data.TransactionType.EXPENSE }.sumOf { it.amount } 
 
                 val items = entry.value.sortedWith(
@@ -117,27 +117,34 @@ fun ExpenseList(
             .sortedByDescending { it.second.first } // Sort by total amount
     }
 
-    if (groupedExpenses.isEmpty()) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 40.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = "No expenses recorded for this period.",
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+    LazyColumn(
+        state = state,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+        contentPadding = PaddingValues(bottom = 96.dp), // Space for FAB
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        // Header (Chart)
+        item {
+            headerContent()
         }
-    } else {
-        LazyColumn(
-            state = state,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp),
-            contentPadding = PaddingValues(bottom = 96.dp), // Space for FAB
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
+
+        if (groupedExpenses.isEmpty()) {
+            item {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 40.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "No expenses recorded for this period.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        } else {
             items(groupedExpenses) { (category, data) ->
                 val (total, items) = data
                 ExpenseCategoryItem(
@@ -414,45 +421,45 @@ fun ExpenseItem(
                 .height(androidx.compose.foundation.layout.IntrinsicSize.Min)
         ) {
             // Background (Actions)
-            Row(
-                modifier = Modifier.fillMaxSize(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Left Action (Visible when swiped right -> EDIT) - Hidden for BalanceAdjustment
+            Box(modifier = Modifier.matchParentSize()) {
+                // Left Action (Edit)
                 if (!isBalanceAdjustment) {
                     Box(
                         modifier = Modifier
-                            .width(actionWidth)
+                            .align(Alignment.CenterStart)
+                            .width(actionWidth + 24.dp)
                             .fillMaxHeight()
                             .background(MaterialTheme.colorScheme.primary)
                             .clickable { onEdit(expense) },
-                        contentAlignment = Alignment.Center
+                        contentAlignment = Alignment.CenterStart
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Edit,
-                            contentDescription = "Edit",
-                            tint = MaterialTheme.colorScheme.onPrimary
-                        )
+                        Box(modifier = Modifier.width(actionWidth), contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Default.Edit,
+                                contentDescription = "Edit",
+                                tint = MaterialTheme.colorScheme.onPrimary
+                            )
+                        }
                     }
-                } else {
-                    Spacer(modifier = Modifier.width(actionWidth))
                 }
 
-                // Right Action (Visible when swiped left)
+                // Right Action (Delete)
                 Box(
                     modifier = Modifier
-                        .width(actionWidth)
+                        .align(Alignment.CenterEnd)
+                        .width(actionWidth + 24.dp)
                         .fillMaxHeight()
                         .background(MaterialTheme.colorScheme.error)
                         .clickable { showDeleteDialog = true },
-                    contentAlignment = Alignment.Center
+                    contentAlignment = Alignment.CenterEnd
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Delete,
-                        contentDescription = "Delete",
-                        tint = MaterialTheme.colorScheme.onError
-                    )
+                    Box(modifier = Modifier.width(actionWidth), contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.Default.Delete,
+                            contentDescription = "Delete",
+                            tint = MaterialTheme.colorScheme.onError
+                        )
+                    }
                 }
             }
 
