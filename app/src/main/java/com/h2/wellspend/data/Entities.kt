@@ -14,7 +14,7 @@ enum class TransactionType {
 @Keep
 enum class Category {
     Shopping, Snacks, Food, Rent, Internet, Phone, Education,
-    Transport, Groceries, Clothing, Health, Entertainment, Utilities, Insurance, Savings, Gifts, Travel, Subscriptions, Work, Pets, Family, Fitness, Beauty, Donations, Investments, Electronics, Hobbies, TransactionFee, Loan, Others
+    Transport, Groceries, Clothing, Health, Entertainment, Utilities, Insurance, Savings, Gifts, Travel, Subscriptions, Work, Pets, Family, Fitness, Beauty, Donations, Investments, Electronics, Hobbies, TransactionFee, Loan, BalanceAdjustment, Others
 }
 
 @Keep

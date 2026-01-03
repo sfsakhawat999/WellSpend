@@ -169,7 +169,7 @@ class MainViewModel(
         repository.sortedCategories,
         _optimisticUpdates
     ) { repo, optimistic ->
-        optimistic ?: repo
+        (optimistic ?: repo).filter { it != Category.BalanceAdjustment }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // Calculate Balances
@@ -451,7 +451,7 @@ class MainViewModel(
             val expense = Expense(
                 amount = amount,
                 description = "Balance Adjustment",
-                category = Category.Others,
+                category = Category.BalanceAdjustment,
                 date = LocalDate.now().atStartOfDay().toString(),
                 timestamp = System.currentTimeMillis(),
                 isRecurring = false,
