@@ -117,6 +117,12 @@ class WellSpendRepository(private val database: AppDatabase) {
         database.settingDao().insertSetting(Setting("dynamic_color", enabled.toString()))
     }
 
+    val excludeLoanTransactions: Flow<String?> = database.settingDao().getSettingFlow("exclude_loan_transactions")
+    
+    suspend fun setExcludeLoanTransactions(exclude: Boolean) {
+        database.settingDao().insertSetting(Setting("exclude_loan_transactions", exclude.toString()))
+    }
+
     suspend fun getAllExpensesOneShot(): List<Expense> {
         return database.expenseDao().getAllExpensesOneShot()
     }

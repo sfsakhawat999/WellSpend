@@ -56,9 +56,11 @@ fun SettingsScreen(
     currentCurrency: String,
     currentThemeMode: String,
     currentDynamicColor: Boolean,
+    excludeLoanTransactions: Boolean,
     onCurrencyChange: (String) -> Unit,
     onThemeModeChange: (String) -> Unit,
     onDynamicColorChange: (Boolean) -> Unit,
+    onExcludeLoanTransactionsChange: (Boolean) -> Unit,
     onExport: () -> Unit,
     onImport: () -> Unit,
     onBack: () -> Unit
@@ -226,6 +228,40 @@ fun SettingsScreen(
                     Switch(
                         checked = currentDynamicColor,
                         onCheckedChange = onDynamicColorChange,
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
+                            checkedTrackColor = MaterialTheme.colorScheme.primary
+                        )
+                    )
+                }
+            }
+
+
+
+            // Summary Configuration
+            SectionHeader("SUMMARY CONFIGURATION")
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(12.dp))
+                    .padding(16.dp)
+            ) {
+                 Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Exclude loan transactions", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Medium)
+                        Text(
+                            "Exclude loan transactions from total expense and income calculations. Total balance will remain unaffected.",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                    Switch(
+                        checked = excludeLoanTransactions,
+                        onCheckedChange = onExcludeLoanTransactionsChange,
                         colors = SwitchDefaults.colors(
                             checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
                             checkedTrackColor = MaterialTheme.colorScheme.primary

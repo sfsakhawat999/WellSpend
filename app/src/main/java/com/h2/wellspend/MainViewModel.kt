@@ -231,6 +231,10 @@ class MainViewModel(
         .map { it?.toBoolean() ?: false } // Default to false
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), initialDynamicColor)
 
+    val excludeLoanTransactions: StateFlow<Boolean> = repository.excludeLoanTransactions
+        .map { it?.toBoolean() ?: false } // Default to false
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
     init {
         checkRecurringExpenses()
     }
@@ -511,6 +515,12 @@ class MainViewModel(
     fun updateDynamicColor(enabled: Boolean) {
         viewModelScope.launch {
             repository.setDynamicColor(enabled)
+        }
+    }
+
+    fun updateExcludeLoanTransactions(exclude: Boolean) {
+        viewModelScope.launch {
+            repository.setExcludeLoanTransactions(exclude)
         }
     }
 

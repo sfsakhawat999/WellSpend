@@ -156,7 +156,8 @@ fun MainScreen(viewModel: MainViewModel) {
     val accounts by viewModel.accounts.collectAsState(initial = emptyList())
     val loans by viewModel.loans.collectAsState(initial = emptyList())
     val balances by viewModel.accountBalances.collectAsState(initial = emptyMap())
-    
+    val excludeLoanTransactions by viewModel.excludeLoanTransactions.collectAsState()
+
     // Track if initial data has loaded (show skeleton until first real data arrives)
     var isDataLoaded by remember { mutableStateOf(false) }
     LaunchedEffect(expenses, accounts) {
@@ -185,7 +186,6 @@ fun MainScreen(viewModel: MainViewModel) {
         }
     }
 
-    // Filter transactions for current month
     val currentMonthTransactions = expenses.filter {
         val date = try { LocalDate.parse(it.date.take(10)) } catch(e:Exception) { LocalDate.now() }
         date.month == currentDate.month && date.year == currentDate.year
@@ -193,7 +193,12 @@ fun MainScreen(viewModel: MainViewModel) {
 
     // Calculate Total Spend: (All Expenses Base Amount) + (All Fees from any transaction type)
     // EXCLUDING Loan transactions with NO Account (Virtual/Cash/Untracked)
-    val validTransactions = currentMonthTransactions.filter { !(it.loanId != null && it.accountId == null) }
+    // AND optionally excluding ALL loan transactions if setting is enabled
+    val validTransactions = currentMonthTransactions.filter { transaction ->
+        val isVirtualLoan = transaction.loanId != null && transaction.accountId == null
+        val isExcludedLoan = excludeLoanTransactions && transaction.loanId != null
+        !isVirtualLoan && !isExcludedLoan
+    }
     
     val totalSpend = validTransactions.filter { it.transactionType == com.h2.wellspend.data.TransactionType.EXPENSE }.sumOf { it.amount } + 
                      validTransactions.sumOf { it.feeAmount }
@@ -455,27 +460,32 @@ fun MainScreen(viewModel: MainViewModel) {
                         )
                     }
                     "OVERLAY_SETTINGS" -> {
-                         SettingsScreen(
-                            currentCurrency = currency,
-                            currentThemeMode = themeMode,
-                            currentDynamicColor = dynamicColor,
-                            onCurrencyChange = { newCurrency ->
-                                 viewModel.updateBudgets(emptyList(), newCurrency)
-                            },
-                            onThemeModeChange = { viewModel.updateThemeMode(it) },
-                            onDynamicColorChange = { viewModel.updateDynamicColor(it) },
-                            onExport = { 
-                                val timestamp = java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd_HHmm"))
-                                exportLauncher.launch("wellspend_backup_$timestamp.json") 
-                            },
-                            onImport = { importLauncher.launch(arrayOf("application/json")) },
-                            onBack = { showSettings = false }
-                         )
+                            SettingsScreen(
+                                currentCurrency = currency,
+                                currentThemeMode = themeMode,
+                                currentDynamicColor = dynamicColor,
+                                excludeLoanTransactions = excludeLoanTransactions,
+                                onCurrencyChange = { newCurrency ->
+                                     viewModel.updateBudgets(emptyList(), newCurrency)
+                                },
+                                onThemeModeChange = { viewModel.updateThemeMode(it) },
+                                onDynamicColorChange = { viewModel.updateDynamicColor(it) },
+                                onExcludeLoanTransactionsChange = { viewModel.updateExcludeLoanTransactions(it) },
+                                onExport = { 
+                                    val timestamp = java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd_HHmm"))
+                                    exportLauncher.launch("wellspend_backup_$timestamp.json") 
+                                },
+                                onImport = { importLauncher.launch(arrayOf("application/json")) },
+                                onBack = { showSettings = false }
+                             )
                     }
                     "HOME" -> {
                         // Filter out virtual loan transactions (same logic as expense/income pages)
-                        val validTransactionsForDisplay = currentMonthTransactions.filter {
-                            !(it.loanId != null && it.accountId == null)
+                        // AND respect value of excludeLoanTransactions
+                        val validTransactionsForDisplay = currentMonthTransactions.filter { transaction ->
+                            val isVirtualLoan = transaction.loanId != null && transaction.accountId == null
+                            val isExcludedLoan = excludeLoanTransactions && transaction.loanId != null
+                            !isVirtualLoan && !isExcludedLoan
                         }
                         
                         // Calculate balance at end of selected month
