@@ -44,11 +44,24 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import com.h2.wellspend.data.Currencies
+import com.h2.wellspend.data.Currency
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.DropdownMenuItem
 
-val AVAILABLE_CURRENCIES = listOf("$", "€", "£", "₹", "¥", "৳")
+// Removed AVAILABLE_CURRENCIES as we now use the full list
+
 
 @OptIn(ExperimentalLayoutApi::class, androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
@@ -95,54 +108,118 @@ fun SettingsScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(12.dp))
-                    .padding(16.dp)
             ) {
-                Text("Select Currency", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Medium, modifier = Modifier.padding(bottom = 12.dp))
+                var showCurrencyDialog by remember { mutableStateOf(false) }
                 
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                // Find current currency object or default
+                val currencyObj = remember(selectedCurrency) {
+                    if (selectedCurrency == "$") Currencies.find { it.code == "USD" }
+                    else Currencies.find { it.symbol == selectedCurrency } ?: Currency("???", selectedCurrency, "Custom")
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth().clickable { showCurrencyDialog = true },
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    AVAILABLE_CURRENCIES.forEach { currency ->
-                        val isSelected = selectedCurrency == currency
-                        Box(
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Current Currency", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "${currencyObj?.name ?: "Unknown"} (${currencyObj?.symbol ?: selectedCurrency})",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    Icon(Icons.Default.Edit, contentDescription = "Edit", tint = MaterialTheme.colorScheme.primary)
+                }
+
+                if (showCurrencyDialog) {
+                    Dialog(
+                        onDismissRequest = { showCurrencyDialog = false },
+                        properties = DialogProperties(usePlatformDefaultWidth = false)
+                    ) {
+                        Card(
                             modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
-                                .clickable { 
-                                    selectedCurrency = currency 
-                                    onCurrencyChange(currency)
-                                }
-                                .padding(horizontal = 16.dp, vertical = 8.dp),
-                            contentAlignment = Alignment.Center
+                                .fillMaxWidth(0.95f)
+                                .height(600.dp)
+                                .padding(16.dp),
+                            shape = RoundedCornerShape(16.dp),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                         ) {
-                            Text(
-                                text = currency,
-                                color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
-                                fontWeight = FontWeight.Bold
-                            )
+                            Column(
+                                modifier = Modifier.fillMaxSize().padding(16.dp)
+                            ) {
+                                Text(
+                                    "Select Currency", 
+                                    style = MaterialTheme.typography.headlineSmall, 
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Spacer(modifier = Modifier.height(16.dp))
+
+                                var searchQuery by remember { mutableStateOf("") }
+                                OutlinedTextField(
+                                    value = searchQuery,
+                                    onValueChange = { searchQuery = it },
+                                    label = { Text("Search") },
+                                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    singleLine = true,
+                                    shape = RoundedCornerShape(12.dp)
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                val filteredCurrencies = remember(searchQuery) {
+                                    if (searchQuery.isBlank()) Currencies
+                                    else Currencies.filter { 
+                                        it.name.contains(searchQuery, ignoreCase = true) || 
+                                        it.code.contains(searchQuery, ignoreCase = true) || 
+                                        it.symbol.contains(searchQuery, ignoreCase = true)
+                                    }
+                                }
+
+                                LazyColumn(
+                                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    items(filteredCurrencies) { currency ->
+                                        val isSelected = selectedCurrency == currency.symbol
+                                        Card(
+                                            onClick = {
+                                                selectedCurrency = currency.symbol
+                                                onCurrencyChange(currency.symbol)
+                                                showCurrencyDialog = false
+                                            },
+                                            modifier = Modifier.fillMaxWidth(),
+                                            colors = CardDefaults.cardColors(
+                                                containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant
+                                            )
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.padding(12.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Column(modifier = Modifier.weight(1f)) {
+                                                    Text(currency.name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                                                    Text(currency.code, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                                }
+                                                Text(currency.symbol, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                            }
+                                        }
+                                    }
+                                }
+                                
+                                Spacer(modifier = Modifier.height(8.dp))
+                                TextButton(
+                                    onClick = { showCurrencyDialog = false },
+                                    modifier = Modifier.align(Alignment.End)
+                                ) {
+                                    Text("Cancel")
+                                }
+                            }
                         }
                     }
                 }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                OutlinedTextField(
-                    value = if (selectedCurrency in AVAILABLE_CURRENCIES) "" else selectedCurrency,
-                    onValueChange = { 
-                        selectedCurrency = it
-                        onCurrencyChange(it)
-                    },
-                    label = { Text("Custom Symbol") },
-                    placeholder = { Text("e.g. ₦, ₱, R$") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedContainerColor = MaterialTheme.colorScheme.background,
-                        unfocusedContainerColor = MaterialTheme.colorScheme.background
-                    )
-                )
             }
 
             // Theme Settings
@@ -150,8 +227,6 @@ fun SettingsScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(12.dp))
-                    .padding(16.dp)
             ) {
                 // Theme Mode
                 Row(
@@ -243,8 +318,6 @@ fun SettingsScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(12.dp))
-                    .padding(16.dp)
             ) {
                  Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -275,8 +348,6 @@ fun SettingsScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(12.dp))
-                    .padding(16.dp)
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),

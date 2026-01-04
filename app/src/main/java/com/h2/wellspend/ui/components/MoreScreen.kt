@@ -58,10 +58,11 @@ fun MoreScreen(
                     .fillMaxSize()
                     .background(MaterialTheme.colorScheme.background)
                     .padding(padding)
-                    .padding(16.dp)
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                    .padding(padding)
+                    .verticalScroll(rememberScrollState())
             ) {
+                Spacer(modifier = Modifier.height(16.dp))
+
                 MoreMenuItem(
                     icon = Icons.Default.Description,
                     title = "Monthly Report",
@@ -125,8 +126,6 @@ fun MoreMenuItem(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(MaterialTheme.colorScheme.surface)
             .clickable(onClick = onClick)
             .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically

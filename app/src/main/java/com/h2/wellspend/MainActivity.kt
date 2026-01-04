@@ -26,13 +26,15 @@ class MainActivity : ComponentActivity() {
         
         var initialThemeMode: String? = null
         var initialDynamicColor: Boolean = false
+        var initialOnboardingCompleted: Boolean = false
         
         runBlocking {
             initialThemeMode = database.settingDao().getSetting("theme_mode")
-            initialDynamicColor = database.settingDao().getSetting("dynamic_color")?.toBoolean() ?: false
+            initialDynamicColor = database.settingDao().getSetting("dynamic_color")?.toBoolean() ?: true
+            initialOnboardingCompleted = database.settingDao().getSetting("onboarding_completed")?.toBoolean() ?: false
         }
         
-        val viewModelFactory = MainViewModelFactory(repository, initialThemeMode, initialDynamicColor)
+        val viewModelFactory = MainViewModelFactory(repository, initialThemeMode, initialDynamicColor, initialOnboardingCompleted)
         val viewModel = ViewModelProvider(this, viewModelFactory)[MainViewModel::class.java]
 
 
@@ -40,6 +42,9 @@ class MainActivity : ComponentActivity() {
         setContent {
             val themeMode by viewModel.themeMode.collectAsState()
             val dynamicColor by viewModel.dynamicColor.collectAsState()
+            val onboardingCompleted by viewModel.onboardingCompleted.collectAsState()
+            val accounts by viewModel.accounts.collectAsState() // Observe accounts for onboarding synchronization
+
 
             val darkTheme = when (themeMode) {
                 "LIGHT" -> false
@@ -51,12 +56,27 @@ class MainActivity : ComponentActivity() {
                 darkTheme = darkTheme,
                 dynamicColor = dynamicColor
             ) {
-                // A surface container using the 'background' color from the theme
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    MainScreen(viewModel = viewModel)
+                    if (onboardingCompleted) {
+                        MainScreen(viewModel = viewModel)
+                    } else {
+                        com.h2.wellspend.ui.components.OnboardingScreen(
+                            onComplete = { viewModel.completeOnboarding() },
+                            onThemeChange = { viewModel.updateThemeMode(it) },
+                            onDynamicColorChange = { viewModel.updateDynamicColor(it) },
+                            onCurrencyChange = { viewModel.updateBudgets(emptyList(), it) }, // Updates global currency
+                            onImportData = { uri -> 
+                                viewModel.importData(uri, contentResolver) { _, _ -> }
+                            },
+                            onCreateAccount = { viewModel.addAccount(it) },
+                            existingAccounts = accounts, // Pass observed accounts
+                            initialTheme = themeMode,
+                            initialDynamicColor = dynamicColor
+                        )
+                    }
                 }
             }
         }

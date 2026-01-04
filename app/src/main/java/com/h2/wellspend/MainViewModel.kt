@@ -24,7 +24,8 @@ import java.util.UUID
 class MainViewModel(
     private val repository: WellSpendRepository,
     initialThemeMode: String? = null,
-    initialDynamicColor: Boolean = false
+    initialDynamicColor: Boolean = false,
+    initialOnboardingCompleted: Boolean = false
 ) : ViewModel() {
 
     val expenses = repository.expenses.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -224,16 +225,20 @@ class MainViewModel(
         }
     }
     val themeMode: StateFlow<String> = repository.themeMode
-        .map { it ?: "DARK" } // Default to DARK
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), initialThemeMode ?: "DARK")
+        .map { it ?: "SYSTEM" } // Default to SYSTEM
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), initialThemeMode ?: "SYSTEM")
 
     val dynamicColor: StateFlow<Boolean> = repository.dynamicColor
-        .map { it?.toBoolean() ?: false } // Default to false
+        .map { it?.toBoolean() ?: true } // Default to true
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), initialDynamicColor)
 
     val excludeLoanTransactions: StateFlow<Boolean> = repository.excludeLoanTransactions
         .map { it?.toBoolean() ?: false } // Default to false
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    val onboardingCompleted: StateFlow<Boolean> = repository.onboardingCompleted
+        .map { it?.toBoolean() ?: false } // Default to false
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), initialOnboardingCompleted)
 
     init {
         checkRecurringExpenses()
@@ -524,6 +529,12 @@ class MainViewModel(
         }
     }
 
+    fun completeOnboarding() {
+        viewModelScope.launch {
+            repository.setOnboardingCompleted(true)
+        }
+    }
+
     fun exportData(uri: android.net.Uri, contentResolver: android.content.ContentResolver, onResult: (Boolean, String) -> Unit) {
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             try {
@@ -687,12 +698,13 @@ private data class ImportRecurringConfig(
 class MainViewModelFactory(
     private val repository: WellSpendRepository,
     private val initialThemeMode: String? = null,
-    private val initialDynamicColor: Boolean = false
+    private val initialDynamicColor: Boolean = false,
+    private val initialOnboardingCompleted: Boolean = false
 ) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(MainViewModel::class.java)) {
             @Suppress("UNCHECKED_CAST")
-            return MainViewModel(repository, initialThemeMode, initialDynamicColor) as T
+            return MainViewModel(repository, initialThemeMode, initialDynamicColor, initialOnboardingCompleted) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")
     }

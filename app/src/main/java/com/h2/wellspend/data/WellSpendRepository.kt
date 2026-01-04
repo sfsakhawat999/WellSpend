@@ -118,9 +118,14 @@ class WellSpendRepository(private val database: AppDatabase) {
     }
 
     val excludeLoanTransactions: Flow<String?> = database.settingDao().getSettingFlow("exclude_loan_transactions")
+    val onboardingCompleted: Flow<String?> = database.settingDao().getSettingFlow("onboarding_completed")
     
     suspend fun setExcludeLoanTransactions(exclude: Boolean) {
         database.settingDao().insertSetting(Setting("exclude_loan_transactions", exclude.toString()))
+    }
+    
+    suspend fun setOnboardingCompleted(completed: Boolean) {
+        database.settingDao().insertSetting(Setting("onboarding_completed", completed.toString()))
     }
 
     suspend fun getAllExpensesOneShot(): List<Expense> {
