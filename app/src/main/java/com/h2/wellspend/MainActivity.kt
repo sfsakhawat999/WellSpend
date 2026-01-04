@@ -24,14 +24,12 @@ class MainActivity : ComponentActivity() {
         val database = AppDatabase.getDatabase(this)
         val repository = WellSpendRepository(database)
         
-        var initialThemeMode: String? = null
-        var initialDynamicColor: Boolean = false
-        var initialOnboardingCompleted: Boolean = false
-        
-        runBlocking {
-            initialThemeMode = database.settingDao().getSetting("theme_mode")
-            initialDynamicColor = database.settingDao().getSetting("dynamic_color")?.toBoolean() ?: true
-            initialOnboardingCompleted = database.settingDao().getSetting("onboarding_completed")?.toBoolean() ?: false
+        val (initialThemeMode, initialDynamicColor, initialOnboardingCompleted) = runBlocking {
+            Triple(
+                database.settingDao().getSetting("theme_mode"),
+                database.settingDao().getSetting("dynamic_color")?.toBoolean() ?: true,
+                database.settingDao().getSetting("onboarding_completed")?.toBoolean() ?: false
+            )
         }
         
         val viewModelFactory = MainViewModelFactory(repository, initialThemeMode, initialDynamicColor, initialOnboardingCompleted)

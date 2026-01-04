@@ -138,7 +138,6 @@ fun MainScreen(viewModel: MainViewModel) {
     var showSettings by remember { mutableStateOf(false) }
     var showTransfers by remember { mutableStateOf(false) }
     var showLoans by remember { mutableStateOf(false) }
-    var showDataManagement by remember { mutableStateOf(false) } // Maps to Settings for now
 
     var loanTransactionToEdit by remember { mutableStateOf<Expense?>(null) }
     
@@ -527,9 +526,6 @@ fun MainScreen(viewModel: MainViewModel) {
                             onDateChange = { currentDate = it },
                             onReportClick = { showReport = true },
                             currency = currency,
-                            accounts = accounts,
-                            accountBalances = balances,
-                            onAccountClick = { currentScreen = Screen.ACCOUNTS },
                             totalBalance = monthEndBalance,
                             totalIncome = totalIncome,
                             totalExpense = totalSpend,
@@ -690,9 +686,6 @@ fun DashboardScreen(
     onDateChange: (LocalDate) -> Unit,
     onReportClick: () -> Unit,
     currency: String,
-    accounts: List<com.h2.wellspend.data.Account>,
-    accountBalances: Map<String, Double>,
-    onAccountClick: () -> Unit,
     totalBalance: Double,
     totalIncome: Double,
     totalExpense: Double,

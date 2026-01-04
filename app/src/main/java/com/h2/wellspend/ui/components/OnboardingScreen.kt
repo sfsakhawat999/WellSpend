@@ -77,7 +77,6 @@ fun OnboardingScreen(
     var initialBalance by remember { mutableStateOf("") }
     
     // State for Backup
-    val context = LocalContext.current
     var importStatus by remember { mutableStateOf<String?>(null) }
     val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
