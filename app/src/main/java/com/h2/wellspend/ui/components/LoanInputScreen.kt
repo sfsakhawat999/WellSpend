@@ -68,18 +68,7 @@ fun LoanInputScreen(
     // Calculate Fee
     val currentAccount = accounts.find { it.id == selectedAccountId }
 
-    LaunchedEffect(amount, selectedAccountId, selectedFeeConfigName) {
-        if (!isCustomFee && selectedFeeConfigName != null && selectedFeeConfigName != "None" && selectedFeeConfigName != "Custom") {
-            val config = currentAccount?.feeConfigs?.find { it.name == selectedFeeConfigName }
-            if (config != null) {
-                val amt = amount.toDoubleOrNull() ?: 0.0
-                val calculated = if (config.isPercentage) (amt * config.value / 100) else config.value
-                feeAmount = String.format("%.2f", calculated)
-            }
-        } else if (selectedFeeConfigName == "None") {
-            feeAmount = "0.0"
-        }
-    }
+// Fee calculation moved to FeeSelector interaction
 
     if (showDatePicker) {
         DatePickerDialog(
@@ -302,33 +291,19 @@ fun LoanInputScreen(
                 // Fee (Only if Lending AND not tracking? No, Fee applies to transaction.)
                 if (selectedType == LoanType.LEND && !doNotTrack) {
                     Spacer(Modifier.height(16.dp))
-                     Text("Transaction Fees", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Row(modifier = Modifier.fillMaxWidth().horizontalScroll(androidx.compose.foundation.rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        FilterChip(selected = selectedFeeConfigName == "None" || selectedFeeConfigName == null, onClick = { selectedFeeConfigName = "None"; isCustomFee = false }, label = { Text("None") })
-                        
-                        currentAccount?.feeConfigs?.forEach { config ->
-                            FilterChip(
-                                selected = selectedFeeConfigName == config.name,
-                                onClick = { selectedFeeConfigName = config.name; isCustomFee = false },
-                                label = { Text("${config.name} (${if(config.isPercentage) "${config.value}%" else currency + config.value})") }
-                            )
+                    FeeSelector(
+                        account = currentAccount,
+                        transactionAmount = amount.toDoubleOrNull() ?: 0.0,
+                        currency = currency,
+                        selectedConfigName = selectedFeeConfigName,
+                        currentFeeAmount = feeAmount,
+                        isCustomFee = isCustomFee,
+                        onFeeChanged = { name, amt, isCustom ->
+                            selectedFeeConfigName = name
+                            feeAmount = amt
+                            isCustomFee = isCustom
                         }
-                        
-                        FilterChip(selected = isCustomFee, onClick = { selectedFeeConfigName = "Custom"; isCustomFee = true }, label = { Text("Custom") })
-                    }
-                    
-                    if (isCustomFee || (feeAmount.toDoubleOrNull() ?: 0.0) > 0) {
-                         Spacer(modifier = Modifier.height(8.dp))
-                         OutlinedTextField(
-                            value = feeAmount,
-                            onValueChange = { feeAmount = it; if(!isCustomFee) isCustomFee = true; selectedFeeConfigName = "Custom" },
-                            label = { Text("Fee Amount") },
-                            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                            shape = RoundedCornerShape(12.dp),
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-                         )
-                    }
+                    )
                 }
             }
         }
