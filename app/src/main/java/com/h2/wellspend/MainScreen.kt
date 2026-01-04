@@ -837,7 +837,7 @@ fun DashboardScreen(
                                 )
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text(
-                                    "$currency${String.format("%.2f", totalBalance)}",
+                                    "$currency${if (totalBalance % 1.0 == 0.0) String.format("%.0f", totalBalance) else String.format("%.2f", totalBalance)}",
                                     style = MaterialTheme.typography.headlineSmall,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onPrimaryContainer
@@ -866,7 +866,7 @@ fun DashboardScreen(
                                 )
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text(
-                                    "+$currency${String.format("%.2f", totalIncome)}",
+                                    "+$currency${if (totalIncome % 1.0 == 0.0) String.format("%.0f", totalIncome) else String.format("%.2f", totalIncome)}",
                                     style = MaterialTheme.typography.headlineSmall,
                                     fontWeight = FontWeight.Bold,
                                     color = Color(0xFF4CAF50)
@@ -888,7 +888,7 @@ fun DashboardScreen(
                                 )
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text(
-                                    "-$currency${String.format("%.2f", totalExpense)}",
+                                    "-$currency${if (totalExpense % 1.0 == 0.0) String.format("%.0f", totalExpense) else String.format("%.2f", totalExpense)}",
                                     style = MaterialTheme.typography.headlineSmall,
                                     fontWeight = FontWeight.Bold,
                                     color = Color(0xFFF44336)

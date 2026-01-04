@@ -25,11 +25,21 @@ class MainActivity : ComponentActivity() {
         val repository = WellSpendRepository(database)
         
         val (initialThemeMode, initialDynamicColor, initialOnboardingCompleted) = runBlocking {
-            Triple(
-                database.settingDao().getSetting("theme_mode"),
-                database.settingDao().getSetting("dynamic_color")?.toBoolean() ?: true,
-                database.settingDao().getSetting("onboarding_completed")?.toBoolean() ?: false
-            )
+            val theme = database.settingDao().getSetting("theme_mode")
+            val dynamic = database.settingDao().getSetting("dynamic_color")?.toBoolean() ?: true
+            var onboarding = database.settingDao().getSetting("onboarding_completed")?.toBoolean() ?: false
+            
+            if (!onboarding) {
+                // Check if user already has accounts (migrating existing user)
+                val accounts = database.accountDao().getAllAccountsOneShot()
+                if (accounts.isNotEmpty()) {
+                    onboarding = true
+                    // Persist for future runs
+                    database.settingDao().insertSetting(com.h2.wellspend.data.Setting("onboarding_completed", "true"))
+                }
+            }
+            
+            Triple(theme, dynamic, onboarding)
         }
         
         val viewModelFactory = MainViewModelFactory(repository, initialThemeMode, initialDynamicColor, initialOnboardingCompleted)
