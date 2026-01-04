@@ -51,6 +51,7 @@ fun LoanScreen(
     loans: List<Loan>,
     expenses: List<Expense>, // To calc balance
     accounts: List<Account>,
+    accountBalances: Map<String, Double>,
     currency: String,
     onAddLoan: (String, Double, LoanType, String?, String?, Double, String?, java.time.LocalDate) -> Unit, // feeConfigName added
     onAddTransaction: (String, String, Double, Boolean, String?, LoanType, Double, String?, java.time.LocalDate) -> Unit, // loanId, loanName, amount, isPayment, ...
@@ -86,6 +87,7 @@ fun LoanScreen(
                     AddLoanTransactionScreen(
                         loan = loan,
                         accounts = accounts,
+                        accountBalances = accountBalances,
                         currency = currency,
                         onDismiss = { loanForTransaction = null },
                         onConfirm = { amount, isPayment, accId, fee, feeName, date ->
@@ -102,6 +104,7 @@ fun LoanScreen(
                 LoanInputScreen(
                     initialLoan = editingLoan,
                     accounts = accounts,
+                    accountBalances = accountBalances,
                     currency = currency,
                     onSave = { name, amount, type, desc, accId, fee, feeName, date ->
                         if (editingLoan != null) {

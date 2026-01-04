@@ -38,6 +38,7 @@ import java.time.ZoneId
 fun LoanInputScreen(
     initialLoan: Loan? = null,
     accounts: List<Account>,
+    accountBalances: Map<String, Double>,
     currency: String,
     onSave: (String, Double, LoanType, String?, String?, Double, String?, LocalDate) -> Unit, // name, amount, type, desc, accId, fee, feeConfigName, date
     onCancel: () -> Unit
@@ -286,19 +287,14 @@ fun LoanInputScreen(
 
                 if (!doNotTrack) {
                     val accountLabel = if (selectedType == LoanType.LEND) "Pay From Account" else "Deposit To Account"
-                    Text(accountLabel, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Spacer(Modifier.height(8.dp))
-                    
-                    Row(modifier = Modifier.horizontalScroll(rememberScrollState())) {
-                        accounts.forEach { acc ->
-                            FilterChip(
-                                selected = selectedAccountId == acc.id,
-                                onClick = { selectedAccountId = acc.id },
-                                label = { Text(acc.name) },
-                                modifier = Modifier.padding(end = 8.dp)
-                            )
-                        }
-                    }
+                    AccountSelector(
+                        accounts = accounts,
+                        accountBalances = accountBalances,
+                        selectedAccountId = selectedAccountId,
+                        onAccountSelected = { selectedAccountId = it },
+                        currency = currency,
+                        title = accountLabel
+                    )
                 } else {
                     LaunchedEffect(Unit) { selectedAccountId = null }
                 }

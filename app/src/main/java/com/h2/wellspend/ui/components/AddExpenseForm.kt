@@ -96,6 +96,7 @@ import androidx.compose.material3.FilterChip
 fun AddExpenseForm(
     currency: String,
     accounts: List<com.h2.wellspend.data.Account>,
+    accountBalances: Map<String, Double>,
     categories: List<Category>,
     onAdd: (Double, String, Category?, String, Boolean, RecurringFrequency, com.h2.wellspend.data.TransactionType, String?, String?, Double, String?) -> Unit,
     onCancel: () -> Unit,
@@ -289,49 +290,25 @@ fun AddExpenseForm(
             }
 
             // Account Selection
-            Text(if (transactionType == com.h2.wellspend.data.TransactionType.INCOME) "To Account" else "From Account", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Spacer(modifier = Modifier.height(8.dp))
-            Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (initialExpense != null && initialExpense.accountId == null) {
-                    FilterChip(
-                        selected = accountId == null,
-                        onClick = { accountId = null },
-                        label = { Text("Deleted Account", color = MaterialTheme.colorScheme.error) },
-                        leadingIcon = { Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(16.dp)) }
-                    )
-                }
-                accounts.forEach { acc ->
-                    FilterChip(
-                        selected = accountId == acc.id,
-                        onClick = { accountId = acc.id },
-                        label = { Text(acc.name) },
-                        leadingIcon = { Icon(Icons.Default.AccountBalanceWallet, null, modifier = Modifier.size(16.dp)) }
-                    )
-                }
-            }
+            AccountSelector(
+                accounts = accounts,
+                accountBalances = accountBalances,
+                selectedAccountId = accountId,
+                onAccountSelected = { accountId = it },
+                currency = currency,
+                title = if (transactionType == com.h2.wellspend.data.TransactionType.INCOME) "To Account" else "From Account"
+            )
             Spacer(modifier = Modifier.height(16.dp))
 
             if (transactionType == com.h2.wellspend.data.TransactionType.TRANSFER) {
-                Text("To Account", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Spacer(modifier = Modifier.height(8.dp))
-                Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (initialExpense != null && initialExpense.transferTargetAccountId == null) {
-                        FilterChip(
-                            selected = targetAccountId == null,
-                            onClick = { targetAccountId = null },
-                            label = { Text("Deleted Target", color = MaterialTheme.colorScheme.error) },
-                            leadingIcon = { Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(16.dp)) }
-                        )
-                    }
-                    accounts.filter { it.id != accountId }.forEach { acc ->
-                        FilterChip(
-                            selected = targetAccountId == acc.id,
-                            onClick = { targetAccountId = acc.id },
-                            label = { Text(acc.name) },
-                            leadingIcon = { Icon(Icons.Default.AccountBalanceWallet, null, modifier = Modifier.size(16.dp)) }
-                        )
-                    }
-                }
+                AccountSelector(
+                    accounts = accounts.filter { it.id != accountId },
+                    accountBalances = accountBalances,
+                    selectedAccountId = targetAccountId,
+                    onAccountSelected = { targetAccountId = it },
+                    currency = currency,
+                    title = "To Account"
+                )
                 Spacer(modifier = Modifier.height(16.dp))
             } else if (transactionType == com.h2.wellspend.data.TransactionType.EXPENSE) {
                 // Category Selection only for Expense

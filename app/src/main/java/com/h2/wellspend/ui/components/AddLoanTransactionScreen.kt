@@ -71,6 +71,7 @@ import java.time.format.DateTimeFormatter
 fun AddLoanTransactionScreen(
     loan: Loan,
     accounts: List<Account>,
+    accountBalances: Map<String, Double>,
     currency: String,
     onDismiss: () -> Unit,
     onConfirm: (Double, Boolean, String?, Double, String?, LocalDate) -> Unit // feeConfigName added
@@ -170,9 +171,9 @@ fun AddLoanTransactionScreen(
             // Transaction Type Selector (Pay/Repay vs Increase)
             Row(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(12.dp))
-                    .padding(4.dp),
+                .fillMaxWidth()
+                .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(12.dp))
+                .padding(4.dp),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 val types = if (loan.type == LoanType.LEND) listOf(true to "Repayment Received", false to "Lend More") else listOf(true to "Make Payment", false to "Borrow More")
@@ -180,11 +181,11 @@ fun AddLoanTransactionScreen(
                     val isSelected = isPayment == isPay
                     Box(
                         modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent)
-                            .clickable { isPayment = isPay }
-                            .padding(vertical = 8.dp),
+                        .weight(1f)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent)
+                        .clickable { isPayment = isPay }
+                        .padding(vertical = 8.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
@@ -272,21 +273,20 @@ fun AddLoanTransactionScreen(
                     )
                 )
                 
-
-
                 // REMOVED Checkbox for doNotTrack
 
                 // Account Selection (Always Visible)
                 val isMoneyOut = (loan.type == LoanType.LEND && !isPayment) || (loan.type == LoanType.BORROW && isPayment)
                 val accountLabel = if (isMoneyOut) "Pay From Account" else "Deposit To Account"
                 
-                Text(accountLabel, style = MaterialTheme.typography.bodySmall)
-                Row(modifier = Modifier.horizontalScroll(rememberScrollState())) {
-                     accounts.forEach { acc ->
-                         FilterChip(selected = selectedAccountId == acc.id, onClick = { selectedAccountId = acc.id }, label = { Text(acc.name) })
-                         Spacer(Modifier.width(4.dp))
-                     }
-                }
+                AccountSelector(
+                    accounts = accounts,
+                    accountBalances = accountBalances,
+                    selectedAccountId = selectedAccountId,
+                    onAccountSelected = { selectedAccountId = it },
+                    currency = currency,
+                    title = accountLabel
+                )
                 if (accounts.isEmpty()) {
                      Text("No accounts. Add one.", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                 }

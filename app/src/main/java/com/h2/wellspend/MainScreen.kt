@@ -327,6 +327,7 @@ fun MainScreen(viewModel: MainViewModel) {
                         AddExpenseForm(
                             currency = currency,
                             accounts = accounts,
+                            accountBalances = balances,
                             categories = categoryOrder,
                             initialExpense = expenseToEdit,
                             onAdd = { amount, desc, cat, date, isRecurring, freq, type, accId, targetAccId, fee, feeName ->
@@ -440,6 +441,7 @@ fun MainScreen(viewModel: MainViewModel) {
                             loans = loans,
                             expenses = expenses, // All expenses to calc balance
                             accounts = accounts,
+                            accountBalances = balances,
                             currency = currency,
                             onAddLoan = { name, amount, type, desc, accId, fee, feeName, date ->
                                 viewModel.addLoan(name, amount, type, desc, accId, fee, feeName, date)
@@ -894,57 +896,7 @@ fun DashboardScreen(
                 }
             }
             
-            // Accounts Section
-            item {
-                Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "ACCOUNTS",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 1.sp
-                        )
-                    }
-                    
-                    if (accounts.isEmpty()) {
-                         Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
-                                .clickable { onAccountClick() }
-                                .padding(16.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text("No accounts. Add one.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                    } else {
-                        Row(
-                            modifier = Modifier.horizontalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            accounts.forEach { acc ->
-                                 Card(
-                                    shape = RoundedCornerShape(16.dp),
-                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
-                                    elevation = CardDefaults.cardElevation(0.dp),
-                                    modifier = Modifier.width(140.dp)
-                                 ) {
-                                     Column(modifier = Modifier.padding(16.dp)) {
-                                         Text(acc.name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, maxLines = 1, color = MaterialTheme.colorScheme.onSecondaryContainer)
-                                         Spacer(modifier = Modifier.height(8.dp))
-                                         val bal = accountBalances[acc.id] ?: acc.initialBalance
-                                         Text("$currency${String.format("%.2f", bal)}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSecondaryContainer)
-                                     }
-                                 }
-                            }
-                        }
-                    }
-                }
-            }
+
 
             // Transactions Section Header
             item {
