@@ -764,26 +764,28 @@ fun DashboardScreen(
                 Spacer(modifier = Modifier.height(24.dp))
                 
                 // Accounts skeleton
-                Row(modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
-                    Box(
-                        modifier = Modifier
-                            .width(80.dp)
-                            .height(16.dp)
-                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = shimmerAlpha), RoundedCornerShape(4.dp))
-                    )
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    repeat(3) {
+                if (showAccounts) {
+                    Row(modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
                         Box(
                             modifier = Modifier
-                                .width(140.dp)
-                                .height(80.dp)
-                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = shimmerAlpha), RoundedCornerShape(16.dp))
+                                .width(80.dp)
+                                .height(16.dp)
+                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = shimmerAlpha), RoundedCornerShape(4.dp))
                         )
                     }
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        repeat(3) {
+                            Box(
+                                modifier = Modifier
+                                    .width(140.dp)
+                                    .height(80.dp)
+                                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = shimmerAlpha), RoundedCornerShape(16.dp))
+                            )
+                        }
+                    }
+                    
+                    Spacer(modifier = Modifier.height(24.dp))
                 }
-                
-                Spacer(modifier = Modifier.height(24.dp))
                 
                 // Transactions skeleton
                 Row(modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)) {

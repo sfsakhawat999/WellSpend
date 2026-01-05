@@ -241,8 +241,8 @@ class MainViewModel(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), initialOnboardingCompleted)
 
     val showAccountsOnHomepage: StateFlow<Boolean> = repository.showAccountsOnHomepage
-        .map { it?.toBoolean() ?: true } // Default to true (Show by default if not set)
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+        .map { it?.toBoolean() ?: false } // Default to false
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
     init {
         checkRecurringExpenses()
