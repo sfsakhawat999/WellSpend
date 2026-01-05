@@ -240,6 +240,10 @@ class MainViewModel(
         .map { it?.toBoolean() ?: false } // Default to false
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), initialOnboardingCompleted)
 
+    val showAccountsOnHomepage: StateFlow<Boolean> = repository.showAccountsOnHomepage
+        .map { it?.toBoolean() ?: true } // Default to true (Show by default if not set)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
     init {
         checkRecurringExpenses()
     }
@@ -526,6 +530,12 @@ class MainViewModel(
     fun updateExcludeLoanTransactions(exclude: Boolean) {
         viewModelScope.launch {
             repository.setExcludeLoanTransactions(exclude)
+        }
+    }
+
+    fun updateShowAccountsOnHomepage(show: Boolean) {
+        viewModelScope.launch {
+            repository.setShowAccountsOnHomepage(show)
         }
     }
 

@@ -128,6 +128,12 @@ class WellSpendRepository(private val database: AppDatabase) {
         database.settingDao().insertSetting(Setting("onboarding_completed", completed.toString()))
     }
 
+    val showAccountsOnHomepage: Flow<String?> = database.settingDao().getSettingFlow("show_accounts_on_homepage")
+
+    suspend fun setShowAccountsOnHomepage(show: Boolean) {
+        database.settingDao().insertSetting(Setting("show_accounts_on_homepage", show.toString()))
+    }
+
     suspend fun getAllExpensesOneShot(): List<Expense> {
         return database.expenseDao().getAllExpensesOneShot()
     }

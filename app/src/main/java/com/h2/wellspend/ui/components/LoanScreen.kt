@@ -148,7 +148,7 @@ fun LoanScreen(
 
                         val filteredLoans = loans.filter { 
                             if (selectedTab == 0) it.type == LoanType.LEND else it.type == LoanType.BORROW 
-                        }
+                        }.sortedByDescending { it.createdAt }
 
                         if (filteredLoans.isEmpty()) {
                             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {

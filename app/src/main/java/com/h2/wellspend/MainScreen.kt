@@ -156,6 +156,7 @@ fun MainScreen(viewModel: MainViewModel) {
     val loans by viewModel.loans.collectAsState(initial = emptyList())
     val balances by viewModel.accountBalances.collectAsState(initial = emptyMap())
     val excludeLoanTransactions by viewModel.excludeLoanTransactions.collectAsState()
+    val showAccountsOnHomepage by viewModel.showAccountsOnHomepage.collectAsState()
 
     // Track if initial data has loaded (show skeleton until first real data arrives)
     var isDataLoaded by remember { mutableStateOf(false) }
@@ -188,7 +189,7 @@ fun MainScreen(viewModel: MainViewModel) {
     val currentMonthTransactions = expenses.filter {
         val date = try { LocalDate.parse(it.date.take(10)) } catch(e:Exception) { LocalDate.now() }
         date.month == currentDate.month && date.year == currentDate.year
-    }
+    }.sortedByDescending { it.date }
 
     // Calculate Total Spend: (All Expenses Base Amount) + (All Fees from any transaction type)
     // EXCLUDING Loan transactions with NO Account (Virtual/Cash/Untracked)
@@ -464,12 +465,14 @@ fun MainScreen(viewModel: MainViewModel) {
                                 currentThemeMode = themeMode,
                                 currentDynamicColor = dynamicColor,
                                 excludeLoanTransactions = excludeLoanTransactions,
+                                showAccountsOnHomepage = showAccountsOnHomepage,
                                 onCurrencyChange = { newCurrency ->
                                      viewModel.updateBudgets(emptyList(), newCurrency)
                                 },
                                 onThemeModeChange = { viewModel.updateThemeMode(it) },
                                 onDynamicColorChange = { viewModel.updateDynamicColor(it) },
                                 onExcludeLoanTransactionsChange = { viewModel.updateExcludeLoanTransactions(it) },
+                                onShowAccountsOnHomepageChange = { viewModel.updateShowAccountsOnHomepage(it) },
                                 onExport = { 
                                     val timestamp = java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd_HHmm"))
                                     exportLauncher.launch("wellspend_backup_$timestamp.json") 
@@ -519,7 +522,7 @@ fun MainScreen(viewModel: MainViewModel) {
                         
                         // All transactions for lazy loading (sorted by date desc)
                         val allMonthTransactions = validTransactionsForDisplay
-                            .sortedByDescending { it.timestamp }
+                            .sortedByDescending { it.date }
                         
                         DashboardScreen(
                             currentDate = currentDate,
@@ -531,7 +534,9 @@ fun MainScreen(viewModel: MainViewModel) {
                             totalExpense = totalSpend,
                             recentTransactions = allMonthTransactions,
                             allAccounts = accounts,
+                            accountBalances = balances,
                             loans = loans,
+                            showAccounts = showAccountsOnHomepage,
                             isLoading = !isDataLoaded,
                             onEdit = { transaction ->
                                 if (transaction.loanId != null) {
@@ -691,7 +696,9 @@ fun DashboardScreen(
     totalExpense: Double,
     recentTransactions: List<com.h2.wellspend.data.Expense>,
     allAccounts: List<com.h2.wellspend.data.Account>,
+    accountBalances: Map<String, Double>,
     loans: List<com.h2.wellspend.data.Loan>,
+    showAccounts: Boolean,
     isLoading: Boolean = false,
     onEdit: (com.h2.wellspend.data.Expense) -> Unit,
     onDelete: (String) -> Unit
@@ -900,6 +907,51 @@ fun DashboardScreen(
             }
             
 
+
+            // Accounts Section (Conditional)
+            if (showAccounts) {
+                item {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(
+                            text = "ACCOUNTS",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 1.sp
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        androidx.compose.foundation.lazy.LazyRow(
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            items(allAccounts.size) { index ->
+                                val account = allAccounts[index]
+                                val balance = accountBalances[account.id] ?: account.initialBalance
+                                
+                                Card(
+                                    modifier = Modifier.width(160.dp),
+                                    shape = RoundedCornerShape(16.dp),
+                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                                ) {
+                                   Column(modifier = Modifier.padding(16.dp)) {
+                                       Text(
+                                           text = account.name,
+                                           style = MaterialTheme.typography.labelMedium,
+                                           color = MaterialTheme.colorScheme.onSurfaceVariant
+                                       )
+                                       Spacer(modifier = Modifier.height(8.dp))
+                                       Text(
+                                            text = "$currency${String.format("%.2f", balance)}",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                       )
+                                   } 
+                                }
+                            }
+                        }
+                    }
+                }
+            }
 
             // Transactions Section Header
             item {

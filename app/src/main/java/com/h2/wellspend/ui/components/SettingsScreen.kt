@@ -70,10 +70,12 @@ fun SettingsScreen(
     currentThemeMode: String,
     currentDynamicColor: Boolean,
     excludeLoanTransactions: Boolean,
+    showAccountsOnHomepage: Boolean,
     onCurrencyChange: (String) -> Unit,
     onThemeModeChange: (String) -> Unit,
     onDynamicColorChange: (Boolean) -> Unit,
     onExcludeLoanTransactionsChange: (Boolean) -> Unit,
+    onShowAccountsOnHomepageChange: (Boolean) -> Unit,
     onExport: () -> Unit,
     onImport: () -> Unit,
     onBack: () -> Unit
@@ -319,6 +321,33 @@ fun SettingsScreen(
                 modifier = Modifier
                     .fillMaxWidth()
             ) {
+                // Show Accounts on Homepage
+                 Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onShowAccountsOnHomepageChange(!showAccountsOnHomepage) }
+                        .padding(bottom = 16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Show Accounts in Homepage", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Medium)
+                        Text(
+                            "Display your accounts and balances on the dashboard",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                    Switch(
+                        checked = showAccountsOnHomepage,
+                        onCheckedChange = onShowAccountsOnHomepageChange,
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
+                            checkedTrackColor = MaterialTheme.colorScheme.primary
+                        )
+                    )
+                }
+
                  Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
