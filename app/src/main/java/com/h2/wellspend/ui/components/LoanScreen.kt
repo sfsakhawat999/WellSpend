@@ -148,9 +148,23 @@ fun LoanScreen(
 
                         val filteredLoans = loans.filter { 
                             if (selectedTab == 0) it.type == LoanType.LEND else it.type == LoanType.BORROW 
-                        }.sortedByDescending { it.createdAt }
+                        }
+                        
+                        // Sort by Balance (Due Amount) Descending
+                        val sortedLoansWithBalance = filteredLoans.map { loan ->
+                            val loanExpenses = expenses.filter { it.loanId == loan.id }
+                            val sumExpense = loanExpenses.filter { it.transactionType == TransactionType.EXPENSE }.sumOf { it.amount }
+                            val sumIncome = loanExpenses.filter { it.transactionType == TransactionType.INCOME }.sumOf { it.amount }
+                            
+                            val balance = if (loan.type == LoanType.LEND) {
+                                sumExpense - sumIncome
+                            } else {
+                                sumIncome - sumExpense
+                            }
+                            loan to balance
+                        }.sortedByDescending { it.second }
 
-                        if (filteredLoans.isEmpty()) {
+                        if (sortedLoansWithBalance.isEmpty()) {
                             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                                 Text("No loans found.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
@@ -159,17 +173,7 @@ fun LoanScreen(
                                 contentPadding = PaddingValues(16.dp),
                                 verticalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
-                                items(filteredLoans) { loan ->
-                                    val loanExpenses = expenses.filter { it.loanId == loan.id }
-                                    val sumExpense = loanExpenses.filter { it.transactionType == TransactionType.EXPENSE }.sumOf { it.amount }
-                                    val sumIncome = loanExpenses.filter { it.transactionType == TransactionType.INCOME }.sumOf { it.amount }
-                                    
-                                    val balance = if (loan.type == LoanType.LEND) {
-                                        sumExpense - sumIncome
-                                    } else {
-                                        sumIncome - sumExpense
-                                    }
-
+                                items(sortedLoansWithBalance) { (loan, balance) ->
                                     LoanItem(
                                         loan = loan,
                                         balance = balance,
