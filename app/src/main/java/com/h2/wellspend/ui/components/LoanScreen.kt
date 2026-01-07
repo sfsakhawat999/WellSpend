@@ -185,6 +185,21 @@ fun LoanScreen(
                                         onDeleteClick = { deleteTransactions -> onDeleteLoan(loan, deleteTransactions) }
                                     )
                                 }
+                                
+                                item {
+                                    androidx.compose.foundation.layout.Box(
+                                        modifier = androidx.compose.ui.Modifier
+                                            .fillMaxWidth()
+                                            .padding(top = 16.dp, bottom = 32.dp),
+                                        contentAlignment = androidx.compose.ui.Alignment.Center
+                                    ) {
+                                        androidx.compose.material3.Text(
+                                            "Swipe left/right to edit or delete. Long press for options.",
+                                            style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+                                            color = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
@@ -348,9 +363,6 @@ fun LoanItem(
                     interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
                     indication = null,
                     onClick = {
-                        scope.launch {
-                            com.h2.wellspend.ui.performWiggle(offsetX, actionWidthPx, context)
-                        }
                         onTransactionClick(loan)
                     },
                     onLongClick = {
