@@ -18,6 +18,8 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -27,7 +29,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -689,6 +693,7 @@ fun TopBar(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun DashboardScreen(
     currentDate: LocalDate,
@@ -1126,38 +1131,51 @@ fun DashboardScreen(
                             }
                         }
                         
-                        // Foreground Content (Swipeable)
-                        Row(
-                            modifier = Modifier
-                                .offset { IntOffset(offsetX.value.roundToInt(), 0) }
-                                .draggable(
-                                    orientation = Orientation.Horizontal,
-                                    state = rememberDraggableState { delta ->
-                                        scope.launch {
-                                            val minOffset = -actionWidthPx
-                                            val maxOffset = if (isBalanceAdjustment) 0f else actionWidthPx
-                                            val newValue = (offsetX.value + delta).coerceIn(minOffset, maxOffset)
-                                            offsetX.snapTo(newValue)
+                            // Foreground Content (Swipeable)
+                            val context = androidx.compose.ui.platform.LocalContext.current
+                            Row(
+                                modifier = Modifier
+                                    .offset { IntOffset(offsetX.value.roundToInt(), 0) }
+                                    .draggable(
+                                        orientation = Orientation.Horizontal,
+                                        state = rememberDraggableState { delta ->
+                                            scope.launch {
+                                                val minOffset = -actionWidthPx
+                                                val maxOffset = if (isBalanceAdjustment) 0f else actionWidthPx
+                                                val newValue = (offsetX.value + delta).coerceIn(minOffset, maxOffset)
+                                                offsetX.snapTo(newValue)
+                                            }
+                                        },
+                                        onDragStopped = {
+                                            val targetOffset = if (offsetX.value > actionWidthPx / 2) {
+                                                actionWidthPx
+                                            } else if (offsetX.value < -actionWidthPx / 2) {
+                                                -actionWidthPx
+                                            } else {
+                                                0f
+                                            }
+                                            scope.launch { offsetX.animateTo(targetOffset) }
                                         }
-                                    },
-                                    onDragStopped = {
-                                        val targetOffset = if (offsetX.value > actionWidthPx / 2) {
-                                            actionWidthPx
-                                        } else if (offsetX.value < -actionWidthPx / 2) {
-                                            -actionWidthPx
-                                        } else {
-                                            0f
+                                    )
+                                    .fillMaxWidth()
+                                    .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(12.dp))
+                                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(12.dp))
+                                    .combinedClickable(
+                                        onClick = {
+                                            scope.launch {
+                                                com.h2.wellspend.ui.performWiggle(offsetX, actionWidthPx, context)
+                                            }
+                                        },
+                                        onLongClick = {
+                                            scope.launch {
+                                                com.h2.wellspend.ui.performWiggle(offsetX, actionWidthPx, context)
+                                            }
                                         }
-                                        scope.launch { offsetX.animateTo(targetOffset) }
-                                    }
-                                )
-                                .fillMaxWidth()
-                                .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(12.dp))
-                                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(12.dp))
-                                .padding(12.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
+                                    )
+                                    .padding(12.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
                                     displayDesc,

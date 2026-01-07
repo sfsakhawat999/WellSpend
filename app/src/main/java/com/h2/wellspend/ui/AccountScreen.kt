@@ -38,6 +38,7 @@ import com.h2.wellspend.data.Account
 import com.h2.wellspend.data.FeeConfig
 import java.util.UUID
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
@@ -193,6 +194,7 @@ fun AccountScreen(
 }
 
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun AccountItem(
     account: Account,
@@ -267,6 +269,7 @@ fun AccountItem(
         }
 
         // Foreground (Content)
+        val context = androidx.compose.ui.platform.LocalContext.current
         Card(
             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
             shape = RoundedCornerShape(12.dp),
@@ -289,6 +292,17 @@ fun AccountItem(
                                     else -> 0f
                                 }
                                 scope.launch { offsetX.animateTo(targetOffset) }
+                            }
+                        ).combinedClickable(
+                            onClick = {
+                                scope.launch {
+                                    com.h2.wellspend.ui.performWiggle(offsetX, actionWidthPx, context)
+                                }
+                            },
+                            onLongClick = {
+                                scope.launch {
+                                    com.h2.wellspend.ui.performWiggle(offsetX, actionWidthPx, context)
+                                }
                             }
                         )
                     } else Modifier

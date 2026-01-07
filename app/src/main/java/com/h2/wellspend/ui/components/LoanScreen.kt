@@ -10,6 +10,8 @@ import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
@@ -192,6 +194,7 @@ fun LoanScreen(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun LoanItem(
     loan: Loan,
@@ -201,6 +204,7 @@ fun LoanItem(
     onEditClick: () -> Unit,
     onDeleteClick: (Boolean) -> Unit // deleteTransactions parameter
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     val density = androidx.compose.ui.platform.LocalDensity.current
     val actionWidth = 80.dp
     val actionWidthPx = with(density) { actionWidth.toPx() }
@@ -340,7 +344,19 @@ fun LoanItem(
                     }
                 )
                 .fillMaxWidth()
-                .clickable { onTransactionClick(loan) },
+                .combinedClickable(
+                    onClick = {
+                        scope.launch {
+                            com.h2.wellspend.ui.performWiggle(offsetX, actionWidthPx, context)
+                        }
+                        onTransactionClick(loan)
+                    },
+                    onLongClick = {
+                        scope.launch {
+                            com.h2.wellspend.ui.performWiggle(offsetX, actionWidthPx, context)
+                        }
+                    }
+                ),
             elevation = CardDefaults.cardElevation(2.dp),
             shape = RoundedCornerShape(12.dp) // Match Clip
         ) {

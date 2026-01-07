@@ -8,6 +8,8 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -336,6 +338,7 @@ fun FeeItem(
 
 
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ExpenseItem(
     expense: Expense,
@@ -464,6 +467,7 @@ fun ExpenseItem(
             }
 
             // Foreground (Content)
+            val context = androidx.compose.ui.platform.LocalContext.current
             Row(
                 modifier = Modifier
                     .offset { IntOffset(offsetX.value.roundToInt(), 0) }
@@ -491,6 +495,18 @@ fun ExpenseItem(
                     )
                     .fillMaxWidth()
                     .background(MaterialTheme.colorScheme.surface) // Opaque background to hide actions
+                    .combinedClickable(
+                        onClick = {
+                            scope.launch {
+                                com.h2.wellspend.ui.performWiggle(offsetX, actionWidthPx, context)
+                            }
+                        },
+                        onLongClick = {
+                            scope.launch {
+                                com.h2.wellspend.ui.performWiggle(offsetX, actionWidthPx, context)
+                            }
+                        }
+                    )
                     .padding(16.dp),
                 verticalAlignment = Alignment.Top,
                 horizontalArrangement = Arrangement.SpaceBetween

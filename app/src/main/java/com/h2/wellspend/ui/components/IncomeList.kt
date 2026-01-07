@@ -8,6 +8,8 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
@@ -79,6 +81,7 @@ fun IncomeList(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun IncomeItem(
     income: Expense,
@@ -194,6 +197,7 @@ fun IncomeItem(
             }
 
             // Foreground (Content)
+            val context = androidx.compose.ui.platform.LocalContext.current
             Card(
                 modifier = Modifier
                     .offset { IntOffset(offsetX.value.roundToInt(), 0) }
@@ -213,7 +217,19 @@ fun IncomeItem(
                              scope.launch { offsetX.animateTo(targetOffset) }
                         }
                     )
-                    .fillMaxWidth(),
+                    .fillMaxWidth()
+                    .combinedClickable(
+                        onClick = {
+                            scope.launch {
+                                com.h2.wellspend.ui.performWiggle(offsetX, actionWidthPx, context)
+                            }
+                        },
+                        onLongClick = {
+                            scope.launch {
+                                com.h2.wellspend.ui.performWiggle(offsetX, actionWidthPx, context)
+                            }
+                        }
+                    ),
                 shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 elevation = CardDefaults.cardElevation(2.dp)
