@@ -194,7 +194,7 @@ fun LoanScreen(
                                         contentAlignment = androidx.compose.ui.Alignment.Center
                                     ) {
                                         androidx.compose.material3.Text(
-                                            "Swipe left/right to edit or delete. Long press for options.",
+                                            "Swipe left/right to edit or delete.",
                                             style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
                                             color = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant
                                         )
