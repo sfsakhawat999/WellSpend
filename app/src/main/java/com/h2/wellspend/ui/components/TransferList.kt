@@ -202,6 +202,8 @@ fun TransferItem(
                     )
                     .fillMaxWidth()
                     .combinedClickable(
+                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                        indication = null,
                         onClick = {
                             scope.launch {
                                 com.h2.wellspend.ui.performWiggle(offsetX, actionWidthPx, context)

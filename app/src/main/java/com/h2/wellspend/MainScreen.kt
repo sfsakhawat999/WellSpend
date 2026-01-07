@@ -1161,6 +1161,8 @@ fun DashboardScreen(
                                     .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(12.dp))
                                     .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(12.dp))
                                     .combinedClickable(
+                                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                                        indication = null,
                                         onClick = {
                                             scope.launch {
                                                 com.h2.wellspend.ui.performWiggle(offsetX, actionWidthPx, context)

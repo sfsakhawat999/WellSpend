@@ -496,6 +496,8 @@ fun ExpenseItem(
                     .fillMaxWidth()
                     .background(MaterialTheme.colorScheme.surface) // Opaque background to hide actions
                     .combinedClickable(
+                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                        indication = null,
                         onClick = {
                             scope.launch {
                                 com.h2.wellspend.ui.performWiggle(offsetX, actionWidthPx, context)
