@@ -546,7 +546,11 @@ fun MainScreen(viewModel: MainViewModel) {
                                     showAddExpense = true
                                 }
                             },
-                            onDelete = { id -> viewModel.deleteExpense(id) }
+                            onDelete = { id -> viewModel.deleteExpense(id) },
+                            onBalanceClick = { currentScreen = Screen.ACCOUNTS },
+                            onIncomeClick = { currentScreen = Screen.INCOME },
+                            onExpenseClick = { currentScreen = Screen.EXPENSES },
+                            onAccountClick = { currentScreen = Screen.ACCOUNTS } // Just go to Accounts tab for now
                         )
                     }
                     "OVERLAY_ACCOUNT_INPUT" -> {
@@ -701,7 +705,11 @@ fun DashboardScreen(
     showAccounts: Boolean,
     isLoading: Boolean = false,
     onEdit: (com.h2.wellspend.data.Expense) -> Unit,
-    onDelete: (String) -> Unit
+    onDelete: (String) -> Unit,
+    onBalanceClick: () -> Unit,
+    onIncomeClick: () -> Unit,
+    onExpenseClick: () -> Unit,
+    onAccountClick: (String) -> Unit
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         TopBar(
@@ -836,7 +844,9 @@ fun DashboardScreen(
                         Card(
                             shape = RoundedCornerShape(16.dp),
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier
+                                .weight(1f)
+                                .clickable { onBalanceClick() }
                         ) {
                             Column(modifier = Modifier.padding(16.dp)) {
                                 Text(
@@ -865,7 +875,9 @@ fun DashboardScreen(
                         Card(
                             shape = RoundedCornerShape(16.dp),
                             colors = CardDefaults.cardColors(containerColor = Color(0xFF1B5E20).copy(alpha = 0.15f)),
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier
+                                .weight(1f)
+                                .clickable { onIncomeClick() }
                         ) {
                             Column(modifier = Modifier.padding(16.dp)) {
                                 Text(
@@ -887,7 +899,9 @@ fun DashboardScreen(
                         Card(
                             shape = RoundedCornerShape(16.dp),
                             colors = CardDefaults.cardColors(containerColor = Color(0xFFB71C1C).copy(alpha = 0.15f)),
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier
+                                .weight(1f)
+                                .clickable { onExpenseClick() }
                         ) {
                             Column(modifier = Modifier.padding(16.dp)) {
                                 Text(
@@ -930,7 +944,9 @@ fun DashboardScreen(
                                 val balance = accountBalances[account.id] ?: account.initialBalance
                                 
                                 Card(
-                                    modifier = Modifier.width(160.dp),
+                                    modifier = Modifier
+                                        .width(160.dp)
+                                        .clickable { onAccountClick(account.id) },
                                     shape = RoundedCornerShape(16.dp),
                                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
                                 ) {
