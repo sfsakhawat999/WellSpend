@@ -195,7 +195,7 @@ fun MainScreen(viewModel: MainViewModel) {
     val currentMonthTransactions = expenses.filter {
         val date = try { LocalDate.parse(it.date.take(10)) } catch(e:Exception) { LocalDate.now() }
         date.month == currentDate.month && date.year == currentDate.year
-    }.sortedByDescending { it.date }
+    }.sortedWith(compareByDescending<Expense> { it.date }.thenByDescending { it.timestamp })
 
     // Calculate Total Spend: (All Expenses Base Amount) + (All Fees from any transaction type)
     // EXCLUDING Loan transactions with NO Account (Virtual/Cash/Untracked)
