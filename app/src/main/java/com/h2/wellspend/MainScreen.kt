@@ -107,6 +107,8 @@ import com.h2.wellspend.ui.components.BudgetScreen
 
 
 import com.h2.wellspend.ui.components.LoanScreen
+import com.h2.wellspend.data.Budget
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
@@ -638,7 +640,8 @@ fun MainScreen(viewModel: MainViewModel) {
                             },
                             state = listState,
                             chartData = chartData,
-                            totalSpend = totalSpend
+                            totalSpend = totalSpend,
+                            budgets = budgets
                         )
                     }
                     "MORE" -> {
@@ -1255,7 +1258,8 @@ fun ExpenseListScreen(
     onEdit: (Expense) -> Unit,
     state: LazyListState,
     chartData: List<ChartData>,
-    totalSpend: Double
+    totalSpend: Double,
+    budgets: List<Budget>
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         TopBar(
@@ -1274,6 +1278,7 @@ fun ExpenseListScreen(
             accounts = accounts,
             loans = loans,
             currency = currency,
+            budgets = budgets,
             onDelete = onDelete,
             onEdit = onEdit,
             state = state,

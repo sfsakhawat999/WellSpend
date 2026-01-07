@@ -1,7 +1,11 @@
 package com.h2.wellspend.ui.components
 
+
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.height
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
@@ -76,6 +80,7 @@ fun ExpenseList(
     expenses: List<Expense>,
     accounts: List<com.h2.wellspend.data.Account>,
     loans: List<com.h2.wellspend.data.Loan>,
+    budgets: List<com.h2.wellspend.data.Budget> = emptyList(),
     currency: String,
     onDelete: (String) -> Unit,
     onEdit: (Expense) -> Unit,
@@ -156,6 +161,7 @@ fun ExpenseList(
                     accounts = accounts,
                     loans = loans,
                     currency = currency,
+                    budget = budgets.find { it.category == category },
                     onDelete = onDelete,
                     onEdit = { expense ->
                         if (expense.id.startsWith("fee_")) {
@@ -196,6 +202,7 @@ fun ExpenseCategoryItem(
     accounts: List<com.h2.wellspend.data.Account>,
     loans: List<com.h2.wellspend.data.Loan>,
     currency: String,
+    budget: com.h2.wellspend.data.Budget? = null,
     onDelete: (String) -> Unit,
     onEdit: (Expense) -> Unit
 ) {
@@ -209,61 +216,107 @@ fun ExpenseCategoryItem(
             .background(MaterialTheme.colorScheme.surface)
             .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(16.dp))
     ) {
-        // Header
-        Row(
+        // Header & Budget Wrapper
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable { isExpanded = !isExpanded }
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+                .padding(16.dp)
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .size(40.dp)
-                        .clip(CircleShape)
-                        .background(color.copy(alpha = 0.12f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = getCategoryIcon(category),
-                        contentDescription = category.name,
-                        tint = color,
-                        modifier = Modifier.size(20.dp)
-                    )
+            // Top Row (Icon, Name, Amount)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(color.copy(alpha = 0.12f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = getCategoryIcon(category),
+                            contentDescription = category.name,
+                            tint = color,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.size(12.dp))
+                    Column {
+                        Text(
+                            text = category.name,
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Text(
+                            text = "${items.size} transactions",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
-                Spacer(modifier = Modifier.size(12.dp))
-                Column {
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = category.name,
+                        text = "$currency${String.format("%.2f", total)}",
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.onSurface,
-                        fontWeight = FontWeight.SemiBold
+                        fontWeight = FontWeight.Bold
                     )
-                    Text(
-                        text = "${items.size} transactions",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    Spacer(modifier = Modifier.size(12.dp))
+                    Icon(
+                        imageVector = if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                        contentDescription = if (isExpanded) "Collapse" else "Expand",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
 
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = "$currency${String.format("%.2f", total)}",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    fontWeight = FontWeight.Bold
-                )
-                Spacer(modifier = Modifier.size(12.dp))
-                Icon(
-                    imageVector = if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                    contentDescription = if (isExpanded) "Collapse" else "Expand",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+            // Budget Progress Bar (Visible if budget set)
+            if (budget != null) {
+                val progress = (total / budget.limitAmount).toFloat().coerceIn(0f, 1f)
+                val isOverBudget = total > budget.limitAmount
+                val uiColor = if (isOverBudget) MaterialTheme.colorScheme.error else color
+
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                Column {
+                    LinearProgressIndicator(
+                        progress = { progress },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(6.dp)
+                            .clip(RoundedCornerShape(3.dp)),
+                        color = uiColor,
+                        trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = "${(progress * 100).toInt()}% Used",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = uiColor,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Text(
+                            text = "Limit: $currency${String.format("%.0f", budget.limitAmount)}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontSize = 11.sp
+                        )
+                    }
+                }
             }
         }
+
 
         // Expanded List
         AnimatedVisibility(
@@ -293,7 +346,10 @@ fun ExpenseCategoryItem(
                 }
             }
         }
-    }
+}
+
+
+
 }
 
 @Composable
