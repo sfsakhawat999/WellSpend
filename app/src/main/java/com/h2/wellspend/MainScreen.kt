@@ -677,7 +677,6 @@ fun MainScreen(viewModel: MainViewModel) {
                               onReportClick = { showReport = true },
                               onBudgetsClick = { showBudgets = true },
                               onSettingsClick = { showSettings = true },
-                              onDataManagementClick = { showSettings = true }, 
                               onTransfersClick = { showTransfers = true },
                               onLoansClick = { showLoans = true },
                               onCategoriesClick = { showCategoryManagement = true }

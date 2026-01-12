@@ -48,7 +48,6 @@ fun MoreScreen(
     onReportClick: () -> Unit,
     onBudgetsClick: () -> Unit,
     onSettingsClick: () -> Unit,
-    onDataManagementClick: () -> Unit,
     onTransfersClick: () -> Unit,
     onLoansClick: () -> Unit,
     onCategoriesClick: () -> Unit
@@ -111,14 +110,6 @@ fun MoreScreen(
                     subtitle = "App theme, currency, and more",
                     onClick = onSettingsClick,
                     color = Color(0xFF6366f1) // Indigo
-                )
-                
-                MoreMenuItem(
-                    icon = Icons.Default.Storage, // Using Storage for Data
-                    title = "Data Management",
-                    subtitle = "Import and export your data",
-                    onClick = onDataManagementClick, 
-                    color = Color(0xFFf59e0b) // Amber
                 )
             }
         }
