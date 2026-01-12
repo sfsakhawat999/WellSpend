@@ -127,7 +127,7 @@ fun BudgetScreen(
                         Icon(Icons.Default.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f), modifier = Modifier.size(20.dp))
                         Spacer(modifier = Modifier.width(12.dp))
                         Text(
-                            "Set limits for categories to see progress bars on your dashboard.",
+                            "Set limits for categories to see progress bars on your expense history.",
                             color = MaterialTheme.colorScheme.onPrimaryContainer,
                             style = MaterialTheme.typography.bodySmall
                         )
@@ -135,7 +135,11 @@ fun BudgetScreen(
                     Spacer(modifier = Modifier.height(16.dp))
                 }
 
-                items(Category.values(), key = { it.name }) { category ->
+                items(Category.values().filter { 
+                    it != Category.Loan && 
+                    it != Category.TransactionFee && 
+                    it != Category.BalanceAdjustment 
+                }, key = { it.name }) { category ->
                     val color = getCategoryColor(category)
                     Row(
                         modifier = Modifier
