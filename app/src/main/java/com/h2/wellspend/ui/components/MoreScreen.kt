@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.PieChart
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.AttachMoney
+import androidx.compose.material.icons.filled.Label
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -49,7 +50,8 @@ fun MoreScreen(
     onSettingsClick: () -> Unit,
     onDataManagementClick: () -> Unit,
     onTransfersClick: () -> Unit,
-    onLoansClick: () -> Unit
+    onLoansClick: () -> Unit,
+    onCategoriesClick: () -> Unit
 ) {
     Scaffold(
         content = { padding ->
@@ -62,6 +64,14 @@ fun MoreScreen(
                     .verticalScroll(rememberScrollState())
             ) {
                 Spacer(modifier = Modifier.height(16.dp))
+                
+                MoreMenuItem(
+                    icon = Icons.Default.Label,
+                    title = "Categories",
+                    subtitle = "Manage categories & icons",
+                    onClick = onCategoriesClick,
+                    color = Color(0xFFef4444) // Red
+                )
 
                 MoreMenuItem(
                     icon = Icons.Default.Description,

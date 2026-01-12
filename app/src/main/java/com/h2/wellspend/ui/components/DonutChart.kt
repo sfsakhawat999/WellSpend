@@ -27,7 +27,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.h2.wellspend.data.Category
-import com.h2.wellspend.ui.getCategoryColor
+
 import kotlin.math.min
 
 data class ChartData(

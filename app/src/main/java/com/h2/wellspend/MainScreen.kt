@@ -29,6 +29,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
@@ -49,7 +50,8 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.automirrored.filled.List as ListIcon
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
+import androidx.compose.material.icons.automirrored.filled.CompareArrows
+import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -77,6 +79,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.h2.wellspend.data.Account
 import com.h2.wellspend.data.Category
+import com.h2.wellspend.data.SystemCategory
 import com.h2.wellspend.ui.CategoryColors
 import com.h2.wellspend.ui.components.AddExpenseForm
 import com.h2.wellspend.ui.components.ChartData
@@ -144,6 +147,7 @@ fun MainScreen(viewModel: MainViewModel) {
     var showSettings by remember { mutableStateOf(false) }
     var showTransfers by remember { mutableStateOf(false) }
     var showLoans by remember { mutableStateOf(false) }
+    var showCategoryManagement by remember { mutableStateOf(false) }
 
     var loanTransactionToEdit by remember { mutableStateOf<Expense?>(null) }
     
@@ -156,6 +160,7 @@ fun MainScreen(viewModel: MainViewModel) {
     val expenses by viewModel.expenses.collectAsState(initial = emptyList())
     val budgets by viewModel.budgets.collectAsState(initial = emptyList())
     val currency by viewModel.currency.collectAsState(initial = "$")
+    val usedCategoryNames by viewModel.usedCategoryNames.collectAsState(initial = emptySet())
     val themeMode by viewModel.themeMode.collectAsState(initial = "SYSTEM")
     val dynamicColor by viewModel.dynamicColor.collectAsState(initial = false)
     val accounts by viewModel.accounts.collectAsState(initial = emptyList())
@@ -163,6 +168,7 @@ fun MainScreen(viewModel: MainViewModel) {
     val balances by viewModel.accountBalances.collectAsState(initial = emptyMap())
     val excludeLoanTransactions by viewModel.excludeLoanTransactions.collectAsState()
     val showAccountsOnHomepage by viewModel.showAccountsOnHomepage.collectAsState()
+    val allCategories by viewModel.categoryOrder.collectAsState(initial = emptyList())
 
     // Track if initial data has loaded (show skeleton until first real data arrives)
     var isDataLoaded by remember { mutableStateOf(false) }
@@ -177,7 +183,7 @@ fun MainScreen(viewModel: MainViewModel) {
         isDataLoaded = true
     }
 
-    val canNavigateBack = showAddExpense || showReport || showBudgets || showSettings || showTransfers || showLoans || showAccountInput || loanTransactionToEdit != null || currentScreen != Screen.HOME
+    val canNavigateBack = showAddExpense || showReport || showBudgets || showSettings || showTransfers || showLoans || showCategoryManagement || showAccountInput || loanTransactionToEdit != null || currentScreen != Screen.HOME
     androidx.activity.compose.BackHandler(enabled = canNavigateBack) {
         when {
             loanTransactionToEdit != null -> loanTransactionToEdit = null
@@ -188,6 +194,7 @@ fun MainScreen(viewModel: MainViewModel) {
             showSettings -> showSettings = false
             showTransfers -> showTransfers = false
             showLoans -> showLoans = false
+            showCategoryManagement -> showCategoryManagement = false
             currentScreen != Screen.HOME -> currentScreen = Screen.HOME
         }
     }
@@ -216,21 +223,23 @@ fun MainScreen(viewModel: MainViewModel) {
         .groupBy { it.category }
         
     val chartDataList = expensesByCat.map { (cat, list) ->
+        val categoryObj = allCategories.find { it.name == cat }
         ChartData(
-            name = cat.name,
+            name = cat,
             value = list.sumOf { it.amount }, // Fees are handled separately
-            color = CategoryColors[cat] ?: Color.Gray
+            color = categoryObj?.let { Color(it.color) } ?: Color.Gray
         )
     }.toMutableList()
 
     // Add ALL fees (from Income, Transfer, and Expense) as a single "Transaction Fee" slice
     val totalFees = validTransactions.sumOf { it.feeAmount }
     if (totalFees > 0) {
+        val txFeeCat = allCategories.find { it.name == SystemCategory.TransactionFee.name }
         chartDataList.add(
             ChartData(
-                name = Category.TransactionFee.name,
+                name = SystemCategory.TransactionFee.name,
                 value = totalFees,
-                color = CategoryColors[Category.TransactionFee] ?: Color.Gray
+                color = txFeeCat?.let { Color(it.color) } ?: Color.Gray
             )
         )
     }
@@ -255,7 +264,7 @@ fun MainScreen(viewModel: MainViewModel) {
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         bottomBar = {
-            if (!showAddExpense && !showReport && !showBudgets && !showSettings && !showTransfers && !showLoans && !showAccountInput && loanTransactionToEdit == null) {
+            if (!showAddExpense && !showReport && !showBudgets && !showSettings && !showTransfers && !showLoans && !showAccountInput && !showCategoryManagement && loanTransactionToEdit == null) {
                 NavigationBar(
                     containerColor = MaterialTheme.colorScheme.surfaceVariant,
                     tonalElevation = 0.dp
@@ -320,6 +329,8 @@ fun MainScreen(viewModel: MainViewModel) {
                 showSettings -> "OVERLAY_SETTINGS"
                 showTransfers -> "OVERLAY_TRANSFERS"
                 showLoans -> "OVERLAY_LOANS"
+                showCategoryManagement -> "OVERLAY_CATEGORIES"
+                showAccountInput -> "OVERLAY_ACCOUNT_INPUT"
                 else -> currentScreen.name
             }
 
@@ -375,7 +386,8 @@ fun MainScreen(viewModel: MainViewModel) {
                                 showAddExpense = false
                             },
                             onCancel = { showAddExpense = false },
-                            onReorder = { viewModel.updateCategoryOrder(it) }
+                            onReorder = { viewModel.updateCategoryOrder(it) },
+                            onAddCategory = { viewModel.addCategory(it) }
                         )
                     }
                     "OVERLAY_EDIT_LOAN_TRANSACTION" -> {
@@ -395,7 +407,7 @@ fun MainScreen(viewModel: MainViewModel) {
                                             id = transaction.id,
                                             amount = amt,
                                             description = desc,
-                                            category = transaction.category,
+                                            category = allCategories.find { it.name == transaction.category },
                                             date = date,
                                             isRecurring = false,
                                             frequency = com.h2.wellspend.data.RecurringFrequency.WEEKLY, // Dummy
@@ -416,14 +428,17 @@ fun MainScreen(viewModel: MainViewModel) {
                     "OVERLAY_REPORT" -> {
                         MonthlyReport(
                             expenses = expenses,
+                            categories = allCategories,
                             currency = currency,
                             currentDate = currentDate,
                             onBack = { showReport = false }
                         )
                     }
                     "OVERLAY_BUDGETS" -> {
+                         val categories by viewModel.categoryOrder.collectAsState()
                          BudgetScreen(
                             currentBudgets = budgets,
+                            categories = categories,
                             currency = currency,
                             onSave = { newBudgets ->
                                  viewModel.updateBudgets(newBudgets, currency)
@@ -556,7 +571,8 @@ fun MainScreen(viewModel: MainViewModel) {
                             onBalanceClick = { currentScreen = Screen.ACCOUNTS },
                             onIncomeClick = { currentScreen = Screen.INCOME },
                             onExpenseClick = { currentScreen = Screen.EXPENSES },
-                            onAccountClick = { currentScreen = Screen.ACCOUNTS } // Just go to Accounts tab for now
+                            onAccountClick = { currentScreen = Screen.ACCOUNTS },
+                            categories = allCategories
                         )
                     }
                     "OVERLAY_ACCOUNT_INPUT" -> {
@@ -576,6 +592,17 @@ fun MainScreen(viewModel: MainViewModel) {
                                 showAccountInput = false
                                 accountToEdit = null
                             }
+                        )
+                    }
+
+                    "OVERLAY_CATEGORIES" -> {
+                        com.h2.wellspend.ui.components.CategoryManagementScreen(
+                            categories = allCategories,
+                            onBack = { showCategoryManagement = false },
+                            onAddCategory = { viewModel.addCategory(it) },
+                            onUpdateCategory = { viewModel.addCategory(it) }, 
+                            onDeleteCategory = { viewModel.deleteCategory(it) },
+                            usedCategoryNames = usedCategoryNames
                         )
                     }
                     "ACCOUNTS" -> {
@@ -626,6 +653,7 @@ fun MainScreen(viewModel: MainViewModel) {
                             onDateChange = { currentDate = it },
                             onReportClick = { showReport = true },
                             expenses = currentMonthTransactions,
+                            categories = allCategories,
                             accounts = accounts,
                             loans = loans,
                             currency = currency,
@@ -644,16 +672,17 @@ fun MainScreen(viewModel: MainViewModel) {
                             budgets = budgets
                         )
                     }
-                    "MORE" -> {
-                         MoreScreen(
-                             onReportClick = { showReport = true },
-                             onBudgetsClick = { showBudgets = true },
-                             onSettingsClick = { showSettings = true },
-                             onDataManagementClick = { showSettings = true }, // Maps to Settings for now
-                             onTransfersClick = { showTransfers = true },
-                             onLoansClick = { showLoans = true }
-                         )
-                    }
+                     "MORE" -> {
+                          MoreScreen(
+                              onReportClick = { showReport = true },
+                              onBudgetsClick = { showBudgets = true },
+                              onSettingsClick = { showSettings = true },
+                              onDataManagementClick = { showSettings = true }, 
+                              onTransfersClick = { showTransfers = true },
+                              onLoansClick = { showLoans = true },
+                              onCategoriesClick = { showCategoryManagement = true }
+                          )
+                     }
                 }
             }
 
@@ -717,7 +746,8 @@ fun DashboardScreen(
     onBalanceClick: () -> Unit,
     onIncomeClick: () -> Unit,
     onExpenseClick: () -> Unit,
-    onAccountClick: (String) -> Unit
+    onAccountClick: (String) -> Unit,
+    categories: List<com.h2.wellspend.data.Category>
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         TopBar(
@@ -953,25 +983,44 @@ fun DashboardScreen(
                                 
                                 Card(
                                     modifier = Modifier
-                                        .width(160.dp)
+                                        .widthIn(min = 140.dp)
                                         .clickable { onAccountClick(account.id) },
                                     shape = RoundedCornerShape(16.dp),
                                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
                                 ) {
-                                   Column(modifier = Modifier.padding(16.dp)) {
-                                       Text(
-                                           text = account.name,
-                                           style = MaterialTheme.typography.labelMedium,
-                                           color = MaterialTheme.colorScheme.onSurfaceVariant
-                                       )
-                                       Spacer(modifier = Modifier.height(8.dp))
-                                       Text(
-                                            text = "$currency${String.format("%.2f", balance)}",
-                                            style = MaterialTheme.typography.titleMedium,
-                                            fontWeight = FontWeight.Bold,
-                                            color = MaterialTheme.colorScheme.onSurface
-                                       )
-                                   } 
+                                    Row(
+                                        modifier = Modifier.padding(16.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                       Box(
+                                           modifier = Modifier
+                                               .size(40.dp)
+                                               .background(MaterialTheme.colorScheme.primaryContainer, CircleShape),
+                                           contentAlignment = Alignment.Center
+                                       ) {
+                                           Icon(
+                                               Icons.Default.AccountBalanceWallet,
+                                               contentDescription = null,
+                                               tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                               modifier = Modifier.size(24.dp)
+                                           )
+                                       }
+                                       Spacer(modifier = Modifier.width(12.dp))
+                                       Column {
+                                           Text(
+                                               text = account.name,
+                                               style = MaterialTheme.typography.labelMedium,
+                                               color = MaterialTheme.colorScheme.onSurfaceVariant
+                                           )
+                                           Spacer(modifier = Modifier.height(2.dp))
+                                           Text(
+                                                text = "$currency${String.format("%.2f", balance)}",
+                                                style = MaterialTheme.typography.titleMedium,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.onSurface
+                                           )
+                                       }
+                                    } 
                                 }
                             }
                         }
@@ -1022,16 +1071,16 @@ fun DashboardScreen(
                     val isTransfer = transaction.transactionType == com.h2.wellspend.data.TransactionType.TRANSFER
                     
                     // Check if this is a balance adjustment (non-editable)
-                    val isBalanceAdjustment = transaction.category == Category.BalanceAdjustment
+                    val isBalanceAdjustment = transaction.category == SystemCategory.BalanceAdjustment.name
                     
                     // Display text for description: "Category: Description" format
                     val displayDesc = when {
                         isTransfer && targetAccountName != null -> "Transfer: $sourceAccountName → $targetAccountName"
                         isTransfer -> "Transfer: $sourceAccountName → ?"
-                        loanName != null -> transaction.description.ifEmpty { transaction.category.name }
-                        isBalanceAdjustment -> transaction.description.ifEmpty { transaction.category.name }
-                        transaction.description.isNotEmpty() -> "${transaction.category.name}: ${transaction.description}"
-                        else -> transaction.category.name
+                        loanName != null -> transaction.description.ifEmpty { transaction.category }
+                        isBalanceAdjustment -> transaction.description.ifEmpty { transaction.category }
+                        transaction.description.isNotEmpty() -> "${transaction.category}: ${transaction.description}"
+                        else -> transaction.category
                     }
                     
                     val dateStr = try {
@@ -1178,9 +1227,42 @@ fun DashboardScreen(
                                         }
                                     )
                                     .padding(12.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
+                                // Transaction Icon
+                                val transactionIcon = when {
+                                    isIncome -> Icons.Default.AttachMoney
+                                    isTransfer -> Icons.AutoMirrored.Filled.CompareArrows
+                                    isBalanceAdjustment -> Icons.Default.Settings
+                                    else -> com.h2.wellspend.ui.getIconByName(transaction.category)
+                                }
+                                
+                                val iconTint = when {
+                                    isIncome -> Color(0xFF4CAF50)
+                                    isTransfer -> Color(0xFF2196F3)
+                                    isBalanceAdjustment -> MaterialTheme.colorScheme.onSurfaceVariant
+                                    else -> {
+                                        val categoryObj = categories.find { it.name == transaction.category }
+                                        if (categoryObj != null) Color(categoryObj.color) else MaterialTheme.colorScheme.primary
+                                    }
+                                }
+
+                                Box(
+                                    modifier = Modifier
+                                        .size(40.dp)
+                                        .clip(CircleShape)
+                                        .background(iconTint.copy(alpha = 0.15f)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = transactionIcon,
+                                        contentDescription = null,
+                                        tint = iconTint,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                }
+
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
                                     displayDesc,
@@ -1251,6 +1333,7 @@ fun ExpenseListScreen(
     onDateChange: (LocalDate) -> Unit,
     onReportClick: () -> Unit,
     expenses: List<com.h2.wellspend.data.Expense>,
+    categories: List<com.h2.wellspend.data.Category>,
     accounts: List<com.h2.wellspend.data.Account>,
     loans: List<com.h2.wellspend.data.Loan>,
     currency: String,
@@ -1275,6 +1358,7 @@ fun ExpenseListScreen(
         }
         ExpenseList(
             expenses = expenseList,
+            categories = categories,
             accounts = accounts,
             loans = loans,
             currency = currency,

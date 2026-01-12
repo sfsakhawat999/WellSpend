@@ -55,8 +55,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.h2.wellspend.data.Category
 import com.h2.wellspend.data.Expense
-import com.h2.wellspend.ui.getCategoryColor
-import com.h2.wellspend.ui.getCategoryIcon
+import com.h2.wellspend.ui.getIconByName
+import com.h2.wellspend.data.SystemCategory
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -78,6 +78,7 @@ import kotlinx.coroutines.delay
 @Composable
 fun ExpenseList(
     expenses: List<Expense>,
+    categories: List<Category>,
     accounts: List<com.h2.wellspend.data.Account>,
     loans: List<com.h2.wellspend.data.Loan>,
     budgets: List<com.h2.wellspend.data.Budget> = emptyList(),
@@ -96,7 +97,7 @@ fun ExpenseList(
                     expense.copy(
                         id = "fee_${expense.id}",
                         amount = expense.feeAmount,
-                        category = Category.TransactionFee,
+                        category = SystemCategory.TransactionFee.name,
                         description = "Fee for ${expense.description}",
                         feeAmount = 0.0, // Virtual item has no fee on itself
                         transactionType = com.h2.wellspend.data.TransactionType.EXPENSE // Fees are always Expenses
@@ -152,8 +153,13 @@ fun ExpenseList(
                 }
             }
         } else {
-            items(groupedExpenses) { (category, data) ->
+            items(groupedExpenses) { (categoryName, data) ->
                 val (total, items) = data
+                // Resolve Category Object
+                val category = categories.find { it.name == categoryName } 
+                    ?: categories.find { it.name == SystemCategory.TransactionFee.name && categoryName == SystemCategory.TransactionFee.name }
+                    ?: Category(name = categoryName, iconName = "Help", color = 0xFF9ca3af, isSystem = false) // Fallback
+
                 ExpenseCategoryItem(
                     category = category,
                     total = total,
@@ -161,7 +167,7 @@ fun ExpenseList(
                     accounts = accounts,
                     loans = loans,
                     currency = currency,
-                    budget = budgets.find { it.category == category },
+                    budget = budgets.find { it.category == category.name },
                     onDelete = onDelete,
                     onEdit = { expense ->
                         if (expense.id.startsWith("fee_")) {
@@ -207,7 +213,7 @@ fun ExpenseCategoryItem(
     onEdit: (Expense) -> Unit
 ) {
     var isExpanded by remember { mutableStateOf(false) }
-    val color = getCategoryColor(category)
+    val color = Color(category.color)
 
     Column(
         modifier = Modifier
@@ -238,7 +244,7 @@ fun ExpenseCategoryItem(
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            imageVector = getCategoryIcon(category),
+                            imageVector = getIconByName(category.iconName),
                             contentDescription = category.name,
                             tint = color,
                             modifier = Modifier.size(20.dp)
@@ -427,7 +433,7 @@ fun ExpenseItem(
     val loanName = if (expense.loanId != null) loans.find { it.id == expense.loanId }?.name else null
     
     // Check if this is a balance adjustment (non-editable)
-    val isBalanceAdjustment = expense.category == Category.BalanceAdjustment
+    val isBalanceAdjustment = expense.category == SystemCategory.BalanceAdjustment.name
     
     val extraInfo = buildString {
         if (expense.transactionType == com.h2.wellspend.data.TransactionType.INCOME) append(" • Income")

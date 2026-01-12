@@ -93,6 +93,22 @@ interface CategoryDao {
 
     @Update
     suspend fun updateCategorySortOrder(order: CategorySortOrder)
+    
+    // New methods for Category Entity
+    @Query("SELECT * FROM categories")
+    fun getAllCategories(): Flow<List<Category>>
+    
+    @Query("SELECT * FROM categories")
+    suspend fun getAllCategoriesOneShot(): List<Category>
+    
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertCategory(category: Category)
+    
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertCategories(categories: List<Category>)
+    
+    @Delete
+    suspend fun deleteCategory(category: Category)
 }
 
 @Dao

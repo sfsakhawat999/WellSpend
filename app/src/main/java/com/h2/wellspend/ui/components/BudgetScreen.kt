@@ -49,13 +49,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.h2.wellspend.data.Budget
 import com.h2.wellspend.data.Category
-import com.h2.wellspend.ui.getCategoryColor
-import com.h2.wellspend.ui.getCategoryIcon
+import com.h2.wellspend.ui.getIconByName
+import com.h2.wellspend.data.SystemCategory
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BudgetScreen(
     currentBudgets: List<Budget>,
+    categories: List<Category>,
     currency: String,
     onSave: (List<Budget>) -> Unit,
     onBack: () -> Unit
@@ -63,9 +64,9 @@ fun BudgetScreen(
     // Use a map to track local changes
     val localBudgets = remember { mutableStateMapOf<Category, String>() }
 
-    LaunchedEffect(currentBudgets) {
-        Category.values().forEach { cat ->
-            val existing = currentBudgets.find { it.category == cat }
+    LaunchedEffect(currentBudgets, categories) {
+        categories.forEach { cat ->
+            val existing = currentBudgets.find { it.category == cat.name }
             localBudgets[cat] = existing?.limitAmount?.toString() ?: ""
         }
     }
@@ -85,7 +86,7 @@ fun BudgetScreen(
                             val newBudgets = localBudgets.mapNotNull { (cat, limitStr) ->
                                 val limit = limitStr.toDoubleOrNull()
                                 if (limit != null && limit > 0) {
-                                    Budget(cat, limit)
+                                    Budget(cat.name, limit)
                                 } else null
                             }
                             onSave(newBudgets)
@@ -135,12 +136,12 @@ fun BudgetScreen(
                     Spacer(modifier = Modifier.height(16.dp))
                 }
 
-                items(Category.values().filter { 
-                    it != Category.Loan && 
-                    it != Category.TransactionFee && 
-                    it != Category.BalanceAdjustment 
+                items(categories.filter { 
+                    it.name != SystemCategory.Loan.name && 
+                    it.name != SystemCategory.TransactionFee.name && 
+                    it.name != SystemCategory.BalanceAdjustment.name 
                 }, key = { it.name }) { category ->
-                    val color = getCategoryColor(category)
+                    val color = Color(category.color)
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -159,7 +160,7 @@ fun BudgetScreen(
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
-                                    imageVector = getCategoryIcon(category),
+                                    imageVector = getIconByName(category.iconName),
                                     contentDescription = category.name,
                                     tint = color,
                                     modifier = Modifier.size(20.dp)

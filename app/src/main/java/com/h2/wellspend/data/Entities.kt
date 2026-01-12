@@ -12,17 +12,26 @@ enum class TransactionType {
 
 
 @Keep
-enum class Category {
+enum class SystemCategory {
     Shopping, Snacks, Food, Rent, Internet, Phone, Education,
     Transport, Groceries, Clothing, Health, Entertainment, Utilities, Insurance, Savings, Gifts, Travel, Subscriptions, Work, Pets, Family, Fitness, Beauty, Donations, Investments, Electronics, Hobbies, TransactionFee, Loan, BalanceAdjustment, Others
 }
+
+@Keep
+@Entity(tableName = "categories")
+data class Category(
+    @PrimaryKey val name: String,
+    val iconName: String, // Name of the icon in the map
+    val color: Long, // Color as Long (ARGB)
+    val isSystem: Boolean = false
+)
 
 @Keep
 @Entity(tableName = "expenses")
 data class Expense(
     @PrimaryKey val id: String = UUID.randomUUID().toString(),
     val amount: Double,
-    val category: Category,
+    val category: String, // Changed from Category enum to String
     val description: String,
     val date: String, // ISO String
     val timestamp: Long,
@@ -58,7 +67,7 @@ data class Loan(
 @Keep
 @Entity(tableName = "budgets")
 data class Budget(
-    @PrimaryKey val category: Category,
+    @PrimaryKey val category: String, // Changed from Category enum to String
     val limitAmount: Double
 )
 
@@ -72,7 +81,7 @@ enum class RecurringFrequency {
 data class RecurringConfig(
     @PrimaryKey val id: String = UUID.randomUUID().toString(),
     val amount: Double,
-    val category: Category,
+    val category: String, // Changed from Category enum to String
     val description: String,
     val frequency: RecurringFrequency,
     val nextDueDate: String, // ISO String
@@ -98,7 +107,8 @@ data class AppData(
     val budgets: List<Budget>,
     val accounts: List<Account>? = null,
     val recurringConfigs: List<RecurringConfig>? = null,
-    val loans: List<Loan>? = null
+    val loans: List<Loan>? = null,
+    val categories: List<Category>? = null
 )
 
 @Keep

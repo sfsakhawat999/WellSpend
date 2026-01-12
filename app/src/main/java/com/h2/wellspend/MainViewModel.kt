@@ -11,13 +11,16 @@ import com.h2.wellspend.data.RecurringFrequency
 import com.h2.wellspend.data.WellSpendRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
+import com.h2.wellspend.data.SystemCategory
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+import androidx.compose.ui.graphics.toArgb
 
 import java.util.UUID
 
@@ -72,7 +75,7 @@ class MainViewModel(
             val expense = Expense(
                 amount = amount,
                 description = "New Loan: $name",
-                category = Category.Loan,
+                category = SystemCategory.Loan.name,
                 date = date.atStartOfDay().toString(),
                 timestamp = System.currentTimeMillis(),
                 transactionType = transactionType,
@@ -132,7 +135,7 @@ class MainViewModel(
                 val expense = Expense(
                     amount = amount,
                     description = desc,
-                    category = Category.Loan,
+                    category = SystemCategory.Loan.name,
                     date = date.atStartOfDay().toString(),
                     timestamp = System.currentTimeMillis(),
                     transactionType = transactionType,
@@ -184,8 +187,12 @@ class MainViewModel(
         repository.sortedCategories,
         _optimisticUpdates
     ) { repo, optimistic ->
-        (optimistic ?: repo).filter { it != Category.BalanceAdjustment }
+        (optimistic ?: repo)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val usedCategoryNames: StateFlow<Set<String>> = expenses.map { list -> 
+        list.map { it.category }.toSet()
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptySet())
 
     // Calculate Balances
     val accountBalances: StateFlow<Map<String, Double>> = kotlinx.coroutines.flow.combine(
@@ -213,6 +220,9 @@ class MainViewModel(
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 
     init {
+        viewModelScope.launch {
+            repository.ensureCategoriesInitialized()
+        }
         // Clear optimistic update when repository catches up
         viewModelScope.launch {
             kotlinx.coroutines.flow.combine(repository.sortedCategories, _optimisticUpdates) { repo, opt ->
@@ -311,10 +321,11 @@ class MainViewModel(
         feeConfigName: String?
     ) {
         viewModelScope.launch {
+            val categoryName = category?.name ?: SystemCategory.Others.name
             val expense = Expense(
                 amount = amount,
                 description = description,
-                category = category ?: Category.Others,
+                category = categoryName,
                 date = date, // Should be ISO string
                 timestamp = System.currentTimeMillis(),
                 isRecurring = false, // The manual entry itself
@@ -332,7 +343,7 @@ class MainViewModel(
                 
                 val config = RecurringConfig(
                     amount = amount,
-                    category = category ?: Category.Others,
+                    category = categoryName,
                     description = description,
                     frequency = frequency,
                     nextDueDate = nextDate.toString(),
@@ -363,11 +374,12 @@ class MainViewModel(
         loanId: String? = null
     ) {
         viewModelScope.launch {
+            val categoryName = category?.name ?: SystemCategory.Others.name
             val expense = Expense(
                 id = id,
                 amount = amount,
                 description = description,
-                category = category ?: Category.Others,
+                category = categoryName,
                 date = date,
                 timestamp = System.currentTimeMillis(), 
                 isRecurring = false,
@@ -386,7 +398,7 @@ class MainViewModel(
                 
                 val config = RecurringConfig(
                     amount = amount,
-                    category = category ?: Category.Others,
+                    category = categoryName,
                     description = description,
                     frequency = frequency,
                     nextDueDate = nextDate.toString(),
@@ -490,7 +502,7 @@ class MainViewModel(
             val expense = Expense(
                 amount = amount,
                 description = "Balance Adjustment: $accountName",
-                category = Category.BalanceAdjustment,
+                category = SystemCategory.BalanceAdjustment.name,
                 date = LocalDate.now().atStartOfDay().toString(),
                 timestamp = System.currentTimeMillis(),
                 isRecurring = false,
@@ -553,7 +565,8 @@ class MainViewModel(
                 val accounts = repository.getAllAccountsOneShot()
                 val recurringConfigs = repository.getRecurringConfigsOneShot()
                 val loans = repository.getAllLoansOneShot()
-                val appData = com.h2.wellspend.data.AppData(expenses, budgets, accounts, recurringConfigs, loans)
+                val categories = repository.sortedCategories.first() // Get current visible categories
+                val appData = com.h2.wellspend.data.AppData(expenses, budgets, accounts, recurringConfigs, loans, categories)
                 
                 val gson = com.google.gson.Gson()
                 val jsonString = gson.toJson(appData)
@@ -581,13 +594,6 @@ class MainViewModel(
                     val jsonString = inputStream.bufferedReader().use { it.readText() }
                     
                     val gson = com.google.gson.GsonBuilder()
-                        .registerTypeAdapter(Category::class.java, com.google.gson.JsonDeserializer { json, _, _ ->
-                            try {
-                                Category.valueOf(json.asString)
-                            } catch (e: Exception) {
-                                Category.Others
-                            }
-                        })
                         .create()
                         
                     // Parse into ImportAppData which allows nullable new fields
@@ -603,8 +609,48 @@ class MainViewModel(
                         
                         val recurringConfigs = importData.recurringConfigs?.map { it.toRecurringConfig() }
                         val loans = importData.loans
+                        var categories = importData.categories ?: emptyList()
+                        
+                        // Check for missing categories in imported expenses
+                        val importedCategoryNames = expenses.map { it.category }.toSet()
+                        val existingCategoryNames = categories.map { it.name }.toSet()
+                        val missingCategoryNames = importedCategoryNames - existingCategoryNames
+                        
+                        if (missingCategoryNames.isNotEmpty()) {
+                            val newCategories = missingCategoryNames.map { name ->
+                                val sysCat = try { com.h2.wellspend.data.SystemCategory.valueOf(name) } catch (e: Exception) { null }
+                                
+                                if (sysCat != null) {
+                                    val isSystemProtected = setOf(
+                                         com.h2.wellspend.data.SystemCategory.Others.name,
+                                         com.h2.wellspend.data.SystemCategory.Loan.name,
+                                         com.h2.wellspend.data.SystemCategory.TransactionFee.name,
+                                         com.h2.wellspend.data.SystemCategory.BalanceAdjustment.name
+                                    ).contains(name)
+                                    
+                                    val color = com.h2.wellspend.ui.CategoryColors[sysCat]?.toArgb()?.toLong() 
+                                        ?: (0xFF000000 or (kotlin.random.Random.nextLong() and 0x00FFFFFF))
 
-                        repository.importData(expenses, budgets, accounts, recurringConfigs, loans)
+                                    com.h2.wellspend.data.Category(
+                                        name = name,
+                                        iconName = name, 
+                                        color = color,
+                                        isSystem = isSystemProtected
+                                    )
+                                } else {
+                                    val randomColor = (0xFF000000 or (kotlin.random.Random.nextLong() and 0x00FFFFFF))
+                                    com.h2.wellspend.data.Category(
+                                        name = name,
+                                        iconName = "Label", 
+                                        color = randomColor,
+                                        isSystem = false
+                                    )
+                                }
+                            }
+                            categories = categories + newCategories
+                        }
+
+                        repository.importData(expenses, budgets, accounts, recurringConfigs, loans, categories)
                         viewModelScope.launch(kotlinx.coroutines.Dispatchers.Main) {
                             onResult(true, "Import successful")
                         }
@@ -627,6 +673,17 @@ class MainViewModel(
             }
         }
     }
+    fun addCategory(category: Category) {
+        viewModelScope.launch {
+            repository.addCategory(category)
+        }
+    }
+    
+    fun deleteCategory(category: Category) {
+        viewModelScope.launch {
+            repository.deleteCategory(category)
+        }
+    }
 }
 
 // Import DTOs to handle legacy data (missing fields)
@@ -636,14 +693,15 @@ private data class ImportAppData(
     val budgets: List<Budget>,
     val accounts: List<com.h2.wellspend.data.Account>? = null,
     val recurringConfigs: List<ImportRecurringConfig>? = null,
-    val loans: List<com.h2.wellspend.data.Loan>? = null
+    val loans: List<com.h2.wellspend.data.Loan>? = null,
+    val categories: List<Category>? = null
 )
 
 @androidx.annotation.Keep
 private data class ImportExpense(
     val id: String = UUID.randomUUID().toString(),
     val amount: Double,
-    val category: Category,
+    val category: String,
     val description: String,
     val date: String,
     val timestamp: Long,
@@ -678,7 +736,7 @@ private data class ImportExpense(
 private data class ImportRecurringConfig(
     val id: String = UUID.randomUUID().toString(),
     val amount: Double,
-    val category: Category,
+    val category: String,
     val description: String,
     val frequency: RecurringFrequency,
     val nextDueDate: String,

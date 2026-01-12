@@ -38,6 +38,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import com.h2.wellspend.data.Category
 
+import com.h2.wellspend.data.SystemCategory
+
 @Composable
 fun IncomeList(
     incomes: List<Expense>,
@@ -121,7 +123,7 @@ fun IncomeItem(
     val formattedDate = date.format(DateTimeFormatter.ofPattern("EEE, MMM d")) + extraInfo
 
     // Check if this is a balance adjustment (non-editable)
-    val isBalanceAdjustment = income.category == Category.BalanceAdjustment
+    val isBalanceAdjustment = income.category == SystemCategory.BalanceAdjustment.name
 
     val density = androidx.compose.ui.platform.LocalDensity.current
     val actionWidth = 80.dp

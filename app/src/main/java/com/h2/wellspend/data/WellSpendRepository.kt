@@ -2,6 +2,10 @@ package com.h2.wellspend.data
 
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import com.h2.wellspend.ui.getSystemCategoryColor
+import androidx.compose.ui.graphics.toArgb
+import kotlinx.coroutines.flow.combine
+import com.h2.wellspend.data.SystemCategory
 
 class WellSpendRepository(private val database: AppDatabase) {
     val expenses: Flow<List<Expense>> = database.expenseDao().getAllExpenses()
@@ -71,22 +75,27 @@ class WellSpendRepository(private val database: AppDatabase) {
     suspend fun deleteLoan(loan: Loan) {
         database.loanDao().deleteLoan(loan)
     }
+    
+    // Category Management
+    suspend fun addCategory(category: Category) {
+        database.categoryDao().insertCategory(category)
+    }
+    
+    suspend fun deleteCategory(category: Category) {
+        database.categoryDao().deleteCategory(category)
+    }
 
-    // Category Sorting
-    val sortedCategories: Flow<List<Category>> = database.categoryDao().getAllCategorySortOrders()
-        .map { sortOrders ->
-            if (sortOrders.isEmpty()) {
-                // Return default order if no sort order is saved
-                Category.values().toList()
-            } else {
-                // Create a map of category name to sort order
-                val orderMap = sortOrders.associate { it.categoryName to it.sortOrder }
-                
-                // Sort categories based on the map, putting those without order at the end
-                Category.values().sortedBy { category ->
-                    orderMap[category.name] ?: Int.MAX_VALUE
-                }
-            }
+    // Category Sorting and Listing
+    val sortedCategories: Flow<List<Category>> = database.categoryDao().getAllCategories()
+        .combine(database.categoryDao().getAllCategorySortOrders()) { categories, sortOrders ->
+             if (categories.isEmpty()) {
+                 emptyList()
+             } else {
+                 val orderMap = sortOrders.associate { it.categoryName to it.sortOrder }
+                 categories.sortedBy { category ->
+                     orderMap[category.name] ?: Int.MAX_VALUE
+                 }
+             }
         }
 
     suspend fun updateCategoryOrder(categories: List<Category>) {
@@ -96,10 +105,28 @@ class WellSpendRepository(private val database: AppDatabase) {
         database.categoryDao().insertCategorySortOrders(sortOrders)
     }
 
-    suspend fun ensureCategoryOrderInitialized() {
-        val existingOrders = database.categoryDao().getAllCategorySortOrdersOneShot()
-        if (existingOrders.isEmpty()) {
-            val defaultOrders = Category.values().mapIndexed { index, category ->
+    suspend fun ensureCategoriesInitialized() {
+        // Check if categories table is empty (not just sort orders)
+        val existingCategories = database.categoryDao().getAllCategoriesOneShot()
+        if (existingCategories.isEmpty()) {
+            val systemInternalCategories = setOf(
+                SystemCategory.TransactionFee, SystemCategory.Loan, SystemCategory.BalanceAdjustment, SystemCategory.Others
+            )
+            
+            val defaultCategories = SystemCategory.values().filter { 
+                systemInternalCategories.contains(it)
+            }.map { sysCat ->
+                Category(
+                    name = sysCat.name,
+                    iconName = sysCat.name, // Use nameKey which maps to SystemCategory icon lookup
+                    color = getSystemCategoryColor(sysCat).toArgb().toLong(),
+                    isSystem = true
+                )
+            }
+            database.categoryDao().insertCategories(defaultCategories)
+            
+            // Also initialize sort order
+            val defaultOrders = defaultCategories.mapIndexed { index, category ->
                 CategorySortOrder(category.name, index)
             }
             database.categoryDao().insertCategorySortOrders(defaultOrders)
@@ -155,8 +182,16 @@ class WellSpendRepository(private val database: AppDatabase) {
         budgets: List<Budget>, 
         accounts: List<Account>?, 
         recurringConfigs: List<RecurringConfig>?,
-        loans: List<Loan>?
+        loans: List<Loan>?,
+        categories: List<Category>?
     ) {
+        if (categories != null) {
+            // We use INSERT OR IGNORE or REPLACE strategy in DAO usually. 
+            // If checking collision is needed, we might want to be careful.
+            // Assuming Replace is fine or Ignore.
+            // But custom categories should be added.
+            database.categoryDao().insertCategories(categories)
+        }
         if (accounts != null) {
             database.accountDao().insertAccounts(accounts)
         }

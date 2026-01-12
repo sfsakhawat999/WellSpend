@@ -41,13 +41,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.h2.wellspend.data.Category
 import com.h2.wellspend.data.Expense
-import com.h2.wellspend.ui.getCategoryColor
-import com.h2.wellspend.ui.getCategoryIcon
+import com.h2.wellspend.ui.getIconByName
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import kotlin.math.abs
@@ -61,6 +61,7 @@ import androidx.compose.ui.window.Dialog
 @Composable
 fun MonthlyReport(
     expenses: List<Expense>,
+    categories: List<Category>,
     currency: String,
     currentDate: LocalDate,
     onBack: () -> Unit
@@ -115,7 +116,7 @@ fun MonthlyReport(
         // Expense Fees + Income Fees + Transfer Fees
         val allTransactionFees = currentMonthTransactions.sumOf { it.feeAmount }
         if (allTransactionFees > 0) {
-            val feeCat = com.h2.wellspend.data.Category.TransactionFee
+            val feeCat = com.h2.wellspend.data.SystemCategory.TransactionFee.name
             // If there are existing expenses in TransactionFee category (e.g. manual entry), add to them
             currentCatMap[feeCat] = (currentCatMap[feeCat] ?: 0.0) + allTransactionFees
         }
@@ -125,13 +126,22 @@ fun MonthlyReport(
             .toMutableMap()
         
         if (prevAllFees > 0) {
-            val feeCat = com.h2.wellspend.data.Category.TransactionFee
+            val feeCat = com.h2.wellspend.data.SystemCategory.TransactionFee.name
             prevCatMap[feeCat] = (prevCatMap[feeCat] ?: 0.0) + prevAllFees
         }
 
-        val catData = currentCatMap.map { (cat, amount) ->
-            val prevAmount = prevCatMap[cat] ?: 0.0
-            CategoryData(cat, amount, prevAmount)
+        val catData = currentCatMap.map { (catName, amount) ->
+            val prevAmount = prevCatMap[catName] ?: 0.0
+             val category = categories.find { it.name == catName } ?: Category(
+                name = catName,
+                iconName = catName,
+                color = com.h2.wellspend.ui.getSystemCategoryColor(com.h2.wellspend.data.SystemCategory.Others).toArgb().toLong().also {
+                    // Fallback to Others color or gray if system lookup fails
+                     try { com.h2.wellspend.ui.getSystemCategoryColor(com.h2.wellspend.data.SystemCategory.valueOf(catName)).toArgb().toLong() } catch(e:Exception) {}
+                },
+                isSystem = false
+            )
+            CategoryData(category, amount, prevAmount)
         }.sortedByDescending { it.amount }
 
         ReportData(incTotal, expTotal, trTotal, prevExpTotal, expChange, catData)
@@ -219,7 +229,7 @@ fun MonthlyReport(
                         
                         val csvHeader = "Date,Category,Type,Amount,Fee,Description,Recurring\n"
                         val csvData = reportExpenses.joinToString("\n") {
-                            "${it.date},${it.category.name},${it.transactionType},${it.amount},${it.feeAmount},${it.description},${it.isRecurring}"
+                            "${it.date},${it.category},${it.transactionType},${it.amount},${it.feeAmount},${it.description},${it.isRecurring}"
                         }
                         val csvContent = csvHeader + csvData
 
@@ -388,9 +398,9 @@ fun MonthlyReport(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(
-                                imageVector = getCategoryIcon(data.category),
+                                imageVector = getIconByName(data.category.iconName),
                                 contentDescription = data.category.name,
-                                tint = getCategoryColor(data.category),
+                                tint = Color(data.category.color),
                                 modifier = Modifier.width(24.dp).size(16.dp)
                             )
                             Box(
@@ -404,7 +414,7 @@ fun MonthlyReport(
                                         .fillMaxHeight()
                                         .fillMaxWidth((data.amount / maxVal).toFloat())
                                         .clip(RoundedCornerShape(4.dp))
-                                        .background(getCategoryColor(data.category))
+                                        .background(Color(data.category.color))
                                 )
                             }
                         }
@@ -438,9 +448,9 @@ fun MonthlyReport(
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                              Icon(
-                                imageVector = getCategoryIcon(data.category),
+                                imageVector = getIconByName(data.category.iconName),
                                 contentDescription = null,
-                                tint = getCategoryColor(data.category),
+                                tint = Color(data.category.color),
                                 modifier = Modifier.size(24.dp).padding(end = 8.dp)
                             )
                             Text(data.category.name, color = MaterialTheme.colorScheme.onSurface)

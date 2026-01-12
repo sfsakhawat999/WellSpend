@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Repeat
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.AccountBalanceWallet
@@ -84,7 +85,8 @@ import androidx.compose.material3.rememberDatePickerState
 import com.h2.wellspend.data.Category
 import com.h2.wellspend.data.Expense
 import com.h2.wellspend.data.RecurringFrequency
-import com.h2.wellspend.ui.getCategoryIcon
+import com.h2.wellspend.ui.getIconByName
+import com.h2.wellspend.data.SystemCategory
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -101,16 +103,22 @@ fun AddExpenseForm(
     onAdd: (Double, String, Category?, String, Boolean, RecurringFrequency, com.h2.wellspend.data.TransactionType, String?, String?, Double, String?) -> Unit,
     onCancel: () -> Unit,
     onReorder: (List<Category>) -> Unit,
+    onAddCategory: (Category) -> Unit,
     initialExpense: Expense? = null
 ) {
     var amount by remember { mutableStateOf(initialExpense?.amount?.let { String.format("%.2f", it).trimEnd('0').trimEnd('.') } ?: "") }
     var description by remember { mutableStateOf(initialExpense?.description ?: "") }
-    var category by remember { mutableStateOf(initialExpense?.category ?: Category.Food) }
+    var category by remember { 
+        mutableStateOf(
+            categories.find { it.name == initialExpense?.category } 
+        ) 
+    }
     var date by remember { mutableStateOf(initialExpense?.date?.substring(0, 10) ?: LocalDate.now().toString()) } // YYYY-MM-DD
     var isRecurring by remember { mutableStateOf(initialExpense?.isRecurring ?: false) }
     var frequency by remember { mutableStateOf(RecurringFrequency.MONTHLY) }
     var showDatePicker by remember { mutableStateOf(false) }
     var expanded by remember { mutableStateOf(false) }
+    var showAddCategoryDialog by remember { mutableStateOf(false) }
     val datePickerState = rememberDatePickerState()
 
     // New State
@@ -130,14 +138,18 @@ fun AddExpenseForm(
     // Fee calculation moved to FeeSelector interaction
 
     // Filter out TransactionFee and Loan from selection
+    // Filter out System categories from selection (Loan, TransactionFee, BalanceAdjustment, Others)
+    // Filter out System categories from selection (Loan, TransactionFee, BalanceAdjustment, Others)
     val filteredCategories = remember(categories) {
-        categories.filter { it != Category.TransactionFee && it != Category.Loan }
+        val systemNames = setOf("Others", "Loan", "TransactionFee", "BalanceAdjustment")
+        categories.filter { !it.isSystem && !systemNames.contains(it.name) }
     }
 
     // Ensure selected category is valid
+    // Update category if selected category becomes invalid or removed
     LaunchedEffect(filteredCategories) {
-        if (!filteredCategories.contains(category) && filteredCategories.isNotEmpty()) {
-            category = filteredCategories.first()
+        if (category != null && !filteredCategories.contains(category)) {
+            category = null
         }
     }
 
@@ -162,6 +174,18 @@ fun AddExpenseForm(
         ) {
             DatePicker(state = datePickerState)
         }
+    }
+
+    if (showAddCategoryDialog) {
+        AddCategoryDialog(
+            onDismiss = { showAddCategoryDialog = false },
+            onConfirm = { name, iconName, color ->
+                val newCategory = Category(name = name, iconName = iconName, color = color, isSystem = false)
+                onAddCategory(newCategory)
+                category = newCategory // Auto select
+                showAddCategoryDialog = false
+            }
+        )
     }
 
     Column(
@@ -305,10 +329,13 @@ fun AddExpenseForm(
                 CategoryGrid(
                     categories = filteredCategories,
                     selectedCategory = category,
-                    onCategorySelected = { category = it },
+                    onCategorySelected = { 
+                        category = if (category == it) null else it 
+                    },
                     expanded = expanded,
                     onExpandChange = { expanded = it },
-                    onReorder = onReorder
+                    onReorder = onReorder,
+                    onAddClick = { showAddCategoryDialog = true }
                 )
                 Spacer(modifier = Modifier.height(24.dp))
             }
@@ -417,8 +444,12 @@ fun AddExpenseForm(
                     val amountVal = amount.toDoubleOrNull()
                     if (amountVal != null) {
                         val feeVal = feeAmount.toDoubleOrNull() ?: 0.0
+                        val finalCategory = if(transactionType == com.h2.wellspend.data.TransactionType.EXPENSE) {
+                             category ?: categories.find { it.name == SystemCategory.Others.name }
+                        } else null
+                        
                         onAdd(amountVal, description,
-                            if(transactionType == com.h2.wellspend.data.TransactionType.EXPENSE) category else null,
+                            finalCategory,
                             date, isRecurring, frequency,
                             transactionType, accountId, targetAccountId, feeVal, selectedFeeConfigName)
                     }
@@ -463,13 +494,16 @@ fun FrequencyButton(
 @Composable
 fun CategoryGrid(
     categories: List<Category>,
-    selectedCategory: Category,
+    selectedCategory: Category?,
     onCategorySelected: (Category) -> Unit,
     expanded: Boolean,
     onExpandChange: (Boolean) -> Unit,
-    onReorder: (List<Category>) -> Unit
+    onReorder: (List<Category>) -> Unit,
+    onAddClick: () -> Unit
 ) {
-    val visibleCount = if (expanded) categories.size else 8
+    val totalCategories = categories.size
+    val showExpandButton = totalCategories > 8
+    val visibleCount = if (showExpandButton && !expanded) 4 else totalCategories
     val visibleCategories = categories.take(visibleCount)
     
     val itemsPerRow = 4
@@ -632,7 +666,7 @@ fun CategoryGrid(
                         ) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Icon(
-                                    imageVector = getCategoryIcon(cat),
+                                    imageVector = getIconByName(cat.iconName),
                                     contentDescription = cat.name,
                                     tint = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.size(24.dp)
@@ -647,22 +681,36 @@ fun CategoryGrid(
                             }
                         }
                     }
-                }
+                } // End of categories loop
+
+
             }
         }
         
         Spacer(modifier = Modifier.height(16.dp))
         
-        TextButton(onClick = { onExpandChange(!expanded) }) {
-            Text(
-                text = if (expanded) "Show Less" else "Show More",
-                color = MaterialTheme.colorScheme.primary
-            )
-            Icon(
-                imageVector = if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary
-            )
+        if (showExpandButton) {
+            Spacer(modifier = Modifier.height(16.dp))
+            TextButton(onClick = { onExpandChange(!expanded) }) {
+                Text(
+                    text = if (expanded) "Show Less" else "Show More",
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Icon(
+                    imageVector = if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
         }
+        
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = "To add or manage categories, go to More > Categories",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp)
+        )
     }
 }

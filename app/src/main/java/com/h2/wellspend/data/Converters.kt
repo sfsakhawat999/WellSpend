@@ -24,15 +24,7 @@ class Converters {
         return gson.fromJson(value, type)
     }
 
-    @TypeConverter
-    fun fromCategory(value: Category): String = value.name
 
-    @TypeConverter
-    fun toCategory(value: String): Category = try {
-        Category.valueOf(value)
-    } catch (e: Exception) {
-        Category.Others
-    }
 
     @TypeConverter
     fun fromTransactionType(value: TransactionType): String = value.name
