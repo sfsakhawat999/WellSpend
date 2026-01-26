@@ -60,6 +60,9 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.automirrored.filled.Label
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -128,6 +131,12 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material.icons.filled.MoreVert
 import com.h2.wellspend.ui.components.TransactionItem
+import com.h2.wellspend.ui.components.SearchScreen
+import com.h2.wellspend.ui.components.SearchFilterDialog
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 
 
 import com.h2.wellspend.ui.components.LoanScreen
@@ -154,6 +163,7 @@ enum class Screen {
     HOME, ACCOUNTS, INCOME, EXPENSES
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(viewModel: MainViewModel) {
     var currentDate by remember { mutableStateOf(LocalDate.now()) }
@@ -172,6 +182,8 @@ fun MainScreen(viewModel: MainViewModel) {
     var showLoans by remember { mutableStateOf(false) }
     var showCategoryManagement by remember { mutableStateOf(false) }
     var showAddCategoryDialog by remember { mutableStateOf(false) }
+    var showSearch by remember { mutableStateOf(false) }
+    var showSearchFilterDialog by remember { mutableStateOf(false) }
 
     var loanTransactionToEdit by remember { mutableStateOf<Expense?>(null) }
     
@@ -193,6 +205,9 @@ fun MainScreen(viewModel: MainViewModel) {
     val excludeLoanTransactions by viewModel.excludeLoanTransactions.collectAsState()
     val showAccountsOnHomepage by viewModel.showAccountsOnHomepage.collectAsState()
     val allCategories by viewModel.categoryOrder.collectAsState(initial = emptyList())
+    val searchQuery by viewModel.searchQuery.collectAsState()
+    val searchFilter by viewModel.searchFilter.collectAsState()
+    val searchResults by viewModel.searchResults.collectAsState(initial = emptyList())
 
     // Hoisted States for Sub-screens
     // Budgets
@@ -229,7 +244,7 @@ fun MainScreen(viewModel: MainViewModel) {
         isDataLoaded = true
     }
 
-    val canNavigateBack = showAddExpense || showReport || showBudgets || showSettings || showTransfers || showLoans || showCategoryManagement || showAccountInput || loanTransactionToEdit != null || currentScreen != Screen.HOME || (showLoans && (isCreatingLoan || editingLoan != null || loanForTransaction != null))
+    val canNavigateBack = showAddExpense || showReport || showBudgets || showSettings || showTransfers || showLoans || showCategoryManagement || showAccountInput || loanTransactionToEdit != null || currentScreen != Screen.HOME || (showLoans && (isCreatingLoan || editingLoan != null || loanForTransaction != null)) || showSearch
     androidx.activity.compose.BackHandler(enabled = canNavigateBack) {
         when {
             loanTransactionToEdit != null -> loanTransactionToEdit = null
@@ -244,6 +259,11 @@ fun MainScreen(viewModel: MainViewModel) {
             showLoans && (isCreatingLoan || editingLoan != null) -> { isCreatingLoan = false; editingLoan = null }
             showLoans -> showLoans = false
             showCategoryManagement -> showCategoryManagement = false
+            showSearch -> {
+                 showSearch = false
+                 viewModel.updateSearchQuery("") // Clear query on exit
+                 viewModel.updateSearchFilter(MainViewModel.SearchFilter()) // Clear filters on exit
+            }
             currentScreen != Screen.HOME -> currentScreen = Screen.HOME
         }
     }
@@ -310,7 +330,7 @@ fun MainScreen(viewModel: MainViewModel) {
         }
     }
 
-    val isBottomBarVisible = !showAddExpense && !showReport && !showBudgets && !showSettings && !showTransfers && !showLoans && !showAccountInput && !showCategoryManagement && loanTransactionToEdit == null
+    val isBottomBarVisible = !showAddExpense && !showReport && !showBudgets && !showSettings && !showTransfers && !showLoans && !showAccountInput && !showCategoryManagement && loanTransactionToEdit == null && !showSearch
 
     val view = LocalView.current
     if (!view.isInEditMode) {
@@ -368,6 +388,7 @@ fun MainScreen(viewModel: MainViewModel) {
                 showSettings -> "OVERLAY_SETTINGS"
                 showTransfers -> "OVERLAY_TRANSFERS"
                 showCategoryManagement -> "OVERLAY_CATEGORIES"
+                showSearch -> "OVERLAY_SEARCH"
                 else -> currentScreen.name
             }
 
@@ -428,7 +449,64 @@ fun MainScreen(viewModel: MainViewModel) {
                     
                     val isOverlay = state.startsWith("OVERLAY_")
                     
-                    if (state != "OVERLAY_ADD") {
+
+                    
+                    if (state == "OVERLAY_SEARCH") {
+                         val focusRequester = remember { FocusRequester() }
+                         LaunchedEffect(Unit) {
+                             focusRequester.requestFocus()
+                         }
+                         
+                         TopAppBar(
+                            title = {
+                                OutlinedTextField(
+                                    value = searchQuery,
+                                    onValueChange = { viewModel.updateSearchQuery(it) },
+                                    placeholder = { Text("Search transactions...") },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .focusRequester(focusRequester),
+                                    singleLine = true,
+                                    colors = TextFieldDefaults.colors(
+                                        focusedContainerColor = Color.Transparent,
+                                        unfocusedContainerColor = Color.Transparent,
+                                        disabledContainerColor = Color.Transparent,
+                                        focusedIndicatorColor = Color.Transparent,
+                                        unfocusedIndicatorColor = Color.Transparent
+                                    ),
+                                    trailingIcon = {
+                                        if (searchQuery.isNotEmpty()) {
+                                            IconButton(onClick = { viewModel.updateSearchQuery("") }) {
+                                                Icon(Icons.Default.Close, "Clear")
+                                            }
+                                        }
+                                    }
+                                )
+                            },
+                            navigationIcon = {
+                                IconButton(onClick = { 
+                                     showSearch = false
+                                     viewModel.updateSearchQuery("")
+                                     viewModel.updateSearchFilter(MainViewModel.SearchFilter())
+                                }) {
+                                    Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
+                                }
+                            },
+                            actions = {
+                                IconButton(onClick = { showSearchFilterDialog = true }) {
+                                    Icon(
+                                        Icons.Default.FilterList, 
+                                        "Filter",
+                                        tint = if (searchFilter.type != null || searchFilter.startDate != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
+                            },
+                             colors = TopAppBarDefaults.topAppBarColors(
+                                containerColor = MaterialTheme.colorScheme.background,
+                                titleContentColor = MaterialTheme.colorScheme.onBackground
+                            )
+                         )
+                    } else if (state != "OVERLAY_ADD") {
                         WellSpendTopAppBar(
                             title = title,
                             // Enable back if it's an overlay (except root tabs), OR if we are in a loan sub-screen
@@ -449,6 +527,7 @@ fun MainScreen(viewModel: MainViewModel) {
                                     }
                                     "OVERLAY_LOANS_LIST" -> showLoans = false
                                     "OVERLAY_CATEGORIES" -> showCategoryManagement = false
+                                    "OVERLAY_SEARCH" -> { /* Handled above */ }
                                 }
                             },
                             actions = {
@@ -503,6 +582,9 @@ fun MainScreen(viewModel: MainViewModel) {
                                     else -> {
                                         // Only show the menu on main root tabs
                                         if (state == "HOME" || state == "ACCOUNTS" || state == "INCOME" || state == "EXPENSES") {
+                                            IconButton(onClick = { showSearch = true }) {
+                                                Icon(Icons.Default.Search, contentDescription = "Search")
+                                            }
                                             IconButton(onClick = { showMenu = true }) { Icon(Icons.Default.MoreVert, "Menu") }
                                             DropdownMenu(
                                                 expanded = showMenu, 
@@ -822,6 +904,32 @@ fun MainScreen(viewModel: MainViewModel) {
                             onDismissAddDialog = { showAddCategoryDialog = false }
                         )
                     }
+                    "OVERLAY_SEARCH" -> {
+                        SearchScreen(
+                            searchResults = searchResults,
+                            accounts = accounts,
+                            loans = loans,
+                            categories = allCategories,
+                            currency = currency,
+                            onEdit = { expense ->
+                                if (expense.loanId != null) {
+                                    loanTransactionToEdit = expense
+                                } else {
+                                    expenseToEdit = expense
+                                    showAddExpense = true
+                                }
+                            },
+                            onDelete = { viewModel.deleteExpense(it) }
+                        )
+                        
+                        if (showSearchFilterDialog) {
+                            SearchFilterDialog(
+                                currentFilter = searchFilter,
+                                onApply = { viewModel.updateSearchFilter(it) },
+                                onDismiss = { showSearchFilterDialog = false }
+                            )
+                        }
+                    }
                     "ACCOUNTS" -> {
                         com.h2.wellspend.ui.AccountScreen(
 
@@ -939,7 +1047,7 @@ fun MainScreen(viewModel: MainViewModel) {
                 .padding(bottom = if (isBottomBarVisible) 90.dp else 24.dp, end = 24.dp)
             ) {
                 if ((currentScreen == Screen.HOME || currentScreen == Screen.EXPENSES || currentScreen == Screen.INCOME || currentScreen == Screen.ACCOUNTS || currentScreen == Screen.ACCOUNTS || showTransfers || showLoans) && 
-                    !showAddExpense && !showReport && !showBudgets && !showSettings && !showAccountInput && loanTransactionToEdit == null && !showCategoryManagement) {
+                    !showAddExpense && !showReport && !showBudgets && !showSettings && !showAccountInput && loanTransactionToEdit == null && !showCategoryManagement && !showSearch) {
                         // Logic for deciding which FAB to show
                         // If standard add expense/transaction
                         if (!showLoans || (showLoans && !isCreatingLoan && editingLoan == null && loanForTransaction == null)) {

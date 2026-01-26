@@ -31,11 +31,69 @@ class MainViewModel(
     initialOnboardingCompleted: Boolean = false
 ) : ViewModel() {
 
+
     val expenses = repository.expenses.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     val budgets = repository.budgets.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     val recurringConfigs = repository.recurringConfigs.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     val accounts = repository.accounts.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     val loans = repository.loans.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    // Search State
+    private val _searchQuery = MutableStateFlow("")
+    val searchQuery = _searchQuery.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "")
+
+    data class SearchFilter(
+        val type: com.h2.wellspend.data.TransactionType? = null, // null = All
+        val startDate: LocalDate? = null,
+        val endDate: LocalDate? = null
+    )
+    
+    private val _searchFilter = MutableStateFlow(SearchFilter())
+    val searchFilter = _searchFilter.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), SearchFilter())
+
+    val searchResults: StateFlow<List<Expense>> = combine(
+        expenses,
+        _searchQuery,
+        _searchFilter
+    ) { allExpenses, query, filter ->
+        if (query.isBlank() && filter.type == null && filter.startDate == null && filter.endDate == null) {
+            emptyList()
+        } else {
+            allExpenses.filter { expense ->
+                // Query Match
+                val queryMatch = if (query.isBlank()) true else {
+                    expense.description.contains(query, ignoreCase = true) ||
+                    (expense.note?.contains(query, ignoreCase = true) == true) ||
+                    (expense.amount.toInt().toString().contains(query))
+                }
+                
+                // Type Match
+                val typeMatch = filter.type == null || expense.transactionType == filter.type
+                
+                // Date Match
+                val dateMatch = try {
+                    val expDate = LocalDate.parse(expense.date.take(10))
+                    val startMatch = filter.startDate?.let { !expDate.isBefore(it) } ?: true
+                    val endMatch = filter.endDate?.let { !expDate.isAfter(it) } ?: true
+                    startMatch && endMatch
+                } catch (e: Exception) {
+                    true // If date parse fails, include it (or exclude, depending on policy. Including is safer)
+                }
+                
+                queryMatch && typeMatch && dateMatch
+            }.sortedByDescending { it.date }
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    fun updateSearchQuery(query: String) {
+        _searchQuery.value = query
+    }
+    
+    fun updateSearchFilter(filter: SearchFilter) {
+        _searchFilter.value = filter
+    }
+
+
 
 // ... (existing code) ...
 
