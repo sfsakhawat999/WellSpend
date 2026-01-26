@@ -399,8 +399,8 @@ fun MainScreen(viewModel: MainViewModel) {
                     val isOverlayInitial = initialState.startsWith("OVERLAY_")
                     
                     // Specific Logic for Loan Sub-screens
-                    val isLoanSubScreenTarget = targetState == "OVERLAY_LOANS_ADD" || targetState == "OVERLAY_LOANS_EDIT" || targetState == "OVERLAY_LOANS_TRANSACTION"
-                    val isLoanSubScreenInitial = initialState == "OVERLAY_LOANS_ADD" || initialState == "OVERLAY_LOANS_EDIT" || initialState == "OVERLAY_LOANS_TRANSACTION"
+                    val isLoanSubScreenTarget = targetState == "OVERLAY_LOANS_ADD" || targetState == "OVERLAY_LOANS_EDIT" || targetState == "OVERLAY_LOANS_TRANSACTION" || targetState == "OVERLAY_EDIT_LOAN_TRANSACTION"
+                    val isLoanSubScreenInitial = initialState == "OVERLAY_LOANS_ADD" || initialState == "OVERLAY_LOANS_EDIT" || initialState == "OVERLAY_LOANS_TRANSACTION" || initialState == "OVERLAY_EDIT_LOAN_TRANSACTION"
                     
                     if (isLoanSubScreenTarget && initialState == "OVERLAY_LOANS_LIST") {
                          // Push Sub-screen over List
@@ -669,7 +669,7 @@ fun MainScreen(viewModel: MainViewModel) {
                                     accountBalances = balances,
                                     currency = currency,
                                     onDismiss = { loanTransactionToEdit = null },
-                                    onConfirm = { amt, desc, accId, fee, feeName, date ->
+                                    onConfirm = { amt, desc, accId, fee, feeName, date, note ->
                                         viewModel.updateExpense(
                                             id = transaction.id,
                                             amount = amt,
@@ -683,7 +683,8 @@ fun MainScreen(viewModel: MainViewModel) {
                                             targetAccountId = transaction.transferTargetAccountId,
                                             feeAmount = fee,
                                             feeConfigName = feeName,
-                                            loanId = transaction.loanId
+                                            loanId = transaction.loanId,
+                                            note = note
                                         )
                                         loanTransactionToEdit = null
                                     }
@@ -736,8 +737,8 @@ fun MainScreen(viewModel: MainViewModel) {
                                 accountBalances = balances,
                                 currency = currency,
                                 onDismiss = { loanForTransaction = null },
-                                onConfirm = { amount, isPayment, accId, fee, feeName, date ->
-                                    viewModel.addLoanTransaction(loan.id, loan.name, amount, isPayment, accId, loan.type, fee, feeName, date)
+                                onConfirm = { amount, isPayment, accId, fee, feeName, date, note ->
+                                    viewModel.addLoanTransaction(loan.id, loan.name, amount, isPayment, accId, loan.type, fee, feeName, date, note)
                                     loanForTransaction = null
                                 }
                             )
@@ -775,8 +776,7 @@ fun MainScreen(viewModel: MainViewModel) {
                             onEditLoan = { editingLoan = it },
                             onDeleteLoan = { loan, deleteTransactions -> viewModel.deleteLoan(loan, deleteTransactions) },
                             onEditTransaction = { expense -> 
-                                expenseToEdit = expense
-                                showAddExpense = true
+                                loanTransactionToEdit = expense
                             },
                             onDeleteTransaction = { expenseId -> viewModel.deleteExpense(expenseId) },
                             onAddLoanStart = { isCreatingLoan = true }

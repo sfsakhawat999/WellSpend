@@ -456,7 +456,22 @@ fun AddExpenseForm(
                 Spacer(modifier = Modifier.height(24.dp))
             }
 
-            // Description (Move Before Category)
+            if (transactionType == com.h2.wellspend.data.TransactionType.EXPENSE) {
+                // Category Selection
+                CategoryGrid(
+                    categories = filteredCategories,
+                    selectedCategory = category,
+                    onCategorySelected = { 
+                        category = if (category == it) null else it 
+                    },
+                    expanded = expanded,
+                    onExpandChange = { expanded = it },
+                    onReorder = onReorder
+                )
+                Spacer(modifier = Modifier.height(24.dp))
+            }
+
+            // Description (Moved After Category)
             OutlinedTextField(
                 value = description,
                 onValueChange = { description = it },
@@ -466,7 +481,7 @@ fun AddExpenseForm(
             )
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Note
+            // Note (Moved After Description)
             OutlinedTextField(
                 value = note,
                 onValueChange = { if (it.length <= 300) note = it },
@@ -484,21 +499,6 @@ fun AddExpenseForm(
                 }
             )
             Spacer(modifier = Modifier.height(24.dp))
-
-            if (transactionType == com.h2.wellspend.data.TransactionType.EXPENSE) {
-                // Category Selection
-                CategoryGrid(
-                    categories = filteredCategories,
-                    selectedCategory = category,
-                    onCategorySelected = { 
-                        category = if (category == it) null else it 
-                    },
-                    expanded = expanded,
-                    onExpandChange = { expanded = it },
-                    onReorder = onReorder
-                )
-                Spacer(modifier = Modifier.height(24.dp))
-            }
         }
 
         // Save Button

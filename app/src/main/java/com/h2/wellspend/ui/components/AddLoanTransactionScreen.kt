@@ -74,10 +74,11 @@ fun AddLoanTransactionScreen(
     accountBalances: Map<String, Double>,
     currency: String,
     onDismiss: () -> Unit,
-    onConfirm: (Double, Boolean, String?, Double, String?, LocalDate) -> Unit // feeConfigName added
+    onConfirm: (Double, Boolean, String?, Double, String?, LocalDate, String?) -> Unit // feeConfigName added
 ) {
     // BackHandler(onBack = onDismiss) // Handled by MainScreen
     var amount by remember { mutableStateOf("") }
+    var note by remember { mutableStateOf("") }
     var isPayment by remember { mutableStateOf(true) } // True = Pay/Repay, False = Increase Loan
     var selectedAccountId by remember { mutableStateOf<String?>(null) }
     
@@ -282,6 +283,24 @@ fun AddLoanTransactionScreen(
                     )
                  }
                  
+                 // Note
+                OutlinedTextField(
+                    value = note,
+                    onValueChange = { if (it.length <= 300) note = it },
+                    label = { Text("Note") },
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 3,
+                    maxLines = 5,
+                    supportingText = {
+                        Text(
+                            text = "${note.length}/300",
+                            modifier = Modifier.fillMaxWidth(),
+                            textAlign = TextAlign.End
+                        )
+                    }
+                )
+
                 Spacer(modifier = Modifier.height(16.dp))
             }
         
@@ -296,7 +315,7 @@ fun AddLoanTransactionScreen(
                      val amt = amount.toDoubleOrNull()
                      if (amt != null) {
                          val fee = feeAmount.toDoubleOrNull() ?: 0.0
-                         onConfirm(amt, isPayment, selectedAccountId, fee, selectedFeeConfigName, date)
+                         onConfirm(amt, isPayment, selectedAccountId, fee, selectedFeeConfigName, date, note)
                      }
                 },
                 enabled = amount.isNotEmpty() && amount.toDoubleOrNull() != null && selectedAccountId != null,

@@ -170,7 +170,8 @@ class MainViewModel(
         loanType: com.h2.wellspend.data.LoanType,
         feeAmount: Double,
         feeConfigName: String?,
-        date: java.time.LocalDate
+        date: java.time.LocalDate,
+        note: String? = null
     ) {
         viewModelScope.launch {
             try {
@@ -200,7 +201,8 @@ class MainViewModel(
                     accountId = accountId,
                     loanId = loanId,
                     feeAmount = feeAmount,
-                    feeConfigName = feeConfigName
+                    feeConfigName = feeConfigName,
+                    note = note
                 )
                 repository.addExpense(expense)
             } catch (e: Exception) {
