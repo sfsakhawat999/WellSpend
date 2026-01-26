@@ -10,7 +10,7 @@ import androidx.room.TypeConverters
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
-@Database(entities = [Expense::class, Budget::class, RecurringConfig::class, Setting::class, CategorySortOrder::class, Account::class, Loan::class, Category::class], version = 7, exportSchema = false)
+@Database(entities = [Expense::class, Budget::class, RecurringConfig::class, Setting::class, CategorySortOrder::class, Account::class, Loan::class, Category::class], version = 7, exportSchema = true)
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
 
@@ -44,7 +44,7 @@ abstract class AppDatabase : RoomDatabase() {
                     "wellspend_database"
                 )
                 .addMigrations(MIGRATION_5_6)
-                .fallbackToDestructiveMigration() // Still keep this as failsafe
+                //.fallbackToDestructiveMigration() // Removed to prevent data loss
                 .build()
                 INSTANCE = instance
                 instance
