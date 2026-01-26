@@ -23,6 +23,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.h2.wellspend.ui.AllIcons
 
@@ -52,7 +53,7 @@ fun AddCategoryDialog(
                 modifier = Modifier.padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Text("Add New Category", style = MaterialTheme.typography.titleLarge)
+                Text("Add New Category", style = MaterialTheme.typography.titleLarge.copy(fontSize = 20.sp))
                 Spacer(modifier = Modifier.height(16.dp))
 
                 OutlinedTextField(

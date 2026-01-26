@@ -29,6 +29,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.window.Dialog
 import androidx.compose.material.icons.filled.Close
 import androidx.activity.compose.BackHandler
@@ -36,6 +37,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
 import com.h2.wellspend.data.Account
 import com.h2.wellspend.data.FeeConfig
+import com.h2.wellspend.ui.theme.cardBackgroundColor
 import java.util.UUID
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
@@ -71,9 +73,7 @@ fun AccountScreen(
     balances: Map<String, Double>,
     currency: String,
     onDeleteAccount: (Account) -> Unit,
-    isAccountUsed: (String) -> Boolean,
     onReorder: (List<Account>) -> Unit,
-    onAdjustBalance: (String, Double) -> Unit,
     onAddAccount: () -> Unit,
     onEditAccount: (Account) -> Unit
 ) {
@@ -117,11 +117,14 @@ fun AccountScreen(
                 }
 
                 LazyColumn(
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 150.dp),
+                    verticalArrangement = Arrangement.spacedBy(0.dp)
                 ) {
                     itemsIndexed(accounts, key = { _, account -> account.id }) { index, account ->
-                        Box(modifier = Modifier.animateItemPlacement()) {
+                        val shape = getGroupedItemShape(index, accounts.size)
+                        val backgroundShape = getGroupedItemBackgroundShape(index, accounts.size)
+                        
+                        Box(modifier = Modifier.animateItemPlacement().padding(vertical = 1.dp)) {
                             AccountItem(
                                 account = account,
                                 balance = balances[account.id] ?: account.initialBalance,
@@ -131,6 +134,8 @@ fun AccountScreen(
                                 canMoveDown = index < accounts.size - 1,
                                 onEdit = { onEditAccount(account) },
                                 onDelete = { accountToDelete = account },
+                                shape = shape,
+                                backgroundShape = backgroundShape,
                                 onMoveUp = {
                                     if (index > 0) {
                                         val newList = accounts.toMutableList()
@@ -205,6 +210,8 @@ fun AccountItem(
     canMoveDown: Boolean = true,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
+    shape: Shape = RoundedCornerShape(12.dp),
+    backgroundShape: Shape = shape,
     onMoveUp: () -> Unit = {},
     onMoveDown: () -> Unit = {}
 ) {
@@ -225,11 +232,16 @@ fun AccountItem(
         modifier = Modifier
             .fillMaxWidth()
             .height(IntrinsicSize.Min)
-            .clip(RoundedCornerShape(12.dp))
+            .clip(shape) // Clip the outer box to the shape
     ) {
         // Background (Actions) - only visible when NOT in reorder mode
         if (!isReorderMode) {
-            Box(modifier = Modifier.matchParentSize()) {
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .background(cardBackgroundColor())
+                    .clip(backgroundShape)
+            ) {
                 // Left Action (EDIT)
                 Box(
                     modifier = Modifier
@@ -270,9 +282,9 @@ fun AccountItem(
 
         // Foreground (Content)
         val context = androidx.compose.ui.platform.LocalContext.current
-        Card(
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-            shape = RoundedCornerShape(12.dp),
+        
+        // Changed from Card to Box + Background to match TransactionItem style
+        Box(
             modifier = Modifier
                 .offset { IntOffset(offsetX.value.roundToInt(), 0) }
                 .then(
@@ -310,6 +322,7 @@ fun AccountItem(
                     } else Modifier
                 )
                 .fillMaxWidth()
+                .background(cardBackgroundColor(), shape)
         ) {
             Row(
                 modifier = Modifier
@@ -333,8 +346,9 @@ fun AccountItem(
                     }
                     Spacer(modifier = Modifier.width(16.dp))
                     Column {
-                        Text(text = account.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                        Text(text = "$currency${String.format("%.2f", balance)}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(text = account.name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(text = "$currency${String.format("%.2f", balance)}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
                 
@@ -374,10 +388,9 @@ fun AccountInputScreen(
     account: Account?,
     currentBalance: Double? = null,
     currency: String,
-    onDismiss: () -> Unit,
     onSave: (Account, Double?) -> Unit
 ) {
-    BackHandler(onBack = onDismiss)
+    // BackHandler(onBack = onDismiss) // Handled by MainScreen
     var name by remember { mutableStateOf(account?.name ?: "") }
     // If account exists (Edit), use currentBalance. If new, use initialBalance (empty).
     // but we only track 'displayBalance' for editing.
@@ -407,25 +420,7 @@ fun AccountInputScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
-        // Header
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(onClick = onDismiss) {
-                Icon(Icons.Default.Close, contentDescription = "Close", tint = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            Text(
-                text = if (account == null) "Add Account" else "Edit Account",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-                fontWeight = FontWeight.SemiBold
-            )
-            Spacer(modifier = Modifier.size(32.dp))
-        }
+        // Header Removed - Handled by MainScreen
 
         // Content
         Column(

@@ -15,6 +15,7 @@ import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
@@ -36,6 +37,11 @@ import androidx.compose.animation.core.Animatable
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
+import androidx.compose.ui.graphics.Shape
+import com.h2.wellspend.ui.getGroupedItemShape
+import com.h2.wellspend.ui.getGroupedItemBackgroundShape
+import com.h2.wellspend.ui.theme.cardBackgroundColor
+import androidx.compose.ui.graphics.Color
 
 @Composable
 fun TransferList(
@@ -63,17 +69,24 @@ fun TransferList(
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp),
             contentPadding = PaddingValues(bottom = 96.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(0.dp)
         ) {
-            items(transfers) { transfer ->
-                TransferItem(
-                    transfer = transfer,
-                    fromAccountName = accounts.find { it.id == transfer.accountId }?.name ?: "Deleted Account",
-                    toAccountName = accounts.find { it.id == transfer.transferTargetAccountId }?.name ?: "Deleted Account",
-                    currency = currency,
-                    onEdit = onEdit,
-                    onDelete = onDelete
-                )
+            itemsIndexed(transfers) { index, transfer ->
+                val shape = getGroupedItemShape(index, transfers.size)
+                val backgroundShape = getGroupedItemBackgroundShape(index, transfers.size)
+                
+                Box(modifier = Modifier.padding(vertical = 1.dp)) {
+                    TransferItem(
+                        transfer = transfer,
+                        fromAccountName = accounts.find { it.id == transfer.accountId }?.name ?: "Deleted Account",
+                        toAccountName = accounts.find { it.id == transfer.transferTargetAccountId }?.name ?: "Deleted Account",
+                        currency = currency,
+                        onEdit = onEdit,
+                        onDelete = onDelete,
+                        shape = shape,
+                        backgroundShape = backgroundShape
+                    )
+                }
             }
             
             item {
@@ -102,7 +115,9 @@ fun TransferItem(
     toAccountName: String,
     currency: String,
     onEdit: (Expense) -> Unit,
-    onDelete: (String) -> Unit
+    onDelete: (String) -> Unit,
+    shape: Shape = RoundedCornerShape(16.dp),
+    backgroundShape: Shape = shape
 ) {
     val date = try {
         LocalDate.parse(transfer.date.take(10))
@@ -158,14 +173,20 @@ fun TransferItem(
         exit = shrinkVertically() + fadeOut(),
         enter = expandVertically() + fadeIn()
     ) {
+
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(IntrinsicSize.Min)
-                .clip(RoundedCornerShape(16.dp)) 
+                .clip(shape) 
         ) {
             // Background (Actions)
-            Box(modifier = Modifier.matchParentSize()) {
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .background(cardBackgroundColor())
+                    .clip(backgroundShape)
+            ) {
                 // Left Action (Edit)
                 Box(
                     modifier = Modifier
@@ -199,7 +220,9 @@ fun TransferItem(
 
             // Foreground (Content)
             val context = androidx.compose.ui.platform.LocalContext.current
-            Card(
+            
+            // Replaced Card with Box/Row
+            Box(
                 modifier = Modifier
                     .offset { IntOffset(offsetX.value.roundToInt(), 0) }
                     .draggable(
@@ -216,6 +239,7 @@ fun TransferItem(
                         }
                     )
                     .fillMaxWidth()
+                    .background(cardBackgroundColor(), shape)
                     .combinedClickable(
                         interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
                         indication = null,
@@ -229,12 +253,10 @@ fun TransferItem(
                                 com.h2.wellspend.ui.performWiggle(offsetX, actionWidthPx, context)
                             }
                         }
-                    ),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                elevation = CardDefaults.cardElevation(2.dp)
+                    )
+                    .padding(12.dp)
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
+                Column(modifier = Modifier.padding(12.dp)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -242,19 +264,19 @@ fun TransferItem(
                     ) {
                         Text(
                             text = transfer.description.ifEmpty { "Transfer" },
-                            style = MaterialTheme.typography.bodyLarge,
+                            style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
                             text = "$currency${String.format("%.2f", transfer.amount)}",
-                            style = MaterialTheme.typography.titleMedium,
+                            style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.primary
                         )
                     }
                     
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(6.dp))
                     
                     Row(
                         verticalAlignment = Alignment.CenterVertically,

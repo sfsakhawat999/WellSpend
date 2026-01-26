@@ -76,7 +76,7 @@ fun AddLoanTransactionScreen(
     onDismiss: () -> Unit,
     onConfirm: (Double, Boolean, String?, Double, String?, LocalDate) -> Unit // feeConfigName added
 ) {
-    BackHandler(onBack = onDismiss)
+    // BackHandler(onBack = onDismiss) // Handled by MainScreen
     var amount by remember { mutableStateOf("") }
     var isPayment by remember { mutableStateOf(true) } // True = Pay/Repay, False = Increase Loan
     var selectedAccountId by remember { mutableStateOf<String?>(null) }
@@ -127,25 +127,7 @@ fun AddLoanTransactionScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
-        // Header
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(onClick = onDismiss) {
-                Icon(Icons.Default.Close, contentDescription = "Close", tint = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            Text(
-                text = "${loan.name} Transaction",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-                fontWeight = FontWeight.SemiBold
-            )
-            Spacer(modifier = Modifier.size(32.dp))
-        }
+        // Header Removed - Handled by MainScreen
 
         // Content
         Column(

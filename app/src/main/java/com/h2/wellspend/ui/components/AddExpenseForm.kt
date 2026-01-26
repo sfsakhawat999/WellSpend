@@ -30,10 +30,16 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.AccountBalanceWallet
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
@@ -92,6 +98,9 @@ import java.time.LocalDate
 import java.time.ZoneId
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.material3.FilterChip
+import java.time.format.DateTimeFormatter
+import java.util.Locale
+import java.time.ZoneOffset
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -104,7 +113,8 @@ fun AddExpenseForm(
     onCancel: () -> Unit,
     onReorder: (List<Category>) -> Unit,
     onAddCategory: (Category) -> Unit,
-    initialExpense: Expense? = null
+    initialExpense: Expense? = null,
+    initialTransactionType: com.h2.wellspend.data.TransactionType? = null
 ) {
     var amount by remember { mutableStateOf(initialExpense?.amount?.let { String.format("%.2f", it).trimEnd('0').trimEnd('.') } ?: "") }
     var description by remember { mutableStateOf(initialExpense?.description ?: "") }
@@ -114,15 +124,16 @@ fun AddExpenseForm(
         ) 
     }
     var date by remember { mutableStateOf(initialExpense?.date?.substring(0, 10) ?: LocalDate.now().toString()) } // YYYY-MM-DD
-    var isRecurring by remember { mutableStateOf(initialExpense?.isRecurring ?: false) }
+
     var frequency by remember { mutableStateOf(RecurringFrequency.MONTHLY) }
     var showDatePicker by remember { mutableStateOf(false) }
     var expanded by remember { mutableStateOf(false) }
     var showAddCategoryDialog by remember { mutableStateOf(false) }
+    var showTypeDropdown by remember { mutableStateOf(false) }
     val datePickerState = rememberDatePickerState()
 
     // New State
-    var transactionType by remember { mutableStateOf(initialExpense?.transactionType ?: com.h2.wellspend.data.TransactionType.EXPENSE) }
+    var transactionType by remember { mutableStateOf(initialExpense?.transactionType ?: initialTransactionType ?: com.h2.wellspend.data.TransactionType.EXPENSE) }
     var accountId by remember { mutableStateOf(if (initialExpense != null) initialExpense.accountId else null) }
     var targetAccountId by remember { mutableStateOf(if (initialExpense != null) initialExpense.transferTargetAccountId else null) }
     
@@ -150,6 +161,16 @@ fun AddExpenseForm(
     LaunchedEffect(filteredCategories) {
         if (category != null && !filteredCategories.contains(category)) {
             category = null
+        }
+    }
+
+    // Sync DatePicker state with current date (handle arrow navigation)
+    LaunchedEffect(date) {
+        try {
+            val localDate = LocalDate.parse(date)
+            datePickerState.selectedDateMillis = localDate.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
+        } catch (e: Exception) {
+            // Ignore parse errors
         }
     }
 
@@ -197,62 +218,140 @@ fun AddExpenseForm(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
+                .padding(horizontal = 8.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(onClick = onCancel) {
-                Icon(Icons.Default.Close, contentDescription = "Cancel", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = MaterialTheme.colorScheme.onSurface)
             }
-            Text(
-                text = if (initialExpense != null) "Edit Transaction" else "New Transaction",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-                fontWeight = FontWeight.SemiBold
-            )
-            Spacer(modifier = Modifier.size(32.dp))
-        }
+            
+            if (initialExpense != null) {
+                Text(
+                    text = "Edit ${transactionType.name.lowercase().replaceFirstChar { it.uppercase() }}",
+                    style = MaterialTheme.typography.titleLarge.copy(fontSize = 20.sp),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(start = 8.dp)
+                )
+            } else {
+                Text(
+                    text = "New",
+                    style = MaterialTheme.typography.titleLarge.copy(fontSize = 20.sp),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(start = 8.dp)
+                )
 
-        // Transaction Type Selector
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 24.dp)
-                .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(12.dp))
-                .padding(4.dp),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            com.h2.wellspend.data.TransactionType.values().forEach { type ->
-                val isSelected = transactionType == type
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent)
-                        .clickable(enabled = initialExpense == null) { transactionType = type }
-                        .padding(vertical = 8.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = type.name.lowercase().capitalize(),
-                        color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = if (initialExpense != null) 0.3f else 1f),
-                        style = MaterialTheme.typography.labelLarge
-                    )
+                Spacer(modifier = Modifier.width(16.dp))
+
+                // Transaction Type Dropdown
+                Box {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        modifier = Modifier
+                            .width(140.dp)
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha=0.5f), RoundedCornerShape(8.dp))
+                            .clickable { showTypeDropdown = true }
+                            .padding(horizontal = 12.dp, vertical = 8.dp)
+                    ) {
+                        Text(
+                            text = transactionType.name.lowercase().replaceFirstChar { it.uppercase() },
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Icon(Icons.Default.ArrowDropDown, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface)
+                    }
+                    
+                    DropdownMenu(
+                        expanded = showTypeDropdown,
+                        onDismissRequest = { showTypeDropdown = false },
+                        modifier = Modifier.width(140.dp)
+                    ) {
+                        com.h2.wellspend.data.TransactionType.values().forEach { type ->
+                            DropdownMenuItem(
+                                text = { Text(type.name.lowercase().replaceFirstChar { it.uppercase() }) },
+                                onClick = {
+                                    transactionType = type
+                                    showTypeDropdown = false
+                                }
+                            )
+                        }
+                    }
                 }
             }
         }
+
+
 
         Column(
             modifier = Modifier
                 .weight(1f)
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 24.dp)
-                .padding(top = 16.dp, bottom = 16.dp)
+        .padding(top = 16.dp, bottom = 16.dp)
         ) {
-            // Amount Input
+            // Date Navigation (Moved Inside Scroll)
+            Row(
+                 modifier = Modifier.fillMaxWidth().padding(horizontal = 0.dp, vertical = 4.dp),
+                 verticalAlignment = Alignment.CenterVertically,
+                 horizontalArrangement = Arrangement.Center
+            ) {
+                IconButton(
+                    onClick = { 
+                         val localDate = LocalDate.parse(date)
+                         date = localDate.minusDays(1).toString()
+                    }
+                ) {
+                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "Previous Day", modifier = Modifier.size(36.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                
+                 Box(
+                     modifier = Modifier
+                        .weight(1f)
+                        .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(12.dp))
+                        .clickable { showDatePicker = true }
+                        .padding(vertical = 8.dp, horizontal = 12.dp), // Decreased vertical padding
+                    contentAlignment = Alignment.Center
+                 ) {
+                     Row(
+                         verticalAlignment = Alignment.CenterVertically,
+                         horizontalArrangement = Arrangement.SpaceBetween,
+                         modifier = Modifier.fillMaxWidth()
+                     ) {
+                         Text(
+                             text = try {
+                                 LocalDate.parse(date).format(DateTimeFormatter.ofPattern("MMM dd, yyyy", Locale.US))
+                             } catch (e: Exception) {
+                                 date
+                             },
+                             style = MaterialTheme.typography.titleMedium,
+                             fontWeight = FontWeight.Bold
+                         )
+                         Icon(
+                             Icons.Default.ArrowDropDown, 
+                             contentDescription = "Select Date",
+                             tint = MaterialTheme.colorScheme.onSurfaceVariant
+                         )
+                     }
+                 }
+
+                 IconButton(
+                     onClick = { 
+                         val localDate = LocalDate.parse(date)
+                         date = localDate.plusDays(1).toString()
+                    }
+                ) {
+                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "Next Day", modifier = Modifier.size(36.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+            // Amount Input (Original Style)
             Column(
                 horizontalAlignment = Alignment.Start,
-                modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp)
+                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
@@ -302,6 +401,8 @@ fun AddExpenseForm(
                 }
             }
 
+            Spacer(modifier = Modifier.height(8.dp))
+
             // Account Selection
             AccountSelector(
                 accounts = accounts,
@@ -311,7 +412,7 @@ fun AddExpenseForm(
                 currency = currency,
                 title = if (transactionType == com.h2.wellspend.data.TransactionType.INCOME) "To Account" else "From Account"
             )
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(24.dp))
 
             if (transactionType == com.h2.wellspend.data.TransactionType.TRANSFER) {
                 AccountSelector(
@@ -322,25 +423,10 @@ fun AddExpenseForm(
                     currency = currency,
                     title = "To Account"
                 )
-                Spacer(modifier = Modifier.height(16.dp))
-            } else if (transactionType == com.h2.wellspend.data.TransactionType.EXPENSE) {
-                // Category Selection only for Expense
-                Text("Category", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 16.dp))
-                CategoryGrid(
-                    categories = filteredCategories,
-                    selectedCategory = category,
-                    onCategorySelected = { 
-                        category = if (category == it) null else it 
-                    },
-                    expanded = expanded,
-                    onExpandChange = { expanded = it },
-                    onReorder = onReorder,
-                    onAddClick = { showAddCategoryDialog = true }
-                )
                 Spacer(modifier = Modifier.height(24.dp))
             }
-
-            // Fees (For Expense and Transfer)
+            
+            // Fees (Move Before Category)
             if (transactionType != com.h2.wellspend.data.TransactionType.INCOME) {
                 FeeSelector(
                     account = currentAccount,
@@ -359,77 +445,39 @@ fun AddExpenseForm(
                 val total = (amount.toDoubleOrNull() ?: 0.0) + (feeAmount.toDoubleOrNull() ?: 0.0)
                 if (total > 0 && (feeAmount.toDoubleOrNull() ?: 0.0) > 0) {
                      Text(
-                        text = "Total: $currency${String.format("%.2f", amount.toDoubleOrNull() ?: 0.0)} + $currency${String.format("%.2f", feeAmount.toDoubleOrNull() ?: 0.0)} (Fee) = $currency${String.format("%.2f", total)}",
+                        text = "Total Deduction: $currency${String.format("%.2f", total)}",
                         style = MaterialTheme.typography.bodyMedium, 
-                        fontWeight = FontWeight.Bold, 
-                        color = MaterialTheme.colorScheme.primary, 
-                        modifier = Modifier.padding(top = 8.dp)
+                        fontWeight = FontWeight.SemiBold, 
+                        color = MaterialTheme.colorScheme.onSurfaceVariant, 
+                        modifier = Modifier.padding(top = 8.dp, start = 4.dp)
                      )
-                } else if (total > 0) {
-                     Text("Total Deduction: $currency${String.format("%.2f", total)}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 8.dp))
                 }
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(24.dp))
             }
-            
-            // Description & Date
-            Text("Description", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 8.dp))
+
+            // Description (Move Before Category)
             OutlinedTextField(
                 value = description,
                 onValueChange = { description = it },
-                placeholder = { Text(if(transactionType == com.h2.wellspend.data.TransactionType.INCOME) "Income Source" else "Description") },
+                label = { Text(if(transactionType == com.h2.wellspend.data.TransactionType.INCOME) "Income Source" else "Description") },
                 shape = RoundedCornerShape(12.dp),
                 modifier = Modifier.fillMaxWidth()
             )
+            Spacer(modifier = Modifier.height(24.dp))
 
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Text("Date", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 8.dp))
-            Box(modifier = Modifier.clickable { showDatePicker = true }) {
-                OutlinedTextField(
-                    value = date,
-                    onValueChange = { },
-                    enabled = false,
-                    colors = OutlinedTextFieldDefaults.colors(disabledTextColor = MaterialTheme.colorScheme.onSurface),
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.fillMaxWidth()
+            if (transactionType == com.h2.wellspend.data.TransactionType.EXPENSE) {
+                // Category Selection
+                CategoryGrid(
+                    categories = filteredCategories,
+                    selectedCategory = category,
+                    onCategorySelected = { 
+                        category = if (category == it) null else it 
+                    },
+                    expanded = expanded,
+                    onExpandChange = { expanded = it },
+                    onReorder = onReorder
                 )
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Recurring (Only for Expenses/Income? Maybe Transfers too? Let's allow all)
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(MaterialTheme.colorScheme.surface)
-                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(12.dp))
-                    .padding(16.dp)
-            ) {
-                Column {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(modifier = Modifier.size(32.dp).clip(RoundedCornerShape(8.dp)).background(MaterialTheme.colorScheme.primaryContainer), contentAlignment = Alignment.Center) {
-                                Icon(Icons.Default.Repeat, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(18.dp))
-                            }
-                            Column(modifier = Modifier.padding(start = 12.dp)) {
-                                Text("Recurring", color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.bodyMedium)
-                            }
-                        }
-                        Switch(checked = isRecurring, onCheckedChange = { isRecurring = it }, modifier = Modifier.scale(0.8f))
-                    }
-                    if (isRecurring) {
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            FrequencyButton("Weekly", frequency == RecurringFrequency.WEEKLY, { frequency = RecurringFrequency.WEEKLY }, Modifier.weight(1f))
-                            FrequencyButton("Monthly", frequency == RecurringFrequency.MONTHLY, { frequency = RecurringFrequency.MONTHLY }, Modifier.weight(1f))
-                        }
-                    }
-                }
+                Spacer(modifier = Modifier.height(24.dp))
             }
         }
 
@@ -450,7 +498,7 @@ fun AddExpenseForm(
                         
                         onAdd(amountVal, description,
                             finalCategory,
-                            date, isRecurring, frequency,
+                            date, false, frequency,
                             transactionType, accountId, targetAccountId, feeVal, selectedFeeConfigName)
                     }
                 },
@@ -498,8 +546,7 @@ fun CategoryGrid(
     onCategorySelected: (Category) -> Unit,
     expanded: Boolean,
     onExpandChange: (Boolean) -> Unit,
-    onReorder: (List<Category>) -> Unit,
-    onAddClick: () -> Unit
+    onReorder: (List<Category>) -> Unit
 ) {
     val totalCategories = categories.size
     val showExpandButton = totalCategories > 8
@@ -687,10 +734,9 @@ fun CategoryGrid(
             }
         }
         
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(4.dp))
         
         if (showExpandButton) {
-            Spacer(modifier = Modifier.height(16.dp))
             TextButton(onClick = { onExpandChange(!expanded) }) {
                 Text(
                     text = if (expanded) "Show Less" else "Show More",
@@ -703,14 +749,5 @@ fun CategoryGrid(
                 )
             }
         }
-        
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = "To add or manage categories, go to More > Categories",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-            textAlign = TextAlign.Center,
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp)
-        )
     }
 }

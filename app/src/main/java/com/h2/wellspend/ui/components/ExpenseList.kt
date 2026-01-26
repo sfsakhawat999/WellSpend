@@ -31,6 +31,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CornerSize
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
@@ -50,6 +51,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
+
+import com.h2.wellspend.ui.getGroupedItemShape
+import com.h2.wellspend.ui.getGroupedItemBackgroundShape
+import com.h2.wellspend.ui.theme.cardBackgroundColor
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -219,8 +225,7 @@ fun ExpenseCategoryItem(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
-            .background(MaterialTheme.colorScheme.surface)
-            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(16.dp))
+            .background(cardBackgroundColor())
     ) {
         // Header & Budget Wrapper
         Column(
@@ -333,19 +338,47 @@ fun ExpenseCategoryItem(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.surfaceContainer)
-                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                    .background(MaterialTheme.colorScheme.background)
+                    .padding(top = 2.dp) // Add 1dp separation from header (in addition to gap color)
             ) {
-                items.forEach { expense ->
+                items.forEachIndexed { index, expense ->
+                    // Custom shape logic: If index 0 (Top Item), force Top corners to 0dp (Flat). 
+                    // Otherwise use standard grouped logic (which handles middle/bottom).
+                    // Actually, getGroupedItemShape handles logic for index 0 as Top Rounded. We need to override that.
+                    
+                    val standardShape = getGroupedItemShape(index, items.size)
+                    val shape = if (index == 0) {
+                        // Keep bottom corners from standard logic (which might be rounded if size==1), force top to 0
+                        // Use copy() to modify specific corners
+                        standardShape.copy(
+                            topStart = CornerSize(3.dp), 
+                            topEnd = CornerSize(3.dp)
+                        )
+                    } else {
+                        standardShape
+                    }
+                    
+                    val standardBgShape = getGroupedItemBackgroundShape(index, items.size)
+                    val backgroundShape = if (index == 0) {
+                        standardBgShape.copy(
+                            topStart = CornerSize(4.dp), 
+                            topEnd = CornerSize(4.dp)
+                        )
+                    } else {
+                        standardBgShape
+                    }
+                    
                     key(expense.id) {
-                        Column {
+                        Column(modifier = Modifier.padding(bottom = 2.dp)) {
                             ExpenseItem(
                                 expense = expense,
                                 currency = currency,
                                 accounts = accounts,
                                 loans = loans,
                                 onDelete = onDelete,
-                                onEdit = onEdit
+                                onEdit = onEdit,
+                                shape = shape,
+                                backgroundShape = backgroundShape
                             )
                         }
                     }
@@ -408,7 +441,9 @@ fun ExpenseItem(
     accounts: List<com.h2.wellspend.data.Account>,
     loans: List<com.h2.wellspend.data.Loan>,
     onDelete: (String) -> Unit,
-    onEdit: (Expense) -> Unit
+    onEdit: (Expense) -> Unit,
+    shape: Shape = RoundedCornerShape(12.dp),
+    backgroundShape: Shape = shape
 ) {
     val date = try {
         java.time.LocalDate.parse(expense.date.take(10))
@@ -434,6 +469,12 @@ fun ExpenseItem(
     
     // Check if this is a balance adjustment (non-editable)
     val isBalanceAdjustment = expense.category == SystemCategory.BalanceAdjustment.name
+    
+    // Check if this is an initial loan transaction (non-editable/deletable)
+    val isInitialLoanTransaction = expense.loanId != null && expense.description.startsWith("New Loan:")
+    
+    // Combine flags for actions that should be disabled
+    val isNonEditable = isBalanceAdjustment || isInitialLoanTransaction
     
     val extraInfo = buildString {
         if (expense.transactionType == com.h2.wellspend.data.TransactionType.INCOME) append(" • Income")
@@ -484,52 +525,68 @@ fun ExpenseItem(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(androidx.compose.foundation.layout.IntrinsicSize.Min)
+                .clip(shape) // Clip to shape to fix aliasing
         ) {
             // Background (Actions)
-            Box(modifier = Modifier.matchParentSize()) {
-                // Left Action (Edit)
-                if (!isBalanceAdjustment) {
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.CenterStart)
-                            .width(actionWidth + 24.dp)
-                            .fillMaxHeight()
-                            .background(MaterialTheme.colorScheme.primary)
-                            .clickable { onEdit(expense) },
-                        contentAlignment = Alignment.CenterStart
-                    ) {
-                        Box(modifier = Modifier.width(actionWidth), contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = Icons.Default.Edit,
-                                contentDescription = "Edit",
-                                tint = MaterialTheme.colorScheme.onPrimary
-                            )
-                        }
+            val context = androidx.compose.ui.platform.LocalContext.current
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .clip(backgroundShape)
+            ) {
+                // Left Action (Edit) - Always show, but disabled if non-editable
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.CenterStart)
+                        .width(actionWidth + 24.dp)
+                        .fillMaxHeight()
+                        .background(if (isNonEditable) Color.Gray else MaterialTheme.colorScheme.primary)
+                        .clickable {
+                            if (isNonEditable) {
+                                val msg = if (isInitialLoanTransaction) "Initial loan transactions cannot be edited" else "Balance adjustments cannot be edited"
+                                android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
+                            } else {
+                                onEdit(expense)
+                            }
+                        },
+                    contentAlignment = Alignment.CenterStart
+                ) {
+                    Box(modifier = Modifier.width(actionWidth), contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.Default.Edit,
+                            contentDescription = "Edit",
+                            tint = if (isNonEditable) Color.DarkGray else MaterialTheme.colorScheme.onPrimary
+                        )
                     }
                 }
 
-                // Right Action (Delete)
+                // Right Action (Delete) - Always show, but disabled if initial loan transaction
                 Box(
                     modifier = Modifier
                         .align(Alignment.CenterEnd)
                         .width(actionWidth + 24.dp)
                         .fillMaxHeight()
-                        .background(MaterialTheme.colorScheme.error)
-                        .clickable { showDeleteDialog = true },
+                        .background(if (isInitialLoanTransaction) Color.Gray else MaterialTheme.colorScheme.error)
+                        .clickable {
+                            if (isInitialLoanTransaction) {
+                                android.widget.Toast.makeText(context, "Initial loan transactions cannot be deleted", android.widget.Toast.LENGTH_SHORT).show()
+                            } else {
+                                showDeleteDialog = true
+                            }
+                        },
                     contentAlignment = Alignment.CenterEnd
                 ) {
                     Box(modifier = Modifier.width(actionWidth), contentAlignment = Alignment.Center) {
                         Icon(
                             imageVector = Icons.Default.Delete,
                             contentDescription = "Delete",
-                            tint = MaterialTheme.colorScheme.onError
+                            tint = if (isInitialLoanTransaction) Color.DarkGray else MaterialTheme.colorScheme.onError
                         )
                     }
                 }
             }
 
             // Foreground (Content)
-            val context = androidx.compose.ui.platform.LocalContext.current
             Row(
                 modifier = Modifier
                     .offset { IntOffset(offsetX.value.roundToInt(), 0) }
@@ -537,9 +594,9 @@ fun ExpenseItem(
                         orientation = Orientation.Horizontal,
                         state = rememberDraggableState { delta ->
                             scope.launch {
-                                // For BalanceAdjustment, only allow swipe left (delete), not right (edit)
+                                // Always allow swipe to reveal disabled buttons
                                 val minOffset = -actionWidthPx
-                                val maxOffset = if (isBalanceAdjustment) 0f else actionWidthPx
+                                val maxOffset = actionWidthPx
                                 val newValue = (offsetX.value + delta).coerceIn(minOffset, maxOffset)
                                 offsetX.snapTo(newValue)
                             }
@@ -556,7 +613,8 @@ fun ExpenseItem(
                         }
                     )
                     .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.surface) // Opaque background to hide actions
+                    .background(cardBackgroundColor(), shape) // Opaque background to hide actions with shape
+                    .clip(shape) // Explicit clip for foreground
                     .combinedClickable(
                         interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
                         indication = null,
@@ -580,13 +638,13 @@ fun ExpenseItem(
                         text = expense.description.ifEmpty { "No description" },
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurface,
-                        fontWeight = FontWeight.Medium
+                        fontWeight = FontWeight.SemiBold
                     )
                     Text(
                         text = formattedDate + extraInfo,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 4.dp)
+                        modifier = Modifier.padding(top = 6.dp)
                     )
                 }
 
@@ -595,9 +653,9 @@ fun ExpenseItem(
                 
                 Text(
                     text = "$amountPrefix$currency${String.format("%.2f", expense.amount)}",
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.titleSmall,
                     color = amountColor,
-                    fontWeight = FontWeight.Medium
+                    fontWeight = FontWeight.Bold
                 )
             }
         }

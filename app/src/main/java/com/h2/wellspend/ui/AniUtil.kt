@@ -5,7 +5,7 @@ import androidx.compose.animation.core.tween
 import android.content.Context
 import android.widget.Toast
 
-suspend fun performWiggle(offsetX: Animatable<Float, *>, width: Float, context: Context) {
+suspend fun performWiggle(offsetX: Animatable<Float, *>, width: Float, context: Context, message: String = "Swipe left/right for options") {
     val wiggleDistance = width / 4f // Move 25% of the action width
     
     // Wiggle Right
@@ -15,6 +15,6 @@ suspend fun performWiggle(offsetX: Animatable<Float, *>, width: Float, context: 
     // Back to Center
     offsetX.animateTo(0f, tween(100))
     
-    // Toast (will show immediately when called, doesn't block)
-    Toast.makeText(context, "Swipe left/right for options", Toast.LENGTH_SHORT).show()
+    // Toast
+    Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
 }

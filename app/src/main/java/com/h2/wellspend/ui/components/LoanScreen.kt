@@ -1,13 +1,11 @@
 package com.h2.wellspend.ui.components
 
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
-import androidx.compose.animation.SizeTransform
-import androidx.compose.animation.togetherWith
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -20,6 +18,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState // implicitly needed for horizontalScroll? Yes or just scrollState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
@@ -46,162 +45,91 @@ import com.h2.wellspend.data.LoanType
 import com.h2.wellspend.data.TransactionType
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
+import com.h2.wellspend.ui.getGroupedItemShape
+import com.h2.wellspend.ui.getGroupedItemBackgroundShape
+import com.h2.wellspend.ui.theme.cardBackgroundColor
+import com.h2.wellspend.ui.performWiggle
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.material.icons.filled.Warning
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LoanScreen(
     loans: List<Loan>,
-    expenses: List<Expense>, // To calc balance
+    expenses: List<Expense>,
     accounts: List<Account>,
-    accountBalances: Map<String, Double>,
     currency: String,
-    onAddLoan: (String, Double, LoanType, String?, String?, Double, String?, java.time.LocalDate) -> Unit, // feeConfigName added
-    onAddTransaction: (String, String, Double, Boolean, String?, LoanType, Double, String?, java.time.LocalDate) -> Unit, // loanId, loanName, amount, isPayment, ...
-    onUpdateLoan: (Loan) -> Unit,
-    onDeleteLoan: (Loan, Boolean) -> Unit, // (loan, deleteTransactions)
-    onBack: () -> Unit
+    onTransactionClick: (Loan) -> Unit,
+    onEditLoan: (Loan) -> Unit,
+    onDeleteLoan: (Loan, Boolean) -> Unit,
+    onEditTransaction: (Expense) -> Unit,
+    onDeleteTransaction: (String) -> Unit,
+    @Suppress("UNUSED_PARAMETER") onAddLoanStart: () -> Unit
 ) {
-    var selectedTab by remember { mutableIntStateOf(0) } // 0 = Lent, 1 = Borrowed
-    var isCreatingLoan by remember { mutableStateOf(false) }
-    var editingLoan by remember { mutableStateOf<Loan?>(null) }
-    var loanForTransaction by remember { mutableStateOf<Loan?>(null) } // If set, show transaction dialog
+    var selectedTab by remember { mutableIntStateOf(0) }
+    
+    Column(modifier = Modifier.fillMaxSize()) {
+        TabRow(selectedTabIndex = selectedTab) {
+            Tab(selected = selectedTab == 0, onClick = { selectedTab = 0 }, text = { Text("Lent (Assets)") })
+            Tab(selected = selectedTab == 1, onClick = { selectedTab = 1 }, text = { Text("Borrowed (Debts)") })
+        }
 
-    // Determine current screen state for animation
-    val screenState = when {
-        loanForTransaction != null -> "TRANSACTION"
-        isCreatingLoan || editingLoan != null -> "INPUT"
-        else -> "LIST"
-    }
+        val filteredLoans = loans.filter { 
+            if (selectedTab == 0) it.type == LoanType.LEND else it.type == LoanType.BORROW 
+        }
+        
+        // Sort by Balance (Due Amount) Descending
+        val sortedLoansWithBalance = filteredLoans.map { loan ->
+            val loanExpenses = expenses.filter { it.loanId == loan.id }
+            val sumExpense = loanExpenses.filter { it.transactionType == TransactionType.EXPENSE }.sumOf { it.amount }
+            val sumIncome = loanExpenses.filter { it.transactionType == TransactionType.INCOME }.sumOf { it.amount }
+            
+            val balance = if (loan.type == LoanType.LEND) {
+                sumExpense - sumIncome
+            } else {
+                sumIncome - sumExpense
+            }
+            Triple(loan, balance, loanExpenses)
+        }.sortedByDescending { it.second }
 
-    AnimatedContent(
-        targetState = screenState,
-        transitionSpec = {
-            (fadeIn(animationSpec = tween(300)) + scaleIn(initialScale = 0.95f, animationSpec = tween(300))) togetherWith
-            (fadeOut(animationSpec = tween(200)) + scaleOut(targetScale = 0.95f, animationSpec = tween(200))) using
-            SizeTransform(clip = false)
-        },
-        label = "LoanScreenTransition"
-    ) { state ->
-        when (state) {
-            "TRANSACTION" -> {
-                val loan = loanForTransaction
-                if (loan != null) {
-                    AddLoanTransactionScreen(
+        if (sortedLoansWithBalance.isEmpty()) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text("No loans found.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        } else {
+            LazyColumn(
+                contentPadding = PaddingValues(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                items(sortedLoansWithBalance) { (loan, balance, transactions) ->
+                    LoanCard(
                         loan = loan,
+                        balance = balance,
+                        transactions = transactions,
                         accounts = accounts,
-                        accountBalances = accountBalances,
                         currency = currency,
-                        onDismiss = { loanForTransaction = null },
-                        onConfirm = { amount, isPayment, accId, fee, feeName, date ->
-                            onAddTransaction(loan.id, loan.name, amount, isPayment, accId, loan.type, fee, feeName, date)
-                            loanForTransaction = null
-                        }
+                        onTransactionClick = { onTransactionClick(loan) },
+                        onEditClick = { onEditLoan(loan) },
+                        onDeleteClick = { deleteTransactions -> onDeleteLoan(loan, deleteTransactions) },
+                        onEditTransaction = onEditTransaction,
+                        onDeleteTransaction = onDeleteTransaction,
+                        shape = RoundedCornerShape(16.dp),
+                        backgroundShape = RoundedCornerShape(17.dp)
                     )
-                } else {
-                    // Fallback (Should typically not happen if state logic is perfect, but handles the transition race)
-                    Box(Modifier.fillMaxSize()) 
                 }
-            }
-            "INPUT" -> {
-                LoanInputScreen(
-                    initialLoan = editingLoan,
-                    accounts = accounts,
-                    accountBalances = accountBalances,
-                    currency = currency,
-                    onSave = { name, amount, type, desc, accId, fee, feeName, date ->
-                        if (editingLoan != null) {
-                            val updated = editingLoan!!.copy(name = name, amount = amount, description = desc, type = type)
-                            onUpdateLoan(updated)
-                            editingLoan = null
-                        } else {
-                            onAddLoan(name, amount, type, desc, accId, fee, feeName, date)
-                            isCreatingLoan = false
-                        }
-                    },
-                    onCancel = {
-                        isCreatingLoan = false
-                        editingLoan = null
-                    }
-                )
-            }
-            "LIST" -> {
-                Scaffold(
-                    topBar = {
-                        TopAppBar(
-                            title = { Text("Loans") },
-                            navigationIcon = {
-                                IconButton(onClick = onBack) {
-                                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                                }
-                            }
+                
+                item {
+                    androidx.compose.foundation.layout.Box(
+                        modifier = androidx.compose.ui.Modifier
+                            .fillMaxWidth()
+                            .padding(top = 16.dp, bottom = 32.dp),
+                        contentAlignment = androidx.compose.ui.Alignment.Center
+                    ) {
+                        androidx.compose.material3.Text(
+                            "Swipe left/right to edit or delete.",
+                            style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+                            color = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                    },
-                    floatingActionButton = {
-                        FloatingActionButton(onClick = { isCreatingLoan = true }) {
-                            Icon(Icons.Default.Add, contentDescription = "Add Loan")
-                        }
-                    }
-                ) { padding ->
-                    Column(modifier = Modifier.padding(padding)) {
-                        TabRow(selectedTabIndex = selectedTab) {
-                            Tab(selected = selectedTab == 0, onClick = { selectedTab = 0 }, text = { Text("Lent (Assets)") })
-                            Tab(selected = selectedTab == 1, onClick = { selectedTab = 1 }, text = { Text("Borrowed (Debts)") })
-                        }
-
-                        val filteredLoans = loans.filter { 
-                            if (selectedTab == 0) it.type == LoanType.LEND else it.type == LoanType.BORROW 
-                        }
-                        
-                        // Sort by Balance (Due Amount) Descending
-                        val sortedLoansWithBalance = filteredLoans.map { loan ->
-                            val loanExpenses = expenses.filter { it.loanId == loan.id }
-                            val sumExpense = loanExpenses.filter { it.transactionType == TransactionType.EXPENSE }.sumOf { it.amount }
-                            val sumIncome = loanExpenses.filter { it.transactionType == TransactionType.INCOME }.sumOf { it.amount }
-                            
-                            val balance = if (loan.type == LoanType.LEND) {
-                                sumExpense - sumIncome
-                            } else {
-                                sumIncome - sumExpense
-                            }
-                            loan to balance
-                        }.sortedByDescending { it.second }
-
-                        if (sortedLoansWithBalance.isEmpty()) {
-                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                Text("No loans found.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                        } else {
-                            LazyColumn(
-                                contentPadding = PaddingValues(16.dp),
-                                verticalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                items(sortedLoansWithBalance) { (loan, balance) ->
-                                    LoanItem(
-                                        loan = loan,
-                                        balance = balance,
-                                        currency = currency,
-                                        onTransactionClick = { loanForTransaction = loan },
-                                        onEditClick = { editingLoan = loan },
-                                        onDeleteClick = { deleteTransactions -> onDeleteLoan(loan, deleteTransactions) }
-                                    )
-                                }
-                                
-                                item {
-                                    androidx.compose.foundation.layout.Box(
-                                        modifier = androidx.compose.ui.Modifier
-                                            .fillMaxWidth()
-                                            .padding(top = 16.dp, bottom = 32.dp),
-                                        contentAlignment = androidx.compose.ui.Alignment.Center
-                                    ) {
-                                        androidx.compose.material3.Text(
-                                            "Swipe left/right to edit or delete.",
-                                            style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
-                                            color = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-                                }
-                            }
-                        }
                     }
                 }
             }
@@ -209,38 +137,73 @@ fun LoanScreen(
     }
 }
 
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun LoanItem(
+fun LoanCard(
     loan: Loan,
     balance: Double,
+    transactions: List<Expense>,
+    accounts: List<Account>,
     currency: String,
-    onTransactionClick: (Loan) -> Unit,
+    onTransactionClick: () -> Unit,
     onEditClick: () -> Unit,
-    onDeleteClick: (Boolean) -> Unit // deleteTransactions parameter
+    onDeleteClick: (Boolean) -> Unit,
+    onEditTransaction: (Expense) -> Unit,
+    onDeleteTransaction: (String) -> Unit,
+    shape: Shape,
+    backgroundShape: Shape
 ) {
+    var isExpanded by remember { mutableStateOf(false) }
     val context = androidx.compose.ui.platform.LocalContext.current
+    
+    val initialTransaction = remember(transactions) {
+        transactions.find { it.description.trim().startsWith("New Loan:", ignoreCase = true) }
+    }
+    val isInitialAmountTracked = initialTransaction != null
+
+    // Filter out the initial "New Loan" transaction to prevent double counting/listing
+    // The Initial Amount is already shown in the header row
+    val displayTransactions = remember(transactions) {
+        transactions.filter { !it.description.trim().startsWith("New Loan:", ignoreCase = true) }
+    }
+    
+    // Calculate Progress
+    val totalPrincipal = if (loan.type == LoanType.LEND) {
+        loan.amount + displayTransactions.filter { it.transactionType == TransactionType.EXPENSE }.sumOf { it.amount }
+    } else {
+        loan.amount + displayTransactions.filter { it.transactionType == TransactionType.INCOME }.sumOf { it.amount }
+    }
+    
+    val repaid = if (loan.type == LoanType.LEND) {
+        displayTransactions.filter { it.transactionType == TransactionType.INCOME }.sumOf { it.amount }
+    } else {
+        displayTransactions.filter { it.transactionType == TransactionType.EXPENSE }.sumOf { it.amount }
+    }
+    
+    val progress = if (totalPrincipal > 0) (repaid / totalPrincipal).toFloat().coerceIn(0f, 1f) else 0f
+    
+    // Color Logic
+    val barColor = if (loan.type == LoanType.LEND) Color(0xFF10b981) else MaterialTheme.colorScheme.error
+    
+    // Swipe gesture state
     val density = androidx.compose.ui.platform.LocalDensity.current
-    val actionWidth = 80.dp
+    val actionWidth = 70.dp
     val actionWidthPx = with(density) { actionWidth.toPx() }
     val offsetX = remember { androidx.compose.animation.core.Animatable(0f) }
     val scope = rememberCoroutineScope()
     
-    // Delete states
+    // Delete Dialog Logic
     var showDeleteDialog by remember { mutableStateOf(false) }
     var revertTransactions by remember { mutableStateOf(false) }
 
     if (showDeleteDialog) {
         AlertDialog(
-            onDismissRequest = { 
-                showDeleteDialog = false
-                revertTransactions = false
-            },
+            onDismissRequest = { showDeleteDialog = false },
             title = { Text("Delete Loan") },
             text = { 
                 Column {
-                    Text("Are you sure you want to delete this loan?")
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Text("Delete this loan?")
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -248,64 +211,445 @@ fun LoanItem(
                             .padding(vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Checkbox(
-                            checked = revertTransactions,
-                            onCheckedChange = { revertTransactions = it }
+                        Checkbox(checked = revertTransactions, onCheckedChange = { revertTransactions = it })
+                        Text(" Revert transactions")
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { onDeleteClick(revertTransactions); showDeleteDialog = false }) {
+                    Text("Delete", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = { TextButton(onClick = { showDeleteDialog = false }) { Text("Cancel") } }
+        )
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(shape)
+    ) {
+        // Swipeable Header Section
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(IntrinsicSize.Min)
+                // No clip here, handled by parent Column
+        ) {
+            // Background Actions
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .background(cardBackgroundColor())
+                    .clip(backgroundShape)
+            ) {
+                // Left Action (Edit)
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.CenterStart)
+                        .width(actionWidth + 24.dp)
+                        .fillMaxHeight()
+                        .background(MaterialTheme.colorScheme.primary)
+                        .clickable { onEditClick() },
+                    contentAlignment = Alignment.CenterStart
+                ) {
+                    Box(modifier = Modifier.width(actionWidth), contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.Default.Edit,
+                            contentDescription = "Edit",
+                            tint = MaterialTheme.colorScheme.onPrimary
                         )
-                        Spacer(modifier = Modifier.width(8.dp))
+                    }
+                }
+                
+                // Right Action (Delete)
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .width(actionWidth + 24.dp)
+                        .fillMaxHeight()
+                        .background(MaterialTheme.colorScheme.error)
+                        .clickable { showDeleteDialog = true },
+                    contentAlignment = Alignment.CenterEnd
+                ) {
+                    Box(modifier = Modifier.width(actionWidth), contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.Default.Delete,
+                            contentDescription = "Delete",
+                            tint = MaterialTheme.colorScheme.onError
+                        )
+                    }
+                }
+            }
+            
+            // Foreground Content (Swipeable)
+            Column(
+                modifier = Modifier
+                    .offset { androidx.compose.ui.unit.IntOffset(offsetX.value.toInt(), 0) }
+                    .draggable(
+                        orientation = Orientation.Horizontal,
+                        state = rememberDraggableState { delta ->
+                            scope.launch {
+                                val minOffset = -actionWidthPx
+                                val maxOffset = actionWidthPx
+                                val newValue = (offsetX.value + delta).coerceIn(minOffset, maxOffset)
+                                offsetX.snapTo(newValue)
+                            }
+                        },
+                        onDragStopped = {
+                            val targetOffset = if (offsetX.value > actionWidthPx / 2) {
+                                actionWidthPx
+                            } else if (offsetX.value < -actionWidthPx / 2) {
+                                -actionWidthPx
+                            } else {
+                                0f
+                            }
+                            scope.launch { offsetX.animateTo(targetOffset) }
+                        }
+                    )
+                    .fillMaxWidth()
+                    .background(cardBackgroundColor())
+                    .combinedClickable(
+                        onClick = { onTransactionClick() },
+                        onLongClick = {
+                            scope.launch { performWiggle(offsetX, actionWidthPx, context, "Swipe left/right for options") }
+                        }
+                    )
+                    .padding(16.dp)
+            ) {
+                // Top Row
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.surfaceVariant),
+                            contentAlignment = Alignment.Center
+                        ) {
+                             Icon(
+                                imageVector = Icons.Default.AttachMoney,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
                         Column {
                             Text(
-                                "Revert all transactions",
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.Medium
+                                text = loan.name,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold
                             )
                             Text(
-                                "Deletes all loan transactions and restores account balances",
+                                text = if (loan.type == LoanType.LEND) "Lent" else "Borrowed",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        onDeleteClick(revertTransactions)
-                        showDeleteDialog = false
-                        revertTransactions = false
+                    
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                       Text(
+                            text = "$currency${String.format("%.2f", balance)}",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                       )
+                       Spacer(modifier = Modifier.width(8.dp))
+                       // Expand/Collapse Arrow Button
+                       Box(
+                           modifier = Modifier
+                               .size(32.dp)
+                               .clip(CircleShape)
+                               .background(MaterialTheme.colorScheme.surfaceVariant)
+                               .clickable(
+                                   interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                                   indication = androidx.compose.material.ripple.rememberRipple(bounded = true)
+                               ) { isExpanded = !isExpanded },
+                           contentAlignment = Alignment.Center
+                       ) {
+                           Icon(
+                                imageVector = if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                contentDescription = if (isExpanded) "Collapse" else "Expand",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(20.dp)
+                           )
+                       }
                     }
-                ) {
+                }
+                
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                // Progress Bar
+                Column {
+                    LinearProgressIndicator(
+                        progress = { progress },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(6.dp)
+                            .clip(RoundedCornerShape(3.dp)),
+                        color = barColor,
+                        trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Row(
+                       modifier = Modifier.fillMaxWidth(),
+                       horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = "${(progress * 100).toInt()}% Repaid",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = barColor,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Text(
+                            text = "Total: $currency${String.format("%.0f", totalPrincipal)}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        }
+        
+        // Expanded Content
+        AnimatedVisibility(
+            visible = isExpanded,
+            enter = expandVertically(),
+            exit = shrinkVertically()
+        ) {
+            Column(modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background).padding(top = 2.dp)) {
+
+                 
+
+                 // Transactions List
+                 displayTransactions.forEach { trans ->
+                     androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(2.dp))
+                     LoanTransactionItem(
+                        loan = loan,
+                        transaction = trans,
+                        currency = currency,
+                        accounts = accounts,
+                        onEdit = onEditTransaction,
+                        onDelete = onDeleteTransaction
+                     )
+                 }
+
+                 // Initial Amount Item - Swipeable but disabled (Moved to Bottom)
+                 androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(2.dp))
+                 val initialDensity = androidx.compose.ui.platform.LocalDensity.current
+                 val initialActionWidth = 70.dp
+                 val initialActionWidthPx = with(initialDensity) { initialActionWidth.toPx() }
+                 val initialOffsetX = remember { androidx.compose.animation.core.Animatable(0f) }
+                 val initialScope = rememberCoroutineScope()
+                 val initialContext = androidx.compose.ui.platform.LocalContext.current
+                 
+                 // Special shape for the last item (Initial Amount) to match card bottom
+                 val initialShape = RoundedCornerShape(topStart = 3.dp, topEnd = 3.dp, bottomStart = 16.dp, bottomEnd = 16.dp)
+                 val initialBackgroundShape = RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp, bottomStart = 17.dp, bottomEnd = 17.dp)
+
+                 Box(
+                     modifier = Modifier
+                         .fillMaxWidth()
+                         .height(IntrinsicSize.Min)
+                         .clip(initialShape) // Clip outer box to foreground shape
+                 ) {
+                     // Background Actions (Disabled)
+                     Box(modifier = Modifier.matchParentSize().background(cardBackgroundColor()).clip(initialBackgroundShape)) {
+                         // Left Action (Edit - Disabled)
+                         Box(
+                             modifier = Modifier
+                                 .align(Alignment.CenterStart)
+                                 .width(initialActionWidth + 24.dp)
+                                 .fillMaxHeight()
+                                 .background(Color.Gray)
+                                 .clickable {
+                                     android.widget.Toast.makeText(initialContext, "Initial loan amount cannot be edited", android.widget.Toast.LENGTH_SHORT).show()
+                                 },
+                             contentAlignment = Alignment.CenterStart
+                         ) {
+                             Box(modifier = Modifier.width(initialActionWidth), contentAlignment = Alignment.Center) {
+                                 Icon(Icons.Default.Edit, contentDescription = "Edit", tint = Color.DarkGray)
+                             }
+                         }
+                         
+                         // Right Action (Delete - Disabled)
+                         Box(
+                             modifier = Modifier
+                                 .align(Alignment.CenterEnd)
+                                 .width(initialActionWidth + 24.dp)
+                                 .fillMaxHeight()
+                                 .background(Color.Gray)
+                                 .clickable {
+                                     android.widget.Toast.makeText(initialContext, "Initial loan amount cannot be deleted", android.widget.Toast.LENGTH_SHORT).show()
+                                 },
+                             contentAlignment = Alignment.CenterEnd
+                         ) {
+                             Box(modifier = Modifier.width(initialActionWidth), contentAlignment = Alignment.Center) {
+                                 Icon(Icons.Default.Delete, contentDescription = "Delete", tint = Color.DarkGray)
+                             }
+                         }
+                     }
+                     
+                     // Foreground Content (Swipeable)
+                     Row(
+                         modifier = Modifier
+                             .offset { androidx.compose.ui.unit.IntOffset(initialOffsetX.value.toInt(), 0) }
+                             .draggable(
+                                 orientation = Orientation.Horizontal,
+                                 state = rememberDraggableState { delta ->
+                                     initialScope.launch {
+                                         val newValue = (initialOffsetX.value + delta).coerceIn(-initialActionWidthPx, initialActionWidthPx)
+                                         initialOffsetX.snapTo(newValue)
+                                     }
+                                 },
+                                 onDragStopped = {
+                                     val targetOffset = when {
+                                         initialOffsetX.value > initialActionWidthPx / 2 -> initialActionWidthPx
+                                         initialOffsetX.value < -initialActionWidthPx / 2 -> -initialActionWidthPx
+                                         else -> 0f
+                                     }
+                                     initialScope.launch { initialOffsetX.animateTo(targetOffset) }
+                                 }
+                             )
+                             .fillMaxWidth()
+                             .background(cardBackgroundColor(), initialShape)
+                             .combinedClickable(
+                                 onClick = {
+                                     initialScope.launch { performWiggle(initialOffsetX, initialActionWidthPx, initialContext, "Swipe left/right for options") }
+                                 },
+                                 onLongClick = {
+                                     initialScope.launch { performWiggle(initialOffsetX, initialActionWidthPx, initialContext, "Swipe left/right for options") }
+                                 }
+                             )
+                             .padding(16.dp),
+                         horizontalArrangement = Arrangement.SpaceBetween,
+                         verticalAlignment = Alignment.CenterVertically
+                     ) {
+                         Column {
+                             Text("Initial Amount", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                             
+                             val createdDate = java.time.Instant.ofEpochMilli(loan.createdAt).atZone(java.time.ZoneId.systemDefault()).toLocalDate()
+                             val currentYear = java.time.LocalDate.now().year
+                             val pattern = if (createdDate.year == currentYear) "MMM d" else "MMM d, yyyy"
+                             val dateStr = createdDate.format(java.time.format.DateTimeFormatter.ofPattern(pattern))
+                             
+                             Row {
+                                 Text(
+                                     dateStr,
+                                     style = MaterialTheme.typography.bodySmall,
+                                     color = MaterialTheme.colorScheme.onSurfaceVariant
+                                 )
+                                 
+                                 if (!isInitialAmountTracked || (initialTransaction != null && initialTransaction.accountId == null)) {
+                                     Text(
+                                         " • Untracked",
+                                         style = MaterialTheme.typography.bodySmall,
+                                         color = androidx.compose.ui.graphics.Color(0xFFFFA000)
+                                     )
+                                 } else if (initialTransaction != null) {
+                                     val accountName = accounts.find { it.id == initialTransaction.accountId }?.name ?: "Unknown Account"
+                                     Text(
+                                         " • $accountName",
+                                         style = MaterialTheme.typography.bodySmall,
+                                         color = MaterialTheme.colorScheme.onSurfaceVariant
+                                     )
+                                 }
+                             }
+                         }
+                         Text(
+                             "$currency${String.format("%.2f", loan.amount)}",
+                             style = MaterialTheme.typography.bodyMedium,
+                             fontWeight = FontWeight.Bold
+                         )
+                     }
+                 }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun LoanTransactionItem(
+    loan: Loan,
+    transaction: Expense,
+    currency: String,
+    accounts: List<Account>,
+    onEdit: (Expense) -> Unit,
+    onDelete: (String) -> Unit,
+    shape: Shape = RoundedCornerShape(3.dp),
+    backgroundShape: Shape = RoundedCornerShape(4.dp)
+) {
+    val amountColor = if (transaction.transactionType == TransactionType.INCOME) Color(0xFF10b981) else Color(0xFFef4444)
+    val label = when {
+        loan.type == LoanType.LEND && transaction.transactionType == TransactionType.EXPENSE -> "Lent more"
+        loan.type == LoanType.LEND && transaction.transactionType == TransactionType.INCOME -> "Repayment"
+        loan.type == LoanType.BORROW && transaction.transactionType == TransactionType.INCOME -> "Borrowed more"
+        loan.type == LoanType.BORROW && transaction.transactionType == TransactionType.EXPENSE -> "Repayment"
+        else -> "Transaction"
+    }
+    val accountName = accounts.find { it.id == transaction.accountId }?.name ?: "Unknown Account"
+    
+    // Swipe gesture state
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val actionWidth = 70.dp
+    val actionWidthPx = with(density) { actionWidth.toPx() }
+    val offsetX = remember { androidx.compose.animation.core.Animatable(0f) }
+    val scope = rememberCoroutineScope()
+    
+    // Delete confirmation dialog
+    var showDeleteDialog by remember { mutableStateOf(false) }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    
+    if (showDeleteDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteDialog = false },
+            title = { Text("Delete Transaction") },
+            text = { Text("Are you sure you want to delete this transaction?") },
+            confirmButton = {
+                TextButton(onClick = { 
+                    onDelete(transaction.id)
+                    showDeleteDialog = false 
+                }) {
                     Text("Delete", color = MaterialTheme.colorScheme.error)
                 }
             },
             dismissButton = {
-                TextButton(onClick = { 
-                    showDeleteDialog = false
-                    revertTransactions = false
-                }) {
+                TextButton(onClick = { showDeleteDialog = false }) {
                     Text("Cancel")
                 }
             }
         )
     }
-
+    
+    
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .height(IntrinsicSize.Min)
-            .clip(RoundedCornerShape(12.dp)) // Clip the whole box for corners
+            .clip(shape) // Clip outer box to foreground shape for cleaner interaction area
     ) {
         // Background Actions
-        Box(modifier = Modifier.matchParentSize()) {
-            // Left Action (Edit) - Revealed by swiping RIGHT
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .background(cardBackgroundColor())
+                .clip(backgroundShape)
+        ) {
+            // Left Action (Edit)
             Box(
                 modifier = Modifier
                     .align(Alignment.CenterStart)
                     .width(actionWidth + 24.dp)
                     .fillMaxHeight()
                     .background(MaterialTheme.colorScheme.primary)
-                    .clickable { onEditClick() },
+                    .clickable { onEdit(transaction) },
                 contentAlignment = Alignment.CenterStart
             ) {
                 Box(modifier = Modifier.width(actionWidth), contentAlignment = Alignment.Center) {
@@ -316,8 +660,8 @@ fun LoanItem(
                     )
                 }
             }
-
-            // Right Action (Delete) - Revealed by swiping LEFT
+            
+            // Right Action (Delete)
             Box(
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
@@ -336,232 +680,65 @@ fun LoanItem(
                 }
             }
         }
-
-        // Foreground (Content)
-        Card(
+        
+        // Foreground Content (Swipeable)
+        Row(
             modifier = Modifier
                 .offset { androidx.compose.ui.unit.IntOffset(offsetX.value.toInt(), 0) }
                 .draggable(
                     orientation = Orientation.Horizontal,
                     state = rememberDraggableState { delta ->
                         scope.launch {
-                            val newValue = (offsetX.value + delta).coerceIn(-actionWidthPx, actionWidthPx)
+                            val minOffset = -actionWidthPx
+                            val maxOffset = actionWidthPx
+                            val newValue = (offsetX.value + delta).coerceIn(minOffset, maxOffset)
                             offsetX.snapTo(newValue)
                         }
                     },
                     onDragStopped = {
-                        val targetOffset = when {
-                            offsetX.value > actionWidthPx / 2 -> actionWidthPx // Snap Open (Right/Edit)
-                            offsetX.value < -actionWidthPx / 2 -> -actionWidthPx // Snap Open (Left/Delete)
-                            else -> 0f
+                        val targetOffset = if (offsetX.value > actionWidthPx / 2) {
+                            actionWidthPx
+                        } else if (offsetX.value < -actionWidthPx / 2) {
+                            -actionWidthPx
+                        } else {
+                            0f
                         }
                         scope.launch { offsetX.animateTo(targetOffset) }
                     }
                 )
                 .fillMaxWidth()
+                .background(cardBackgroundColor(), shape)
                 .combinedClickable(
-                    interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                    indication = null,
                     onClick = {
-                        onTransactionClick(loan)
+                        scope.launch { performWiggle(offsetX, actionWidthPx, context, "Swipe left/right for options") }
                     },
                     onLongClick = {
-                        scope.launch {
-                            com.h2.wellspend.ui.performWiggle(offsetX, actionWidthPx, context)
-                        }
+                        scope.launch { performWiggle(offsetX, actionWidthPx, context, "Swipe left/right for options") }
                     }
-                ),
-            elevation = CardDefaults.cardElevation(2.dp),
-            shape = RoundedCornerShape(12.dp) // Match Clip
+                )
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                modifier = Modifier.padding(16.dp).fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(text = loan.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    if (!loan.description.isNullOrEmpty()) {
-                        Text(text = loan.description, style = MaterialTheme.typography.bodySmall)
-                    }
-                }
-                Column(horizontalAlignment = Alignment.End) {
-                    Text(
-                        text = "$currency${String.format("%.2f", balance)}",
-                        style = MaterialTheme.typography.titleLarge,
-                        color = if (balance > 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
+             Column {
+                 Text(label, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                 
+                 val date = java.time.LocalDate.parse(transaction.date.take(10))
+                 val currentYear = java.time.LocalDate.now().year
+                 val pattern = if (date.year == currentYear) "MMM d" else "MMM d, yyyy"
+                 val dateStr = date.format(java.time.format.DateTimeFormatter.ofPattern(pattern))
+                 
+                 Row {
+                    Text(dateStr, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(" • $accountName", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                 }
+             }
+             Text(
+                 "$currency${String.format("%.2f", transaction.amount)}",
+                 style = MaterialTheme.typography.bodyMedium,
+                 fontWeight = FontWeight.Bold,
+                 color = amountColor
+             )
         }
     }
 }
-
-@Composable
-fun AddLoanDialog(
-    accounts: List<Account>,
-    currency: String,
-    onDismiss: () -> Unit,
-    onConfirm: (String, Double, LoanType, String?, String?, Double, String?, java.time.LocalDate) -> Unit // feeConfigName added
-) {
-    var name by remember { mutableStateOf("") }
-    var amount by remember { mutableStateOf("") }
-    var selectedType by remember { mutableStateOf(LoanType.LEND) }
-    var description by remember { mutableStateOf("") }
-    var selectedAccountId by remember { mutableStateOf<String?>(null) } // Null = No Account
-    
-    // Fee State
-    var selectedFeeConfigName by remember { mutableStateOf<String?>("None") }
-    var feeAmount by remember { mutableStateOf("") }
-    var isCustomFee by remember { mutableStateOf(false) }
-
-    var date by remember { mutableStateOf(java.time.LocalDate.now()) }
-    var doNotTrack by remember { mutableStateOf(false) }
-    
-    // Calculate Fee
-    val currentAccount = accounts.find { it.id == selectedAccountId }
-
-    LaunchedEffect(amount, selectedAccountId, selectedFeeConfigName) {
-        if (!isCustomFee && selectedFeeConfigName != null && selectedFeeConfigName != "None" && selectedFeeConfigName != "Custom") {
-            val config = currentAccount?.feeConfigs?.find { it.name == selectedFeeConfigName }
-            if (config != null) {
-                val amt = amount.toDoubleOrNull() ?: 0.0
-                val calculated = if (config.isPercentage) (amt * config.value / 100) else config.value
-                feeAmount = String.format("%.2f", calculated)
-            }
-        } else if (selectedFeeConfigName == "None") {
-            feeAmount = "0.0"
-        }
-    }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("New Loan") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Name (Person/Entity)") })
-                OutlinedTextField(
-                    value = amount, 
-                    onValueChange = { amount = it }, 
-                    label = { Text("Amount") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-                ) 
-                
-                Row {
-                    FilterChip(
-                        selected = selectedType == LoanType.LEND,
-                        onClick = { selectedType = LoanType.LEND },
-                        label = { Text("Lend (I give)") }
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    FilterChip(
-                        selected = selectedType == LoanType.BORROW,
-                        onClick = { selectedType = LoanType.BORROW },
-                        label = { Text("Borrow (I take)") }
-                    )
-                }
-
-                OutlinedTextField(value = description, onValueChange = { description = it }, label = { Text("Description (Optional)") })
-
-                // Account Selector
-                
-                Row(
-                    verticalAlignment = Alignment.CenterVertically, 
-                    modifier = Modifier.fillMaxWidth().clickable { doNotTrack = !doNotTrack }
-                ) {
-                    Checkbox(checked = doNotTrack, onCheckedChange = { doNotTrack = it })
-                    Text("Do not track as transaction")
-                }
-
-                if (!doNotTrack) {
-                     val accountLabel = if (selectedType == LoanType.LEND) "Pay From Account" else "Deposit To Account"
-                     Text(accountLabel)
-                     Row(modifier = Modifier.horizontalScroll(androidx.compose.foundation.rememberScrollState())) {
-                         accounts.forEach { acc ->
-                             FilterChip(selected = selectedAccountId == acc.id, onClick = { selectedAccountId = acc.id }, label = { Text(acc.name) })
-                             Spacer(Modifier.width(4.dp))
-                         }
-                     }
-                     if (selectedAccountId == null && accounts.isNotEmpty()) {
-                        LaunchedEffect(Unit) { selectedAccountId = accounts.first().id }
-                     }
-                } else {
-                    LaunchedEffect(Unit) { selectedAccountId = null }
-                }
-                 
-                 // Fee Option (Only if Lending)
-                if (selectedType == LoanType.LEND && !doNotTrack) {
-                    Text("Transaction Fees", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Row(modifier = Modifier.fillMaxWidth().horizontalScroll(androidx.compose.foundation.rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        FilterChip(selected = selectedFeeConfigName == "None" || selectedFeeConfigName == null, onClick = { selectedFeeConfigName = "None"; isCustomFee = false }, label = { Text("None") })
-                        
-                        currentAccount?.feeConfigs?.forEach { config ->
-                            FilterChip(
-                                selected = selectedFeeConfigName == config.name,
-                                onClick = { selectedFeeConfigName = config.name; isCustomFee = false },
-                                label = { Text("${config.name} (${if(config.isPercentage) "${config.value}%" else currency + config.value})") }
-                            )
-                        }
-                        
-                        FilterChip(selected = isCustomFee, onClick = { selectedFeeConfigName = "Custom"; isCustomFee = true }, label = { Text("Custom") })
-                    }
-                    
-                    if (isCustomFee || (feeAmount.toDoubleOrNull() ?: 0.0) > 0) {
-                         Spacer(modifier = Modifier.height(8.dp))
-                         OutlinedTextField(
-                            value = feeAmount,
-                            onValueChange = { feeAmount = it; if(!isCustomFee) isCustomFee = true; selectedFeeConfigName = "Custom" },
-                            label = { Text("Fee Amount") },
-                            modifier = Modifier.fillMaxWidth(),
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-                         )
-                    }
-                 }
-
-                 // Date Selector
-                 val context = androidx.compose.ui.platform.LocalContext.current
-                 val dateInteractionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
-                 val dateFormatted = remember(date) { date.format(java.time.format.DateTimeFormatter.ofPattern("EEE, MMM d, yyyy")) }
-                 
-                 OutlinedTextField(
-                     value = dateFormatted,
-                     onValueChange = {},
-                     label = { Text("Date") },
-                     readOnly = true,
-                     trailingIcon = { Icon(Icons.Default.DateRange, contentDescription = "Select Date") },
-                     interactionSource = dateInteractionSource
-                 )
-                 
-                 LaunchedEffect(dateInteractionSource) {
-                     dateInteractionSource.interactions.collect { interaction ->
-                         if (interaction is androidx.compose.foundation.interaction.PressInteraction.Release) {
-                             val datePickerDialog = android.app.DatePickerDialog(
-                                 context,
-                                 { _, year, month, dayOfMonth ->
-                                     date = java.time.LocalDate.of(year, month + 1, dayOfMonth)
-                                 },
-                                 date.year,
-                                 date.monthValue - 1,
-                                 date.dayOfMonth
-                             )
-                             datePickerDialog.show()
-                         }
-                     }
-                 }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = {
-                val amt = amount.toDoubleOrNull()
-                val fee = feeAmount.toDoubleOrNull() ?: 0.0
-                if (name.isNotBlank() && amt != null) {
-                    onConfirm(name, amt, selectedType, description.ifBlank { null }, if (doNotTrack) null else selectedAccountId, fee, selectedFeeConfigName, date)
-                }
-            }) { Text("Create") }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
-    )
-}
-
-

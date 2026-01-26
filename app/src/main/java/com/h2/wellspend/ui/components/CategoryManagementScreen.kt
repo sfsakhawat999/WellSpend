@@ -5,6 +5,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -45,6 +46,10 @@ import androidx.compose.ui.unit.IntOffset
 import kotlin.math.roundToInt
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.zIndex
+import androidx.compose.ui.graphics.Shape
+import com.h2.wellspend.ui.getGroupedItemShape
+import com.h2.wellspend.ui.getGroupedItemBackgroundShape
+import com.h2.wellspend.ui.theme.cardBackgroundColor
 
 private val SYSTEM_CATEGORY_NAMES = setOf("Others", "Loan", "TransactionFee", "BalanceAdjustment")
 
@@ -52,49 +57,35 @@ private val SYSTEM_CATEGORY_NAMES = setOf("Others", "Loan", "TransactionFee", "B
 @Composable
 fun CategoryManagementScreen(
     categories: List<Category>,
-    onBack: () -> Unit,
     onAddCategory: (Category) -> Unit,
     onUpdateCategory: (Category) -> Unit,
     onDeleteCategory: (Category) -> Unit,
-    usedCategoryNames: Set<String>
+    usedCategoryNames: Set<String>,
+    showAddDialog: Boolean,
+    onDismissAddDialog: () -> Unit
 ) {
-    var showAddDialog by remember { mutableStateOf(false) }
     var categoryToEdit by remember { mutableStateOf<Category?>(null) }
     var categoryToDelete by remember { mutableStateOf<Category?>(null) }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Manage Categories") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
-                    }
-                },
-                actions = {
-                    // Removed top bar Add button
-                }
-            )
-        },
-        floatingActionButton = {
-            FloatingActionButton(onClick = { showAddDialog = true }) {
-                Icon(Icons.Default.Add, contentDescription = "Add Category")
-            }
-        }
-    ) { padding ->
-        LazyColumn(
-            modifier = Modifier
-                .padding(padding)
-                .fillMaxSize(),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxSize(),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 150.dp),
+            verticalArrangement = Arrangement.spacedBy(0.dp)
         ) {
-            items(categories) { category ->
-                CategoryItem(
-                    category = category,
-                    onEdit = { categoryToEdit = category },
-                    onDelete = { categoryToDelete = category }
-                )
+            itemsIndexed(categories) { index, category ->
+                val shape = getGroupedItemShape(index, categories.size)
+                val backgroundShape = getGroupedItemBackgroundShape(index, categories.size)
+                
+                Box(modifier = Modifier.padding(vertical = 1.dp)) {
+                    CategoryItem(
+                        category = category,
+                        onEdit = { categoryToEdit = category },
+                        onDelete = { categoryToDelete = category },
+                        shape = shape,
+                        backgroundShape = backgroundShape
+                    )
+                }
             }
             item {
                 Box(
@@ -111,24 +102,26 @@ fun CategoryManagementScreen(
                 }
             }
         }
-    }
 
-    if (showAddDialog || categoryToEdit != null) {
-        val isEdit = categoryToEdit != null
+    if (showAddDialog) {
+        CategoryDialog(
+            initialCategory = null,
+            usedCategoryNames = usedCategoryNames,
+            onDismiss = onDismissAddDialog,
+            onConfirm = { cat ->
+                onAddCategory(cat)
+                onDismissAddDialog()
+            }
+        )
+    }
+    
+    if (categoryToEdit != null) {
         CategoryDialog(
             initialCategory = categoryToEdit,
             usedCategoryNames = usedCategoryNames,
-            onDismiss = {
-                showAddDialog = false
-                categoryToEdit = null
-            },
+            onDismiss = { categoryToEdit = null },
             onConfirm = { cat ->
-                if (isEdit) {
-                    onUpdateCategory(cat)
-                } else {
-                    onAddCategory(cat)
-                }
-                showAddDialog = false
+                onUpdateCategory(cat)
                 categoryToEdit = null
             }
         )
@@ -165,7 +158,9 @@ fun CategoryManagementScreen(
 fun CategoryItem(
     category: Category,
     onEdit: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    shape: Shape = RoundedCornerShape(12.dp),
+    backgroundShape: Shape = shape
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current
@@ -181,10 +176,15 @@ fun CategoryItem(
         modifier = Modifier
             .fillMaxWidth()
             .height(IntrinsicSize.Min)
-            .clip(RoundedCornerShape(12.dp))
+            .clip(shape)
     ) {
         // Background Actions
-        Box(modifier = Modifier.matchParentSize()) {
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .background(cardBackgroundColor())
+                .clip(backgroundShape)
+        ) {
             // Left Action (Edit) - Revealed by swiping RIGHT
             Box(
                 modifier = Modifier
@@ -233,7 +233,8 @@ fun CategoryItem(
         }
 
         // Foreground (Content)
-        Card(
+        // Replaced Card with Box/Row
+        Box(
             modifier = Modifier
                 .offset { IntOffset(offsetX.value.roundToInt(), 0) }
                 .draggable(
@@ -254,6 +255,7 @@ fun CategoryItem(
                     }
                 )
                 .fillMaxWidth()
+                .background(cardBackgroundColor(), shape)
                 .combinedClickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null, // Disable ripple to avoid interference
@@ -271,9 +273,7 @@ fun CategoryItem(
                             performWiggle(offsetX, actionWidthPx, context)
                         }
                     }
-                ),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-            shape = RoundedCornerShape(12.dp),
+                )
         ) {
             Row(
                 modifier = Modifier
@@ -301,10 +301,11 @@ fun CategoryItem(
                     Column {
                         Text(
                             text = category.name,
-                            style = MaterialTheme.typography.titleMedium,
+                            style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.SemiBold
                         )
                         if (category.isSystem || SYSTEM_CATEGORY_NAMES.contains(category.name)) {
+                           Spacer(modifier = Modifier.height(6.dp))
                            Text(
                                 text = "System Default",
                                 style = MaterialTheme.typography.bodySmall,
@@ -576,7 +577,7 @@ fun ColorPickerDialog(
                     Slider(
                         value = lightness,
                         onValueChange = { lightness = it },
-                        valueRange = 0f..1f,
+                        valueRange = 0f..0.8f, // Limit lightness to 80% to ensure visibility on white
                         colors = SliderDefaults.colors(
                             thumbColor = selectedColor,
                             activeTrackColor = Color.Transparent,
@@ -615,7 +616,7 @@ fun ColorPickerDialog(
                                 ColorUtils.colorToHSL(colorInt, hsl)
                                 hue = hsl[0]
                                 saturation = hsl[1]
-                                lightness = hsl[2]
+                                lightness = hsl[2].coerceAtMost(0.8f) // Clamp lightness
                             } catch (e: Exception) {}
                         }
                     },

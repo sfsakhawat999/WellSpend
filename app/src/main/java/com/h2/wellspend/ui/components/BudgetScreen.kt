@@ -55,60 +55,15 @@ import com.h2.wellspend.data.SystemCategory
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BudgetScreen(
-    currentBudgets: List<Budget>,
     categories: List<Category>,
     currency: String,
-    onSave: (List<Budget>) -> Unit,
-    onBack: () -> Unit
+    draftBudgets: androidx.compose.runtime.snapshots.SnapshotStateMap<Category, String>
 ) {
-    // Use a map to track local changes
-    val localBudgets = remember { mutableStateMapOf<Category, String>() }
-
-    LaunchedEffect(currentBudgets, categories) {
-        categories.forEach { cat ->
-            val existing = currentBudgets.find { it.category == cat.name }
-            localBudgets[cat] = existing?.limitAmount?.toString() ?: ""
-        }
-    }
-
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Budgets", fontWeight = FontWeight.Bold) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
-                    }
-                },
-                actions = {
-                    Button(
-                        onClick = {
-                            val newBudgets = localBudgets.mapNotNull { (cat, limitStr) ->
-                                val limit = limitStr.toDoubleOrNull()
-                                if (limit != null && limit > 0) {
-                                    Budget(cat.name, limit)
-                                } else null
-                            }
-                            onSave(newBudgets)
-                            onBack()
-                        },
-                        modifier = Modifier.padding(end = 8.dp)
-                    ) {
-                        Text("Save")
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background
-                )
-            )
-        }
-    ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .background(MaterialTheme.colorScheme.background)
-        ) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+    ) {
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
@@ -173,8 +128,8 @@ fun BudgetScreen(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(currency, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(end = 8.dp))
                             OutlinedTextField(
-                                value = localBudgets[category] ?: "",
-                                onValueChange = { localBudgets[category] = it },
+                                value = draftBudgets[category] ?: "",
+                                onValueChange = { draftBudgets[category] = it },
                                 placeholder = { Text("No limit", color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f), fontSize = 14.sp) },
                                 textStyle = TextStyle(
                                     color = MaterialTheme.colorScheme.onSurface,
@@ -199,6 +154,5 @@ fun BudgetScreen(
                 
                 item { Spacer(modifier = Modifier.height(96.dp)) }
             }
-        }
-    }
+}
 }

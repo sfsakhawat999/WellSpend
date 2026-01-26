@@ -15,10 +15,14 @@ import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.AttachMoney
+import androidx.compose.foundation.shape.CircleShape
+import com.h2.wellspend.ui.getIconByName
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -39,6 +43,10 @@ import kotlinx.coroutines.delay
 import com.h2.wellspend.data.Category
 
 import com.h2.wellspend.data.SystemCategory
+import androidx.compose.ui.graphics.Shape
+import com.h2.wellspend.ui.getGroupedItemShape
+import com.h2.wellspend.ui.getGroupedItemBackgroundShape
+import com.h2.wellspend.ui.theme.cardBackgroundColor
 
 @Composable
 fun IncomeList(
@@ -67,17 +75,24 @@ fun IncomeList(
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp),
             contentPadding = PaddingValues(bottom = 96.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(0.dp)
         ) {
-            items(incomes) { income ->
-                IncomeItem(
-                    income = income,
-                    accountName = accounts.find { it.id == income.accountId }?.name ?: "Deleted Account",
-                    loans = loans,
-                    currency = currency,
-                    onEdit = onEdit,
-                    onDelete = onDelete
-                )
+            itemsIndexed(incomes) { index, income ->
+                val shape = getGroupedItemShape(index, incomes.size)
+                val backgroundShape = getGroupedItemBackgroundShape(index, incomes.size)
+                
+                Box(modifier = Modifier.padding(vertical = 1.dp)) {
+                    IncomeItem(
+                        income = income,
+                        accountName = accounts.find { it.id == income.accountId }?.name ?: "Deleted Account",
+                        loans = loans,
+                        currency = currency,
+                        onEdit = onEdit,
+                        onDelete = onDelete,
+                        shape = shape,
+                        backgroundShape = backgroundShape
+                    )
+                }
             }
             
             item {
@@ -106,7 +121,9 @@ fun IncomeItem(
     loans: List<com.h2.wellspend.data.Loan>,
     currency: String,
     onEdit: (Expense) -> Unit,
-    onDelete: (String) -> Unit
+    onDelete: (String) -> Unit,
+    shape: Shape = RoundedCornerShape(16.dp),
+    backgroundShape: Shape = shape
 ) {
     val date = try {
         LocalDate.parse(income.date.take(10))
@@ -125,6 +142,7 @@ fun IncomeItem(
     // Check if this is a balance adjustment (non-editable)
     val isBalanceAdjustment = income.category == SystemCategory.BalanceAdjustment.name
 
+    val context = androidx.compose.ui.platform.LocalContext.current
     val density = androidx.compose.ui.platform.LocalDensity.current
     val actionWidth = 80.dp
     val actionWidthPx = with(density) { actionWidth.toPx() }
@@ -176,24 +194,42 @@ fun IncomeItem(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(IntrinsicSize.Min)
-                .clip(RoundedCornerShape(16.dp)) 
+                .clip(shape) 
         ) {
             // Background (Actions)
-            Box(modifier = Modifier.matchParentSize()) {
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .background(cardBackgroundColor())
+                    .clip(backgroundShape)
+            ) {
+                // Non-editable constraints
+                val isInitialLoanTransaction = income.loanId != null && income.description.startsWith("New Loan:")
+                val isNonEditable = isBalanceAdjustment || isInitialLoanTransaction
+
                 // Left Action (Edit)
-                if (!isBalanceAdjustment) {
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.CenterStart)
-                            .width(actionWidth + 24.dp)
-                            .fillMaxHeight()
-                            .background(MaterialTheme.colorScheme.primary)
-                            .clickable { onEdit(income) },
-                        contentAlignment = Alignment.CenterStart
-                    ) {
-                        Box(modifier = Modifier.width(actionWidth), contentAlignment = Alignment.Center) {
-                            Icon(Icons.Default.Edit, "Edit", tint = MaterialTheme.colorScheme.onPrimary)
-                        }
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.CenterStart)
+                        .width(actionWidth + 24.dp)
+                        .fillMaxHeight()
+                        .background(if (isNonEditable) Color.Gray else MaterialTheme.colorScheme.primary)
+                        .clickable {
+                            if (isNonEditable) {
+                                val msg = if (isInitialLoanTransaction) "Initial loan transactions cannot be edited" else "Balance adjustments cannot be edited"
+                                android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
+                            } else {
+                                onEdit(income)
+                            }
+                        },
+                    contentAlignment = Alignment.CenterStart
+                ) {
+                    Box(modifier = Modifier.width(actionWidth), contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.Default.Edit,
+                            contentDescription = "Edit",
+                            tint = if (isNonEditable) Color.DarkGray else MaterialTheme.colorScheme.onPrimary
+                        )
                     }
                 }
 
@@ -203,28 +239,39 @@ fun IncomeItem(
                         .align(Alignment.CenterEnd)
                         .width(actionWidth + 24.dp)
                         .fillMaxHeight()
-                        .background(MaterialTheme.colorScheme.error)
-                        .clickable { showDeleteDialog = true },
+                        .background(if (isInitialLoanTransaction) Color.Gray else MaterialTheme.colorScheme.error)
+                        .clickable {
+                             if (isInitialLoanTransaction) {
+                                android.widget.Toast.makeText(context, "Initial loan transactions cannot be deleted", android.widget.Toast.LENGTH_SHORT).show()
+                            } else {
+                                showDeleteDialog = true
+                            }
+                        },
                     contentAlignment = Alignment.CenterEnd
                 ) {
                     Box(modifier = Modifier.width(actionWidth), contentAlignment = Alignment.Center) {
-                        Icon(Icons.Default.Delete, "Delete", tint = MaterialTheme.colorScheme.onError)
+                        Icon(
+                            imageVector = Icons.Default.Delete,
+                            contentDescription = "Delete",
+                            tint = if (isInitialLoanTransaction) Color.DarkGray else MaterialTheme.colorScheme.onError
+                        )
                     }
                 }
             }
 
             // Foreground (Content)
-            val context = androidx.compose.ui.platform.LocalContext.current
-            Card(
+            
+            // Replaced Card with Box/Row structure
+            Box(
                 modifier = Modifier
                     .offset { IntOffset(offsetX.value.roundToInt(), 0) }
                     .draggable(
                         orientation = Orientation.Horizontal,
                         state = rememberDraggableState { delta ->
                             scope.launch {
-                                // For BalanceAdjustment, only allow swipe left (delete), not right (edit)
+                                // Always allow swipe to reveal disabled buttons
                                 val minOffset = -actionWidthPx
-                                val maxOffset = if (isBalanceAdjustment) 0f else actionWidthPx
+                                val maxOffset = actionWidthPx
                                 val newValue = (offsetX.value + delta).coerceIn(minOffset, maxOffset)
                                 offsetX.snapTo(newValue)
                             }
@@ -235,6 +282,7 @@ fun IncomeItem(
                         }
                     )
                     .fillMaxWidth()
+                    .background(cardBackgroundColor(), shape) // Opaque background
                     .combinedClickable(
                         interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
                         indication = null,
@@ -248,36 +296,60 @@ fun IncomeItem(
                                 com.h2.wellspend.ui.performWiggle(offsetX, actionWidthPx, context)
                             }
                         }
-                    ),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                elevation = CardDefaults.cardElevation(2.dp)
+                    )
+                    .padding(16.dp)
             ) {
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
+                    modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = income.description.ifEmpty { "No description" },
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = formattedDate,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                         // Icon
+                        val iconVector = if (isBalanceAdjustment || income.category == SystemCategory.Loan.name) {
+                             getIconByName(income.category)
+                        } else {
+                            Icons.Default.AttachMoney
+                        }
+                        
+                        val iconTint = if (isBalanceAdjustment) MaterialTheme.colorScheme.onSurfaceVariant else Color(0xFF4CAF50) // Green
+                        
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .background(iconTint.copy(alpha = 0.15f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = iconVector,
+                                contentDescription = null,
+                                tint = iconTint,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                        
+                        Spacer(modifier = Modifier.width(16.dp))
+                        
+                        Column {
+                            Text(
+                                text = income.description.ifEmpty { "No description" },
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = formattedDate,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
                     
                     Text(
                         text = "+ $currency${String.format("%.2f", income.amount)}",
-                        style = MaterialTheme.typography.titleMedium,
+                        style = MaterialTheme.typography.titleSmall,
                         color = Color(0xFF10b981), // Green
                         fontWeight = FontWeight.Bold
                     )

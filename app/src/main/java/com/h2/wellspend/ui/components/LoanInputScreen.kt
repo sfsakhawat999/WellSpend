@@ -43,7 +43,7 @@ fun LoanInputScreen(
     onSave: (String, Double, LoanType, String?, String?, Double, String?, LocalDate) -> Unit, // name, amount, type, desc, accId, fee, feeConfigName, date
     onCancel: () -> Unit
 ) {
-    BackHandler(onBack = onCancel)
+    // BackHandler(onBack = onCancel) // Handled by MainScreen now
     
     // State initialization
     var name by remember { mutableStateOf(initialLoan?.name ?: "") }
@@ -94,26 +94,8 @@ fun LoanInputScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
-        // Header
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(onClick = onCancel) {
-                Icon(Icons.Default.Close, contentDescription = "Cancel", tint = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            Text(
-                text = if (initialLoan != null) "Edit Loan" else "New Loan",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-                fontWeight = FontWeight.SemiBold
-            )
-            Spacer(modifier = Modifier.size(48.dp)) // Balance the close button
-        }
-
+        // Header Removed - Handled by MainScreen
+        
         Column(
             modifier = Modifier
                 .weight(1f)

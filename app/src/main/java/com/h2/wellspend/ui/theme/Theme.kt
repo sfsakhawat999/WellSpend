@@ -22,6 +22,8 @@ private val DarkColorScheme = darkColorScheme(
     tertiary = Color(0xFFef4444),
     background = Color(0xFF020617),
     surface = Color(0xFF0f172a),
+    surfaceContainer = Color(0xFF1e293b), // Slate 800 - lighter for cards
+    surfaceContainerHigh = Color(0xFF334155), // Slate 700 - even lighter for elevated cards
     onPrimary = Color.White,
     onSecondary = Color.White,
     onTertiary = Color.White,
@@ -34,8 +36,10 @@ private val LightColorScheme = lightColorScheme(
     primary = Color(0xFF2563eb),
     secondary = Color(0xFF64748b),
     tertiary = Color(0xFFef4444),
-    background = Color(0xFFf8fafc), // Slate 50
+    background = Color(0xFFF1F4F7), // Midpoint between Slate 50 and previous dark
     surface = Color(0xFFffffff),
+    surfaceContainer = Color(0xFFffffff), // White for cards in light mode
+    surfaceContainerHigh = Color(0xFFffffff), // White for elevated cards in light mode
     onPrimary = Color.White,
     onSecondary = Color.White,
     onTertiary = Color.White,
@@ -54,7 +58,11 @@ fun WellSpendTheme(
     val colorScheme = when {
         dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
             val context = LocalContext.current
-            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+            if (darkTheme) {
+                dynamicDarkColorScheme(context)
+            } else {
+                dynamicLightColorScheme(context).copy(surfaceContainerHigh = Color.White)
+            }
         }
         darkTheme -> DarkColorScheme
         else -> LightColorScheme
@@ -76,4 +84,14 @@ fun WellSpendTheme(
         typography = Typography,
         content = content
     )
+}
+
+/**
+ * Returns the appropriate background color for cards.
+ * Light mode: Always white for clean card appearance
+ * Dark mode: Uses surfaceContainerHigh from theme (supports dynamic colors)
+ */
+@Composable
+fun cardBackgroundColor(): Color {
+    return MaterialTheme.colorScheme.surfaceContainerHigh
 }

@@ -72,11 +72,12 @@ fun EditLoanTransactionScreen(
     transaction: Expense,
     loan: Loan,
     accounts: List<Account>,
+    accountBalances: Map<String, Double>, // Added
     currency: String,
     onDismiss: () -> Unit,
     onConfirm: (Double, String, String?, Double, String?, String) -> Unit // amount, desc, accId, fee, feeConfigName, date
 ) {
-    BackHandler(onBack = onDismiss)
+    // BackHandler(onBack = onDismiss) // Handled by MainScreen
     var amount by remember { mutableStateOf(String.format("%.2f", transaction.amount).trimEnd('0').trimEnd('.')) }
     var description by remember { mutableStateOf(transaction.description) }
     var selectedAccountId by remember { mutableStateOf(transaction.accountId) }
@@ -158,25 +159,7 @@ fun EditLoanTransactionScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
-        // Header
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(onClick = onDismiss) {
-                Icon(Icons.Default.Close, contentDescription = "Close", tint = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-                fontWeight = FontWeight.SemiBold
-            )
-            Spacer(modifier = Modifier.size(32.dp))
-        }
+        // Header Removed - Handled by MainScreen
 
         // Content
         Column(
@@ -272,46 +255,30 @@ fun EditLoanTransactionScreen(
                 // Checkbox removed
 
                 // Account Selection
-                Text("Account", style = MaterialTheme.typography.bodySmall)
-                Row(modifier = Modifier.horizontalScroll(rememberScrollState())) {
-                     accounts.forEach { acc ->
-                         FilterChip(
-                             selected = selectedAccountId == acc.id,
-                             onClick = { selectedAccountId = acc.id },
-                             label = { Text(acc.name) }
-                         )
-                         Spacer(Modifier.width(4.dp))
-                     }
-                }
+                AccountSelector(
+                    accounts = accounts,
+                    accountBalances = accountBalances,
+                    currency = currency,
+                    selectedAccountId = selectedAccountId,
+                    onAccountSelected = { selectedAccountId = it },
+                    title = "Account"
+                )
 
                 
                 if (showFee) {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("Transaction Fees", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            FilterChip(selected = selectedFeeConfigName == "None" || selectedFeeConfigName == null, onClick = { selectedFeeConfigName = "None"; isCustomFee = false }, label = { Text("None") })
-                            
-                            currentAccount?.feeConfigs?.forEach { config ->
-                                FilterChip(
-                                    selected = selectedFeeConfigName == config.name,
-                                    onClick = { selectedFeeConfigName = config.name; isCustomFee = false },
-                                    label = { Text("${config.name} (${if(config.isPercentage) "${config.value}%" else currency + config.value})") }
-                                )
-                            }
-                            
-                            FilterChip(selected = isCustomFee, onClick = { selectedFeeConfigName = "Custom"; isCustomFee = true }, label = { Text("Custom") })
+                    FeeSelector(
+                        account = currentAccount,
+                        transactionAmount = amount.toDoubleOrNull() ?: 0.0,
+                        currency = currency,
+                        selectedConfigName = selectedFeeConfigName,
+                        currentFeeAmount = feeAmount,
+                        isCustomFee = isCustomFee,
+                        onFeeChanged = { name, fee, isCustom ->
+                             selectedFeeConfigName = name
+                             feeAmount = fee
+                             isCustomFee = isCustom
                         }
-                        
-                        if (isCustomFee || (feeAmount.toDoubleOrNull() ?: 0.0) > 0) {
-                             OutlinedTextField(
-                                value = feeAmount,
-                                onValueChange = { feeAmount = it; if(!isCustomFee) isCustomFee = true; selectedFeeConfigName = "Custom" },
-                                label = { Text("Fee Amount") },
-                                modifier = Modifier.fillMaxWidth(),
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-                             )
-                        }
-                    }
+                    )
                 }
                 
                 Spacer(modifier = Modifier.height(16.dp))

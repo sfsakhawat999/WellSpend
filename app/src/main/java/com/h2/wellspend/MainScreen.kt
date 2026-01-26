@@ -2,6 +2,7 @@ package com.h2.wellspend
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import com.h2.wellspend.data.Loan
 import androidx.compose.animation.ExperimentalAnimationApi
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -17,6 +18,9 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
@@ -48,16 +52,24 @@ import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Description
-import androidx.compose.material.icons.automirrored.filled.List as ListIcon
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.CompareArrows
 import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.automirrored.filled.Label
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Text
 
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -76,12 +88,17 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.runtime.SideEffect
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalView
+import android.app.Activity
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.h2.wellspend.data.Account
 import com.h2.wellspend.data.Category
 import com.h2.wellspend.data.SystemCategory
 import com.h2.wellspend.ui.CategoryColors
 import com.h2.wellspend.ui.components.AddExpenseForm
+import com.h2.wellspend.ui.components.DateSelector
 import com.h2.wellspend.ui.components.ChartData
 import com.h2.wellspend.ui.components.DonutChart
 import com.h2.wellspend.ui.components.ExpenseList
@@ -107,6 +124,10 @@ import androidx.compose.material3.TopAppBarDefaults
 import com.h2.wellspend.ui.components.MoreScreen
 import com.h2.wellspend.ui.components.SettingsScreen
 import com.h2.wellspend.ui.components.BudgetScreen
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material.icons.filled.MoreVert
+import com.h2.wellspend.ui.components.TransactionItem
 
 
 import com.h2.wellspend.ui.components.LoanScreen
@@ -126,16 +147,18 @@ import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import androidx.compose.ui.draw.clip
 
 enum class Screen {
-    HOME, ACCOUNTS, INCOME, EXPENSES, MORE
+    HOME, ACCOUNTS, INCOME, EXPENSES
 }
 
 @Composable
 fun MainScreen(viewModel: MainViewModel) {
     var currentDate by remember { mutableStateOf(LocalDate.now()) }
     var expenseToEdit by remember { mutableStateOf<Expense?>(null) }
+    var defaultTransactionType by remember { mutableStateOf<com.h2.wellspend.data.TransactionType?>(null) }
     val listState = rememberLazyListState()
     
     // Navigation State
@@ -148,6 +171,7 @@ fun MainScreen(viewModel: MainViewModel) {
     var showTransfers by remember { mutableStateOf(false) }
     var showLoans by remember { mutableStateOf(false) }
     var showCategoryManagement by remember { mutableStateOf(false) }
+    var showAddCategoryDialog by remember { mutableStateOf(false) }
 
     var loanTransactionToEdit by remember { mutableStateOf<Expense?>(null) }
     
@@ -170,6 +194,28 @@ fun MainScreen(viewModel: MainViewModel) {
     val showAccountsOnHomepage by viewModel.showAccountsOnHomepage.collectAsState()
     val allCategories by viewModel.categoryOrder.collectAsState(initial = emptyList())
 
+    // Hoisted States for Sub-screens
+    // Budgets
+    val localBudgetLimits = remember { mutableStateMapOf<Category, String>() }
+    LaunchedEffect(showBudgets, budgets) {
+        if (showBudgets) {
+            // Reset/Init draft logic when opening
+            viewModel.categoryOrder.value.forEach { cat ->
+                val existing = budgets.find { it.category == cat.name }
+                localBudgetLimits[cat] = existing?.limitAmount?.toString() ?: ""
+            }
+        }
+    }
+
+    // Loans
+    var isCreatingLoan by remember { mutableStateOf(false) }
+    var editingLoan by remember { mutableStateOf<com.h2.wellspend.data.Loan?>(null) }
+    var loanForTransaction by remember { mutableStateOf<com.h2.wellspend.data.Loan?>(null) }
+
+    // Monthly Report
+    var showReportCompareDialog by remember { mutableStateOf(false) }
+    var reportComparisonDate by remember { mutableStateOf<java.time.LocalDate?>(null) }
+
     // Track if initial data has loaded (show skeleton until first real data arrives)
     var isDataLoaded by remember { mutableStateOf(false) }
     LaunchedEffect(expenses, accounts) {
@@ -183,16 +229,19 @@ fun MainScreen(viewModel: MainViewModel) {
         isDataLoaded = true
     }
 
-    val canNavigateBack = showAddExpense || showReport || showBudgets || showSettings || showTransfers || showLoans || showCategoryManagement || showAccountInput || loanTransactionToEdit != null || currentScreen != Screen.HOME
+    val canNavigateBack = showAddExpense || showReport || showBudgets || showSettings || showTransfers || showLoans || showCategoryManagement || showAccountInput || loanTransactionToEdit != null || currentScreen != Screen.HOME || (showLoans && (isCreatingLoan || editingLoan != null || loanForTransaction != null))
     androidx.activity.compose.BackHandler(enabled = canNavigateBack) {
         when {
             loanTransactionToEdit != null -> loanTransactionToEdit = null
-            showAddExpense -> showAddExpense = false
+            showAddExpense -> { showAddExpense = false; defaultTransactionType = null }
             showAccountInput -> { showAccountInput = false; accountToEdit = null }
             showReport -> showReport = false
             showBudgets -> showBudgets = false
             showSettings -> showSettings = false
             showTransfers -> showTransfers = false
+            // Handle Loan Sub-screens
+            showLoans && loanForTransaction != null -> loanForTransaction = null
+            showLoans && (isCreatingLoan || editingLoan != null) -> { isCreatingLoan = false; editingLoan = null }
             showLoans -> showLoans = false
             showCategoryManagement -> showCategoryManagement = false
             currentScreen != Screen.HOME -> currentScreen = Screen.HOME
@@ -261,88 +310,220 @@ fun MainScreen(viewModel: MainViewModel) {
         }
     }
 
-    Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
-        bottomBar = {
-            if (!showAddExpense && !showReport && !showBudgets && !showSettings && !showTransfers && !showLoans && !showAccountInput && !showCategoryManagement && loanTransactionToEdit == null) {
-                NavigationBar(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                    tonalElevation = 0.dp
-                ) {
-                    NavigationBarItem(
-                        selected = currentScreen == Screen.HOME,
-                        onClick = { currentScreen = Screen.HOME },
-                        icon = { Icon(Icons.Default.Home, contentDescription = "Home") },
-                        label = { Text("Home") }
-                    )
-                    NavigationBarItem(
-                        selected = currentScreen == Screen.ACCOUNTS,
-                        onClick = { currentScreen = Screen.ACCOUNTS },
-                        icon = { Icon(Icons.Default.AccountBalance, contentDescription = "Accounts") },
-                        label = { Text("Accounts") }
-                    )
-                    NavigationBarItem(
-                        selected = currentScreen == Screen.INCOME,
-                        onClick = { currentScreen = Screen.INCOME },
-                        icon = { Icon(Icons.Default.AttachMoney, contentDescription = "Income") },
-                        label = { Text("Income") }
-                    )
-                    NavigationBarItem(
-                        selected = currentScreen == Screen.EXPENSES,
-                        onClick = { currentScreen = Screen.EXPENSES },
-                        icon = { Icon(Icons.AutoMirrored.Filled.ListIcon, contentDescription = "Expenses") },
-                        label = { Text("Expenses") }
-                    )
-                    NavigationBarItem(
-                        selected = currentScreen == Screen.MORE,
-                        onClick = { currentScreen = Screen.MORE },
-                        icon = { Icon(Icons.Default.MoreHoriz, contentDescription = "More") },
-                        label = { Text("More") }
-                    )
-                }
-            }
-        },
-        floatingActionButton = {
-            if ((currentScreen == Screen.HOME || currentScreen == Screen.EXPENSES || currentScreen == Screen.INCOME) && 
-                !showAddExpense && !showReport && !showBudgets && !showSettings && !showTransfers && !showLoans && !showAccountInput && loanTransactionToEdit == null) {
-                FloatingActionButton(
-                    onClick = { 
-                        expenseToEdit = null
-                        showAddExpense = true
-                    },
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary,
-                    shape = RoundedCornerShape(16.dp)
-                ) {
-                    Icon(Icons.Default.Add, contentDescription = "Add Expense")
-                }
+    val isBottomBarVisible = !showAddExpense && !showReport && !showBudgets && !showSettings && !showTransfers && !showLoans && !showAccountInput && !showCategoryManagement && loanTransactionToEdit == null
+
+    val view = LocalView.current
+    if (!view.isInEditMode) {
+        val window = (view.context as Activity).window
+        val surfaceVariantColor = MaterialTheme.colorScheme.surfaceVariant.toArgb()
+        val backgroundColor = MaterialTheme.colorScheme.background.toArgb()
+        
+        LaunchedEffect(isBottomBarVisible) {
+            if (!isBottomBarVisible) {
+                // Delay to match the exit animation duration so it doesn't flash white while sliding down
+                delay(300)
+                window.navigationBarColor = backgroundColor
+            } else {
+                // Immediate update when showing
+                window.navigationBarColor = surfaceVariantColor
             }
         }
+    }
+
+    // Cache states for exit animations to prevent layout shifts
+    var lastExpenseToEdit by remember { mutableStateOf<Expense?>(null) }
+    if (showAddExpense) lastExpenseToEdit = expenseToEdit
+
+    var lastAccountToEdit by remember { mutableStateOf<Account?>(null) }
+    if (showAccountInput) lastAccountToEdit = accountToEdit
+
+    var lastLoanTransactionToEdit by remember { mutableStateOf<Expense?>(null) }
+    if (loanTransactionToEdit != null) lastLoanTransactionToEdit = loanTransactionToEdit
+
+    var lastLoanForTransaction by remember { mutableStateOf<Loan?>(null) }
+    if (loanForTransaction != null) lastLoanForTransaction = loanForTransaction
+    
+    var lastEditingLoan by remember { mutableStateOf<Loan?>(null) }
+    if (isCreatingLoan || editingLoan != null) lastEditingLoan = editingLoan
+
+
+    Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
+
+
     ) { paddingValues ->
         Box(modifier = Modifier.padding(paddingValues).fillMaxSize()) {
             val targetState = when {
                 showAddExpense -> "OVERLAY_ADD"
                 showAccountInput -> "OVERLAY_ACCOUNT_INPUT"
                 loanTransactionToEdit != null -> "OVERLAY_EDIT_LOAN_TRANSACTION"
+                // Hoisted Loan States
+                loanForTransaction != null -> "OVERLAY_LOANS_TRANSACTION"
+                isCreatingLoan -> "OVERLAY_LOANS_ADD"
+                editingLoan != null -> "OVERLAY_LOANS_EDIT"
+                showLoans -> "OVERLAY_LOANS_LIST"
+                
                 showReport -> "OVERLAY_REPORT"
                 showBudgets -> "OVERLAY_BUDGETS"
                 showSettings -> "OVERLAY_SETTINGS"
                 showTransfers -> "OVERLAY_TRANSFERS"
-                showLoans -> "OVERLAY_LOANS"
                 showCategoryManagement -> "OVERLAY_CATEGORIES"
-                showAccountInput -> "OVERLAY_ACCOUNT_INPUT"
                 else -> currentScreen.name
             }
 
             AnimatedContent(
                 targetState = targetState,
                 transitionSpec = {
-                    (fadeIn(animationSpec = tween(300)) + scaleIn(initialScale = 0.95f, animationSpec = tween(300))) togetherWith
-                    (fadeOut(animationSpec = tween(200)) + scaleOut(targetScale = 0.95f, animationSpec = tween(200))) using
-                    SizeTransform(clip = false)
+                    val isOverlayTarget = targetState.startsWith("OVERLAY_")
+                    val isOverlayInitial = initialState.startsWith("OVERLAY_")
+                    
+                    // Specific Logic for Loan Sub-screens
+                    val isLoanSubScreenTarget = targetState == "OVERLAY_LOANS_ADD" || targetState == "OVERLAY_LOANS_EDIT" || targetState == "OVERLAY_LOANS_TRANSACTION"
+                    val isLoanSubScreenInitial = initialState == "OVERLAY_LOANS_ADD" || initialState == "OVERLAY_LOANS_EDIT" || initialState == "OVERLAY_LOANS_TRANSACTION"
+                    
+                    if (isLoanSubScreenTarget && initialState == "OVERLAY_LOANS_LIST") {
+                         // Push Sub-screen over List
+                         slideInHorizontally(initialOffsetX = { fullWidth -> fullWidth }, animationSpec = tween(300)) togetherWith
+                         fadeOut(animationSpec = tween(200))
+                    } else if (targetState == "OVERLAY_LOANS_LIST" && isLoanSubScreenInitial) {
+                         // Pop Sub-screen
+                         fadeIn(animationSpec = tween(300)) togetherWith
+                         slideOutHorizontally(targetOffsetX = { fullWidth -> fullWidth }, animationSpec = tween(300))
+                    } else if (isOverlayTarget && !isOverlayInitial) {
+                        // Entering an overlay (Push)
+                        slideInHorizontally(initialOffsetX = { fullWidth -> fullWidth }, animationSpec = tween(300)) togetherWith
+                        fadeOut(animationSpec = tween(200)) using SizeTransform(clip = false)
+                    } else if (!isOverlayTarget && isOverlayInitial) {
+                        // Exiting an overlay (Pop)
+                        fadeIn(animationSpec = tween(300)) togetherWith
+                        slideOutHorizontally(targetOffsetX = { fullWidth -> fullWidth }, animationSpec = tween(300)) using SizeTransform(clip = false)
+                    } else {
+                        // Tab changes or Overlay to Overlay (default fade/scale)
+                        (fadeIn(animationSpec = tween(300)) + scaleIn(initialScale = 0.95f, animationSpec = tween(300))) togetherWith
+                        (fadeOut(animationSpec = tween(200)) + scaleOut(targetScale = 0.95f, animationSpec = tween(200))) using SizeTransform(clip = false)
+                    }
                 },
                 label = "MainContentTransition"
             ) { state ->
+                Column(modifier = Modifier.fillMaxSize()) {
+                    val title = when(state) {
+                        "OVERLAY_ADD" -> if(lastExpenseToEdit != null) "Edit Expense" else "Add Expense"
+                        "OVERLAY_REPORT" -> "Monthly Report"
+                        "OVERLAY_BUDGETS" -> "Budgets"
+                        "OVERLAY_SETTINGS" -> "Settings"
+                        "OVERLAY_TRANSFERS" -> "Transfers"
+                        "OVERLAY_LOANS_ADD" -> "New Loan"
+                        "OVERLAY_LOANS_EDIT" -> "Edit Loan"
+                        "OVERLAY_LOANS_TRANSACTION" -> "${lastLoanForTransaction?.name ?: ""} Transaction"
+                        "OVERLAY_LOANS_LIST" -> "Loans"
+                        "OVERLAY_CATEGORIES" -> "Categories"
+                        "OVERLAY_ACCOUNT_INPUT" -> if(lastAccountToEdit != null) "Edit Account" else "Add Account"
+                        "OVERLAY_EDIT_LOAN_TRANSACTION" -> "Edit Loan Transaction"
+                        "HOME" -> "Dashboard"
+                        "ACCOUNTS" -> "Accounts"
+                        "INCOME" -> "Income"
+                        "EXPENSES" -> "Expenses"
+                        else -> "WellSpend"
+                    }
+                    
+                    val isOverlay = state.startsWith("OVERLAY_")
+                    
+                    if (state != "OVERLAY_ADD") {
+                        WellSpendTopAppBar(
+                            title = title,
+                            // Enable back if it's an overlay (except root tabs), OR if we are in a loan sub-screen
+                            canNavigateBack = (isOverlay && state != "HOME" && state != "ACCOUNTS" && state != "INCOME" && state != "EXPENSES") || 
+                                              (state.startsWith("OVERLAY_LOANS_") && state != "OVERLAY_LOANS_LIST"),
+                            onBack = {
+                                when(state) {
+                                    "OVERLAY_EDIT_LOAN_TRANSACTION" -> loanTransactionToEdit = null
+                                    "OVERLAY_ACCOUNT_INPUT" -> { showAccountInput = false; accountToEdit = null }
+                                    "OVERLAY_REPORT" -> showReport = false
+                                    "OVERLAY_BUDGETS" -> showBudgets = false
+                                    "OVERLAY_SETTINGS" -> showSettings = false
+                                    "OVERLAY_TRANSFERS" -> showTransfers = false
+                                    "OVERLAY_LOANS_TRANSACTION" -> loanForTransaction = null
+                                    "OVERLAY_LOANS_ADD", "OVERLAY_LOANS_EDIT" -> {
+                                        isCreatingLoan = false
+                                        editingLoan = null
+                                    }
+                                    "OVERLAY_LOANS_LIST" -> showLoans = false
+                                    "OVERLAY_CATEGORIES" -> showCategoryManagement = false
+                                }
+                            },
+                            actions = {
+                                var showMenu by remember { mutableStateOf(false) }
+                                when(state) {
+                                    "OVERLAY_BUDGETS" -> {
+                                        Button(
+                                            onClick = {
+                                                val newBudgets = localBudgetLimits.mapNotNull { (cat, limitStr) ->
+                                                    val limit = limitStr.toDoubleOrNull()
+                                                    if (limit != null && limit > 0) {
+                                                        com.h2.wellspend.data.Budget(cat.name, limit)
+                                                    } else null
+                                                }
+                                                viewModel.updateBudgets(newBudgets, currency)
+                                                showBudgets = false
+                                            },
+                                            modifier = Modifier.padding(end = 8.dp)
+                                        ) { Text("Save") }
+                                    }
+                                    "OVERLAY_REPORT" -> {
+                                        IconButton(onClick = { showReportCompareDialog = true }) {
+                                            Icon(Icons.AutoMirrored.Filled.CompareArrows, contentDescription = "Compare", tint = MaterialTheme.colorScheme.primary)
+                                        }
+                                        val reportExpenses = remember(expenses, currentDate) {
+                                            expenses.filter {
+                                                val date = java.time.LocalDate.parse(it.date.substring(0, 10))
+                                                date.month == currentDate.month && date.year == currentDate.year
+                                            }
+                                        }
+                                        val localContext = androidx.compose.ui.platform.LocalContext.current
+                                        IconButton(onClick = {
+                                            try {
+                                                 val csvHeader = "Date,Category,Type,Amount,Fee,Description,Recurring\n"
+                                                 val csvData = reportExpenses.joinToString("\n") { "${it.date},${it.category},${it.transactionType},${it.amount},${it.feeAmount},${it.description},${it.isRecurring}" }
+                                                 val csvContent = csvHeader + csvData
+                                                 val fileName = "expenses_${currentDate.format(java.time.format.DateTimeFormatter.ofPattern("MMM_yyyy"))}.csv"
+                                                 val file = java.io.File(localContext.cacheDir, fileName)
+                                                 file.writeText(csvContent)
+                                                 val uri = androidx.core.content.FileProvider.getUriForFile(localContext, "com.h2.wellspend.fileprovider", file)
+                                                 val sendIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                                                     type = "text/csv"
+                                                     putExtra(android.content.Intent.EXTRA_STREAM, uri)
+                                                     addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                                 }
+                                                 localContext.startActivity(android.content.Intent.createChooser(sendIntent, "Export Expenses"))
+                                            } catch(e: Exception) { e.printStackTrace() }
+                                        }) { Icon(Icons.Default.Download, contentDescription = "Export") }
+                                    }
+                                    "OVERLAY_LOANS" -> { /* No Actions */ }
+                                    "OVERLAY_ACCOUNT_INPUT", "OVERLAY_EDIT_LOAN_TRANSACTION" -> { /* No Actions */ }
+                                    else -> {
+                                        // Only show the menu on main root tabs
+                                        if (state == "HOME" || state == "ACCOUNTS" || state == "INCOME" || state == "EXPENSES") {
+                                            IconButton(onClick = { showMenu = true }) { Icon(Icons.Default.MoreVert, "Menu") }
+                                            DropdownMenu(
+                                                expanded = showMenu, 
+                                                onDismissRequest = { showMenu = false },
+                                                modifier = Modifier.width(200.dp)
+                                            ) {
+                                                DropdownMenuItem(text = { Text("Budgets") }, onClick = { showMenu = false; showBudgets = true }, leadingIcon = { Icon(Icons.Default.BarChart, null) })
+                                                DropdownMenuItem(text = { Text("Transfers") }, onClick = { showMenu = false; showTransfers = true }, leadingIcon = { Icon(Icons.AutoMirrored.Filled.CompareArrows, null) })
+                                                DropdownMenuItem(text = { Text("Loans") }, onClick = { showMenu = false; showLoans = true }, leadingIcon = { Icon(Icons.Default.AttachMoney, null) })
+                                                DropdownMenuItem(text = { Text("Categories") }, onClick = { showMenu = false; showCategoryManagement = true }, leadingIcon = { Icon(Icons.AutoMirrored.Filled.Label, null) })
+                                                DropdownMenuItem(text = { Text("Monthly Report") }, onClick = { showMenu = false; showReport = true }, leadingIcon = { Icon(Icons.Default.Description, null) })
+                                                DropdownMenuItem(text = { Text("Settings") }, onClick = { showMenu = false; showSettings = true }, leadingIcon = { Icon(Icons.Default.Settings, null) })
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        )
+                    }
+                    
+                    Box(modifier = Modifier.weight(1f)) {
                 when (state) {
                     "OVERLAY_ADD" -> {
                         val categoryOrder by viewModel.categoryOrder.collectAsState()
@@ -351,11 +532,12 @@ fun MainScreen(viewModel: MainViewModel) {
                             accounts = accounts,
                             accountBalances = balances,
                             categories = categoryOrder,
-                            initialExpense = expenseToEdit,
+                            initialExpense = lastExpenseToEdit, // Use cached
+                            initialTransactionType = defaultTransactionType,
                             onAdd = { amount, desc, cat, date, isRecurring, freq, type, accId, targetAccId, fee, feeName ->
-                                if (expenseToEdit != null) {
+                                if (lastExpenseToEdit != null) {
                                     viewModel.updateExpense(
-                                        id = expenseToEdit!!.id, 
+                                        id = lastExpenseToEdit!!.id, 
                                         amount = amount, 
                                         description = desc, 
                                         category = cat, 
@@ -384,15 +566,15 @@ fun MainScreen(viewModel: MainViewModel) {
                                     )
                                 }
                                 showAddExpense = false
+                                defaultTransactionType = null
                             },
-                            onCancel = { showAddExpense = false },
+                            onCancel = { showAddExpense = false; defaultTransactionType = null },
                             onReorder = { viewModel.updateCategoryOrder(it) },
                             onAddCategory = { viewModel.addCategory(it) }
                         )
                     }
                     "OVERLAY_EDIT_LOAN_TRANSACTION" -> {
-                         // Capture transaction safely - during exit animation, loanTransactionToEdit may be null
-                         val transaction = loanTransactionToEdit
+                         val transaction = lastLoanTransactionToEdit // Use cached
                          if (transaction != null) {
                              val relatedLoan = loans.find { it.id == transaction.loanId }
                              if (relatedLoan != null) {
@@ -400,6 +582,7 @@ fun MainScreen(viewModel: MainViewModel) {
                                     transaction = transaction,
                                     loan = relatedLoan,
                                     accounts = accounts,
+                                    accountBalances = balances,
                                     currency = currency,
                                     onDismiss = { loanTransactionToEdit = null },
                                     onConfirm = { amt, desc, accId, fee, feeName, date ->
@@ -423,7 +606,6 @@ fun MainScreen(viewModel: MainViewModel) {
                                  )
                              }
                          }
-                         // Empty composable during exit animation when transaction is null
                     }
                     "OVERLAY_REPORT" -> {
                         MonthlyReport(
@@ -431,53 +613,89 @@ fun MainScreen(viewModel: MainViewModel) {
                             categories = allCategories,
                             currency = currency,
                             currentDate = currentDate,
-                            onBack = { showReport = false }
+                            onDateChange = { currentDate = it }, // Connected
+                            showCompareDialog = showReportCompareDialog,
+                            onDismissCompareDialog = { showReportCompareDialog = false },
+                            comparisonDate = reportComparisonDate,
+                            onComparisonDateChange = { reportComparisonDate = it }
                         )
                     }
                     "OVERLAY_BUDGETS" -> {
                          val categories by viewModel.categoryOrder.collectAsState()
                          BudgetScreen(
-                            currentBudgets = budgets,
                             categories = categories,
                             currency = currency,
-                            onSave = { newBudgets ->
-                                 viewModel.updateBudgets(newBudgets, currency)
-                            },
-                            onBack = { showBudgets = false }
+                            draftBudgets = localBudgetLimits
                          )
                     }
                     "OVERLAY_TRANSFERS" -> {
                         TransferListScreen(
                             currentDate = currentDate,
                             onDateChange = { currentDate = it },
-                            onReportClick = { showReport = true },
                             expenses = currentMonthTransactions,
                             accounts = accounts,
                             currency = currency,
+
                             onDelete = { viewModel.deleteExpense(it) },
                             onEdit = { 
                                 expenseToEdit = it
                                 showAddExpense = true
-                            },
-                            onBack = { showTransfers = false }
+                            }
                         )
                     }
-                    "OVERLAY_LOANS" -> {
-                        LoanScreen(
-                            loans = loans,
-                            expenses = expenses, // All expenses to calc balance
+                    "OVERLAY_LOANS_TRANSACTION" -> {
+                        val loan = lastLoanForTransaction // Use cached
+                        if (loan != null) {
+                            com.h2.wellspend.ui.components.AddLoanTransactionScreen(
+                                loan = loan,
+                                accounts = accounts,
+                                accountBalances = balances,
+                                currency = currency,
+                                onDismiss = { loanForTransaction = null },
+                                onConfirm = { amount, isPayment, accId, fee, feeName, date ->
+                                    viewModel.addLoanTransaction(loan.id, loan.name, amount, isPayment, accId, loan.type, fee, feeName, date)
+                                    loanForTransaction = null
+                                }
+                            )
+                        } else { Box(Modifier.fillMaxSize()) }
+                    }
+                    "OVERLAY_LOANS_ADD", "OVERLAY_LOANS_EDIT" -> {
+                        com.h2.wellspend.ui.components.LoanInputScreen(
+                            initialLoan = lastEditingLoan, // Use cached
                             accounts = accounts,
                             accountBalances = balances,
                             currency = currency,
-                            onAddLoan = { name, amount, type, desc, accId, fee, feeName, date ->
-                                viewModel.addLoan(name, amount, type, desc, accId, fee, feeName, date)
+                            onSave = { name, amount, type, desc, accId, fee, feeName, date ->
+                                if (lastEditingLoan != null) {
+                                    viewModel.updateLoan(lastEditingLoan!!.copy(name = name, amount = amount, description = desc, type = type))
+                                    editingLoan = null
+                                } else {
+                                    viewModel.addLoan(name, amount, type, desc, accId, fee, feeName, date)
+                                    isCreatingLoan = false
+                                }
                             },
-                            onAddTransaction = { loanId, loanName, amount, isPayment, accId, type, fee, feeName, date ->
-                                viewModel.addLoanTransaction(loanId, loanName, amount, isPayment, accId, type, fee, feeName, date)
-                            },
-                            onUpdateLoan = { viewModel.updateLoan(it) },
+                            onCancel = {
+                                isCreatingLoan = false
+                                editingLoan = null
+                            }
+                        )
+                    }
+                    "OVERLAY_LOANS_LIST" -> {
+                        // Pass empty lambdas for things now handled by MainScreen
+                        LoanScreen(
+                            loans = loans,
+                            expenses = expenses,
+                            accounts = accounts,
+                            currency = currency,
+                            onTransactionClick = { loanForTransaction = it },
+                            onEditLoan = { editingLoan = it },
                             onDeleteLoan = { loan, deleteTransactions -> viewModel.deleteLoan(loan, deleteTransactions) },
-                            onBack = { showLoans = false }
+                            onEditTransaction = { expense -> 
+                                expenseToEdit = expense
+                                showAddExpense = true
+                            },
+                            onDeleteTransaction = { expenseId -> viewModel.deleteExpense(expenseId) },
+                            onAddLoanStart = { isCreatingLoan = true }
                         )
                     }
                     "OVERLAY_SETTINGS" -> {
@@ -548,7 +766,6 @@ fun MainScreen(viewModel: MainViewModel) {
                         DashboardScreen(
                             currentDate = currentDate,
                             onDateChange = { currentDate = it },
-                            onReportClick = { showReport = true },
                             currency = currency,
                             totalBalance = monthEndBalance,
                             totalIncome = totalIncome,
@@ -577,13 +794,10 @@ fun MainScreen(viewModel: MainViewModel) {
                     }
                     "OVERLAY_ACCOUNT_INPUT" -> {
                         com.h2.wellspend.ui.AccountInputScreen(
-                            account = accountToEdit,
-                            currentBalance = if (accountToEdit != null) balances[accountToEdit!!.id] else null,
+                            account = lastAccountToEdit, // Use cached
+                            currentBalance = if (lastAccountToEdit != null) balances[lastAccountToEdit!!.id] else null,
                             currency = currency,
-                            onDismiss = { 
-                                showAccountInput = false 
-                                accountToEdit = null
-                            },
+
                             onSave = { account, adjustment ->
                                 viewModel.updateAccount(account)
                                 if (adjustment != null && adjustment != 0.0) {
@@ -598,25 +812,22 @@ fun MainScreen(viewModel: MainViewModel) {
                     "OVERLAY_CATEGORIES" -> {
                         com.h2.wellspend.ui.components.CategoryManagementScreen(
                             categories = allCategories,
-                            onBack = { showCategoryManagement = false },
                             onAddCategory = { viewModel.addCategory(it) },
                             onUpdateCategory = { viewModel.addCategory(it) }, 
                             onDeleteCategory = { viewModel.deleteCategory(it) },
-                            usedCategoryNames = usedCategoryNames
+                            usedCategoryNames = usedCategoryNames,
+                            showAddDialog = showAddCategoryDialog,
+                            onDismissAddDialog = { showAddCategoryDialog = false }
                         )
                     }
                     "ACCOUNTS" -> {
                         com.h2.wellspend.ui.AccountScreen(
+
                             accounts = accounts,
                             balances = balances,
                             currency = currency,
                             onDeleteAccount = { viewModel.deleteAccount(it) },
-                            isAccountUsed = { id -> expenses.any { it.accountId == id } },
                             onReorder = { viewModel.updateAccountOrder(it) },
-                            onAdjustBalance = { accId, adj -> 
-                                val accName = accounts.find { it.id == accId }?.name ?: "Unknown"
-                                viewModel.addAdjustmentTransaction(accId, accName, adj) 
-                            },
                             onAddAccount = { 
                                 accountToEdit = null
                                 showAccountInput = true 
@@ -631,7 +842,6 @@ fun MainScreen(viewModel: MainViewModel) {
                         IncomeListScreen(
                             currentDate = currentDate,
                             onDateChange = { currentDate = it },
-                            onReportClick = { showReport = true },
                             expenses = currentMonthTransactions,
                             accounts = accounts,
                             loans = loans,
@@ -651,7 +861,6 @@ fun MainScreen(viewModel: MainViewModel) {
                          ExpenseListScreen(
                             currentDate = currentDate,
                             onDateChange = { currentDate = it },
-                            onReportClick = { showReport = true },
                             expenses = currentMonthTransactions,
                             categories = allCategories,
                             accounts = accounts,
@@ -673,16 +882,98 @@ fun MainScreen(viewModel: MainViewModel) {
                         )
                     }
                      "MORE" -> {
-                          MoreScreen(
-                              onReportClick = { showReport = true },
-                              onBudgetsClick = { showBudgets = true },
-                              onSettingsClick = { showSettings = true },
-                              onDataManagementClick = { showSettings = true }, 
-                              onTransfersClick = { showTransfers = true },
-                              onLoansClick = { showLoans = true },
-                              onCategoriesClick = { showCategoryManagement = true }
-                          )
+                          // Deprecated
+                          Box(modifier = Modifier.fillMaxSize())
                      }
+                }
+            }
+                    }
+                }
+
+            // Floating Bottom Bar
+            Box(modifier = Modifier.align(Alignment.BottomCenter)) {
+                 AnimatedVisibility(
+                    visible = isBottomBarVisible,
+                    enter = slideInVertically(animationSpec = tween(300)) { it },
+                    exit = slideOutVertically(animationSpec = tween(300)) { it }
+                ) {
+                    NavigationBar(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                        tonalElevation = 0.dp
+                    ) {
+                        NavigationBarItem(
+                            selected = currentScreen == Screen.HOME,
+                            onClick = { currentScreen = Screen.HOME },
+                            icon = { Icon(Icons.Default.Home, contentDescription = "Home") },
+                            label = { Text("Home") }
+                        )
+                        NavigationBarItem(
+                            selected = currentScreen == Screen.ACCOUNTS,
+                            onClick = { currentScreen = Screen.ACCOUNTS },
+                            icon = { Icon(Icons.Default.AccountBalance, contentDescription = "Accounts") },
+                            label = { Text("Accounts") }
+                        )
+                        NavigationBarItem(
+                            selected = currentScreen == Screen.INCOME,
+                            onClick = { currentScreen = Screen.INCOME },
+                            icon = { Icon(Icons.Default.AttachMoney, contentDescription = "Income") },
+                            label = { Text("Income") }
+                        )
+                        NavigationBarItem(
+                            selected = currentScreen == Screen.EXPENSES,
+                            onClick = { currentScreen = Screen.EXPENSES },
+                            icon = { Icon(Icons.AutoMirrored.Filled.List, contentDescription = "Expenses") },
+                            label = { Text("Expenses") }
+                        )
+                    }
+                }
+            }
+
+
+
+            // Floating Action Buttons (Custom Positioning)
+            Box(modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(bottom = if (isBottomBarVisible) 90.dp else 24.dp, end = 24.dp)
+            ) {
+                if ((currentScreen == Screen.HOME || currentScreen == Screen.EXPENSES || currentScreen == Screen.INCOME || currentScreen == Screen.ACCOUNTS || currentScreen == Screen.ACCOUNTS || showTransfers || showLoans) && 
+                    !showAddExpense && !showReport && !showBudgets && !showSettings && !showAccountInput && loanTransactionToEdit == null && !showCategoryManagement) {
+                        // Logic for deciding which FAB to show
+                        // If standard add expense/transaction
+                        if (!showLoans || (showLoans && !isCreatingLoan && editingLoan == null && loanForTransaction == null)) {
+                             FloatingActionButton(
+                                onClick = { 
+                                    if(showLoans) {
+                                         isCreatingLoan = true
+                                    } else if (showTransfers) {
+                                         // Transfer FAB if needed, though Transfers page usually has its own
+                                         expenseToEdit = null
+                                         defaultTransactionType = com.h2.wellspend.data.TransactionType.TRANSFER
+                                         showAddExpense = true
+                                    } else if (currentScreen == Screen.ACCOUNTS) {
+                                         accountToEdit = null
+                                         showAccountInput = true
+                                    } else if (currentScreen == Screen.INCOME) {
+                                         expenseToEdit = null
+                                         defaultTransactionType = com.h2.wellspend.data.TransactionType.INCOME
+                                         showAddExpense = true
+                                    } else {
+                                        expenseToEdit = null
+                                        defaultTransactionType = com.h2.wellspend.data.TransactionType.EXPENSE
+                                        showAddExpense = true
+                                    }
+                                },
+                                containerColor = MaterialTheme.colorScheme.primary,
+                                contentColor = MaterialTheme.colorScheme.onPrimary,
+                                shape = RoundedCornerShape(16.dp)
+                            ) {
+                                Icon(Icons.Default.Add, contentDescription = "Add")
+                            }
+                        }
+                } else if (showCategoryManagement && !showAddExpense && !showAccountInput && !showReport && !showBudgets && !showSettings && !showLoans) {
+                      FloatingActionButton(onClick = { showAddCategoryDialog = true }) {
+                         Icon(Icons.Default.Add, contentDescription = "Add Category")
+                    }
                 }
             }
 
@@ -691,46 +982,45 @@ fun MainScreen(viewModel: MainViewModel) {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TopBar(
-    currentDate: LocalDate,
-    onDateChange: (LocalDate) -> Unit,
-    onReportClick: () -> Unit
+fun WellSpendTopAppBar(
+    title: String,
+    canNavigateBack: Boolean,
+    onBack: () -> Unit,
+    actions: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit = {}
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(16.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = { onDateChange(currentDate.minusMonths(1)) }) {
-                Icon(Icons.Default.ChevronLeft, contentDescription = "Prev Month", tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
-            }
+    TopAppBar(
+        title = { 
             Text(
-                text = currentDate.format(DateTimeFormatter.ofPattern("MMMM yyyy")),
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-                fontWeight = FontWeight.Bold
-            )
-            IconButton(onClick = { onDateChange(currentDate.plusMonths(1)) }) {
-                Icon(Icons.Default.ChevronRight, contentDescription = "Next Month", tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                title, 
+                style = MaterialTheme.typography.titleLarge.copy(fontSize = 20.sp),
+                fontWeight = FontWeight.Bold 
+            ) 
+        },
+        navigationIcon = {
+            if (canNavigateBack) {
+                IconButton(onClick = onBack) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                }
             }
-        }
-
-        IconButton(onClick = onReportClick) {
-            Icon(Icons.Default.Description, contentDescription = "Report", tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
-        }
-    }
+        },
+        actions = actions,
+        colors = TopAppBarDefaults.topAppBarColors(
+            containerColor = MaterialTheme.colorScheme.background,
+            titleContentColor = MaterialTheme.colorScheme.onBackground
+        )
+    )
 }
+
+// DateSelector moved to ui/components/DateSelector.kt
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun DashboardScreen(
+
     currentDate: LocalDate,
     onDateChange: (LocalDate) -> Unit,
-    onReportClick: () -> Unit,
     currency: String,
     totalBalance: Double,
     totalIncome: Double,
@@ -750,10 +1040,9 @@ fun DashboardScreen(
     categories: List<com.h2.wellspend.data.Category>
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
-        TopBar(
+        DateSelector(
             currentDate = currentDate,
-            onDateChange = onDateChange,
-            onReportClick = onReportClick
+            onDateChange = onDateChange
         )
 
         if (isLoading) {
@@ -788,7 +1077,7 @@ fun DashboardScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(72.dp)
+                        .height(84.dp)
                         .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = shimmerAlpha), RoundedCornerShape(16.dp))
                 )
                 Spacer(modifier = Modifier.height(12.dp))
@@ -796,13 +1085,13 @@ fun DashboardScreen(
                     Box(
                         modifier = Modifier
                             .weight(1f)
-                            .height(72.dp)
+                            .height(84.dp)
                             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = shimmerAlpha), RoundedCornerShape(16.dp))
                     )
                     Box(
                         modifier = Modifier
                             .weight(1f)
-                            .height(72.dp)
+                            .height(84.dp)
                             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = shimmerAlpha), RoundedCornerShape(16.dp))
                     )
                 }
@@ -842,13 +1131,18 @@ fun DashboardScreen(
                             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = shimmerAlpha), RoundedCornerShape(4.dp))
                     )
                 }
-                repeat(5) {
+                repeat(5) { index ->
+                    val shape = when(index) {
+                        0 -> RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 3.dp, bottomEnd = 3.dp)
+                        4 -> RoundedCornerShape(topStart = 3.dp, topEnd = 3.dp, bottomStart = 16.dp, bottomEnd = 16.dp)
+                        else -> RoundedCornerShape(3.dp)
+                    }
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(64.dp)
-                            .padding(vertical = 4.dp)
-                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = shimmerAlpha), RoundedCornerShape(12.dp))
+                            .padding(vertical = 1.dp)
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = shimmerAlpha), shape)
                     )
                 }
             }
@@ -1061,247 +1355,39 @@ fun DashboardScreen(
             } else {
                 items(recentTransactions.size) { index ->
                     val transaction = recentTransactions[index]
-                    val sourceAccountName = allAccounts.find { it.id == transaction.accountId }?.name ?: "No Account"
-                    val targetAccountName = allAccounts.find { it.id == transaction.transferTargetAccountId }?.name
-                    val loanName = if (transaction.loanId != null) {
-                        loans.find { it.id == transaction.loanId }?.name
-                    } else null
                     
-                    val isIncome = transaction.transactionType == com.h2.wellspend.data.TransactionType.INCOME
-                    val isTransfer = transaction.transactionType == com.h2.wellspend.data.TransactionType.TRANSFER
-                    
-                    // Check if this is a balance adjustment (non-editable)
-                    val isBalanceAdjustment = transaction.category == SystemCategory.BalanceAdjustment.name
-                    
-                    // Display text for description: "Category: Description" format
-                    val displayDesc = when {
-                        isTransfer && targetAccountName != null -> "Transfer: $sourceAccountName → $targetAccountName"
-                        isTransfer -> "Transfer: $sourceAccountName → ?"
-                        loanName != null -> transaction.description.ifEmpty { transaction.category }
-                        isBalanceAdjustment -> transaction.description.ifEmpty { transaction.category }
-                        transaction.description.isNotEmpty() -> "${transaction.category}: ${transaction.description}"
-                        else -> transaction.category
+                    val shape = when {
+                        recentTransactions.size == 1 -> RoundedCornerShape(16.dp)
+                        index == 0 -> RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 3.dp, bottomEnd = 3.dp)
+                        index == recentTransactions.lastIndex -> RoundedCornerShape(topStart = 3.dp, topEnd = 3.dp, bottomStart = 16.dp, bottomEnd = 16.dp)
+                        else -> RoundedCornerShape(3.dp)
                     }
                     
-                    val dateStr = try {
-                        val date = LocalDate.parse(transaction.date.take(10))
-                        date.format(DateTimeFormatter.ofPattern("MMM d"))
-                    } catch (e: Exception) { "" }
-                    
-                    // Color coding: Green for income, Red for expense, Blue for transfer
-                    val amountColor = when {
-                        isIncome -> Color(0xFF4CAF50) // Green
-                        isTransfer -> Color(0xFF2196F3) // Blue
-                        else -> Color(0xFFF44336) // Red
-                    }
-                    val amountPrefix = when {
-                        isIncome -> "+"
-                        isTransfer -> "↔"
-                        else -> "-"
+                    val backgroundShape = when {
+                        recentTransactions.size == 1 -> RoundedCornerShape(17.dp)
+                        index == 0 -> RoundedCornerShape(topStart = 17.dp, topEnd = 17.dp, bottomStart = 4.dp, bottomEnd = 4.dp)
+                        index == recentTransactions.lastIndex -> RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp, bottomStart = 17.dp, bottomEnd = 17.dp)
+                        else -> RoundedCornerShape(4.dp)
                     }
                     
-                    // Swipe gesture state
-                    val density = androidx.compose.ui.platform.LocalDensity.current
-                    val actionWidth = 70.dp
-                    val actionWidthPx = with(density) { actionWidth.toPx() }
-                    val offsetX = remember { Animatable(0f) }
-                    val scope = rememberCoroutineScope()
-                    var showDeleteDialog by remember { mutableStateOf(false) }
-                    
-                    // Delete confirmation dialog
-                    if (showDeleteDialog) {
-                        androidx.compose.material3.AlertDialog(
-                            onDismissRequest = { showDeleteDialog = false },
-                            title = { Text("Delete Transaction") },
-                            text = { Text("Are you sure you want to delete this transaction?") },
-                            confirmButton = {
-                                androidx.compose.material3.TextButton(
-                                    onClick = {
-                                        showDeleteDialog = false
-                                        onDelete(transaction.id)
-                                    }
-                                ) {
-                                    Text("Delete", color = MaterialTheme.colorScheme.error)
-                                }
-                            },
-                            dismissButton = {
-                                androidx.compose.material3.TextButton(onClick = { showDeleteDialog = false }) {
-                                    Text("Cancel")
-                                }
-                            }
-                        )
-                    }
-                    
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 4.dp)
-                            .height(IntrinsicSize.Min)
-                    ) {
-                        // Background Actions
-                        Box(modifier = Modifier.matchParentSize()) {
-                            // Left Action (Edit)
-                            if (!isBalanceAdjustment) {
-                                Box(
-                                    modifier = Modifier
-                                        .align(Alignment.CenterStart)
-                                        .width(actionWidth + 24.dp)
-                                        .fillMaxHeight()
-                                        .clip(RoundedCornerShape(topStart = 12.dp, bottomStart = 12.dp))
-                                        .background(MaterialTheme.colorScheme.primary)
-                                        .clickable { onEdit(transaction) },
-                                    contentAlignment = Alignment.CenterStart
-                                ) {
-                                    Box(modifier = Modifier.width(actionWidth), contentAlignment = Alignment.Center) {
-                                        Icon(
-                                            imageVector = Icons.Default.Edit,
-                                            contentDescription = "Edit",
-                                            tint = MaterialTheme.colorScheme.onPrimary
-                                        )
-                                    }
-                                }
-                            }
-                            
-                            // Right Action (Delete)
-                            Box(
-                                modifier = Modifier
-                                    .align(Alignment.CenterEnd)
-                                    .width(actionWidth + 24.dp)
-                                    .fillMaxHeight()
-                                    .clip(RoundedCornerShape(topEnd = 12.dp, bottomEnd = 12.dp))
-                                    .background(MaterialTheme.colorScheme.error)
-                                    .clickable { showDeleteDialog = true },
-                                contentAlignment = Alignment.CenterEnd
-                            ) {
-                                Box(modifier = Modifier.width(actionWidth), contentAlignment = Alignment.Center) {
-                                    Icon(
-                                        imageVector = Icons.Default.Delete,
-                                        contentDescription = "Delete",
-                                        tint = MaterialTheme.colorScheme.onError
-                                    )
-                                }
-                            }
-                        }
-                        
-                            // Foreground Content (Swipeable)
-                            val context = androidx.compose.ui.platform.LocalContext.current
-                            Row(
-                                modifier = Modifier
-                                    .offset { IntOffset(offsetX.value.roundToInt(), 0) }
-                                    .draggable(
-                                        orientation = Orientation.Horizontal,
-                                        state = rememberDraggableState { delta ->
-                                            scope.launch {
-                                                val minOffset = -actionWidthPx
-                                                val maxOffset = if (isBalanceAdjustment) 0f else actionWidthPx
-                                                val newValue = (offsetX.value + delta).coerceIn(minOffset, maxOffset)
-                                                offsetX.snapTo(newValue)
-                                            }
-                                        },
-                                        onDragStopped = {
-                                            val targetOffset = if (offsetX.value > actionWidthPx / 2) {
-                                                actionWidthPx
-                                            } else if (offsetX.value < -actionWidthPx / 2) {
-                                                -actionWidthPx
-                                            } else {
-                                                0f
-                                            }
-                                            scope.launch { offsetX.animateTo(targetOffset) }
-                                        }
-                                    )
-                                    .fillMaxWidth()
-                                    .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(12.dp))
-                                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(12.dp))
-                                    .combinedClickable(
-                                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                                        indication = null,
-                                        onClick = {
-                                            scope.launch {
-                                                com.h2.wellspend.ui.performWiggle(offsetX, actionWidthPx, context)
-                                            }
-                                        },
-                                        onLongClick = {
-                                            scope.launch {
-                                                com.h2.wellspend.ui.performWiggle(offsetX, actionWidthPx, context)
-                                            }
-                                        }
-                                    )
-                                    .padding(12.dp),
-                                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                // Transaction Icon
-                                val transactionIcon = when {
-                                    isIncome -> Icons.Default.AttachMoney
-                                    isTransfer -> Icons.AutoMirrored.Filled.CompareArrows
-                                    isBalanceAdjustment -> Icons.Default.Settings
-                                    else -> com.h2.wellspend.ui.getIconByName(transaction.category)
-                                }
-                                
-                                val iconTint = when {
-                                    isIncome -> Color(0xFF4CAF50)
-                                    isTransfer -> Color(0xFF2196F3)
-                                    isBalanceAdjustment -> MaterialTheme.colorScheme.onSurfaceVariant
-                                    else -> {
-                                        val categoryObj = categories.find { it.name == transaction.category }
-                                        if (categoryObj != null) Color(categoryObj.color) else MaterialTheme.colorScheme.primary
-                                    }
-                                }
+                    val paddingModifier = Modifier.padding(
+                        horizontal = 16.dp, 
+                        vertical = 1.dp
+                    )
 
-                                Box(
-                                    modifier = Modifier
-                                        .size(40.dp)
-                                        .clip(CircleShape)
-                                        .background(iconTint.copy(alpha = 0.15f)),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = transactionIcon,
-                                        contentDescription = null,
-                                        tint = iconTint,
-                                        modifier = Modifier.size(24.dp)
-                                    )
-                                }
+                    com.h2.wellspend.ui.components.TransactionItem(
+                        transaction = transaction,
+                        accounts = allAccounts,
+                        loans = loans,
+                        categories = categories,
+                        currency = currency,
+                        onEdit = onEdit,
+                        onDelete = onDelete,
+                        modifier = paddingModifier,
+                        shape = shape,
+                        backgroundShape = backgroundShape
+                    )
 
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    displayDesc,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = FontWeight.Medium,
-                                    maxLines = 1,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                                Row(
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    if (!isTransfer) {
-                                        Text(
-                                            sourceAccountName,
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                        Text(
-                                            "•",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-                                    Text(
-                                        dateStr,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                            }
-                            Text(
-                                "$amountPrefix$currency${String.format("%.2f", transaction.amount)}",
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = amountColor
-                            )
-                        }
-                    }
                 }
             }
             
@@ -1331,7 +1417,6 @@ fun DashboardScreen(
 fun ExpenseListScreen(
     currentDate: LocalDate,
     onDateChange: (LocalDate) -> Unit,
-    onReportClick: () -> Unit,
     expenses: List<com.h2.wellspend.data.Expense>,
     categories: List<com.h2.wellspend.data.Category>,
     accounts: List<com.h2.wellspend.data.Account>,
@@ -1345,10 +1430,9 @@ fun ExpenseListScreen(
     budgets: List<Budget>
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
-        TopBar(
+        DateSelector(
             currentDate = currentDate,
-            onDateChange = onDateChange,
-            onReportClick = onReportClick
+            onDateChange = onDateChange
         )
         
         // Show Expenses ONLY (Transfers -> More > Transfers, Income -> Bottom Tab)
@@ -1384,31 +1468,16 @@ fun ExpenseListScreen(
 fun TransferListScreen(
     currentDate: LocalDate,
     onDateChange: (LocalDate) -> Unit,
-    onReportClick: () -> Unit,
     expenses: List<com.h2.wellspend.data.Expense>,
     accounts: List<com.h2.wellspend.data.Account>,
     currency: String,
     onDelete: (String) -> Unit,
-    onEdit: (Expense) -> Unit,
-    onBack: () -> Unit
+    onEdit: (Expense) -> Unit
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
-        TopAppBar(
-            title = { Text("Transfers", fontWeight = FontWeight.Bold) },
-            navigationIcon = {
-                IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                }
-            },
-            colors = TopAppBarDefaults.topAppBarColors(
-                containerColor = MaterialTheme.colorScheme.background,
-                titleContentColor = MaterialTheme.colorScheme.onBackground
-            )
-        )
-        TopBar(
+        DateSelector(
             currentDate = currentDate,
-            onDateChange = onDateChange,
-            onReportClick = onReportClick
+            onDateChange = onDateChange
         )
         
         // Filter only Transfers
@@ -1429,7 +1498,6 @@ fun TransferListScreen(
 fun IncomeListScreen(
     currentDate: LocalDate,
     onDateChange: (LocalDate) -> Unit,
-    onReportClick: () -> Unit,
     expenses: List<com.h2.wellspend.data.Expense>,
     accounts: List<com.h2.wellspend.data.Account>,
     loans: List<com.h2.wellspend.data.Loan>,
@@ -1438,10 +1506,9 @@ fun IncomeListScreen(
     onEdit: (Expense) -> Unit
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
-        TopBar(
+        DateSelector(
             currentDate = currentDate,
-            onDateChange = onDateChange,
-            onReportClick = onReportClick
+            onDateChange = onDateChange
         )
         
         // Filter only Incomes
