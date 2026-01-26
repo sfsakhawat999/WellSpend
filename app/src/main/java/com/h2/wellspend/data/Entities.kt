@@ -45,7 +45,8 @@ data class Expense(
     val feeConfigName: String? = null,
     
     // Loan Support
-    val loanId: String? = null
+    val loanId: String? = null,
+    val note: String? = null
 )
 
 @Keep

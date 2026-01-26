@@ -534,7 +534,7 @@ fun MainScreen(viewModel: MainViewModel) {
                             categories = categoryOrder,
                             initialExpense = lastExpenseToEdit, // Use cached
                             initialTransactionType = defaultTransactionType,
-                            onAdd = { amount, desc, cat, date, isRecurring, freq, type, accId, targetAccId, fee, feeName ->
+                            onAdd = { amount, desc, cat, date, isRecurring, freq, type, accId, targetAccId, fee, feeName, note ->
                                 if (lastExpenseToEdit != null) {
                                     viewModel.updateExpense(
                                         id = lastExpenseToEdit!!.id, 
@@ -548,7 +548,8 @@ fun MainScreen(viewModel: MainViewModel) {
                                         accountId = accId,
                                         targetAccountId = targetAccId,
                                         feeAmount = fee,
-                                        feeConfigName = feeName
+                                        feeConfigName = feeName,
+                                        note = note
                                     )
                                 } else {
                                     viewModel.addExpense(
@@ -562,7 +563,8 @@ fun MainScreen(viewModel: MainViewModel) {
                                         accountId = accId,
                                         targetAccountId = targetAccId,
                                         feeAmount = fee,
-                                        feeConfigName = feeName
+                                        feeConfigName = feeName,
+                                        note = note
                                     )
                                 }
                                 showAddExpense = false

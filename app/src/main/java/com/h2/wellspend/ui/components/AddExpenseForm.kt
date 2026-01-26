@@ -109,7 +109,7 @@ fun AddExpenseForm(
     accounts: List<com.h2.wellspend.data.Account>,
     accountBalances: Map<String, Double>,
     categories: List<Category>,
-    onAdd: (Double, String, Category?, String, Boolean, RecurringFrequency, com.h2.wellspend.data.TransactionType, String?, String?, Double, String?) -> Unit,
+    onAdd: (Double, String, Category?, String, Boolean, RecurringFrequency, com.h2.wellspend.data.TransactionType, String?, String?, Double, String?, String?) -> Unit,
     onCancel: () -> Unit,
     onReorder: (List<Category>) -> Unit,
     onAddCategory: (Category) -> Unit,
@@ -118,6 +118,7 @@ fun AddExpenseForm(
 ) {
     var amount by remember { mutableStateOf(initialExpense?.amount?.let { String.format("%.2f", it).trimEnd('0').trimEnd('.') } ?: "") }
     var description by remember { mutableStateOf(initialExpense?.description ?: "") }
+    var note by remember { mutableStateOf(initialExpense?.note ?: "") }
     var category by remember { 
         mutableStateOf(
             categories.find { it.name == initialExpense?.category } 
@@ -465,6 +466,25 @@ fun AddExpenseForm(
             )
             Spacer(modifier = Modifier.height(24.dp))
 
+            // Note
+            OutlinedTextField(
+                value = note,
+                onValueChange = { if (it.length <= 300) note = it },
+                label = { Text("Note") },
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth(),
+                minLines = 3,
+                maxLines = 5,
+                supportingText = {
+                    Text(
+                        text = "${note.length}/300",
+                        modifier = Modifier.fillMaxWidth(),
+                        textAlign = TextAlign.End
+                    )
+                }
+            )
+            Spacer(modifier = Modifier.height(24.dp))
+
             if (transactionType == com.h2.wellspend.data.TransactionType.EXPENSE) {
                 // Category Selection
                 CategoryGrid(
@@ -499,7 +519,7 @@ fun AddExpenseForm(
                         onAdd(amountVal, description,
                             finalCategory,
                             date, false, frequency,
-                            transactionType, accountId, targetAccountId, feeVal, selectedFeeConfigName)
+                            transactionType, accountId, targetAccountId, feeVal, selectedFeeConfigName, note)
                     }
                 },
                 enabled = amount.isNotEmpty() && accountId != null && (transactionType != com.h2.wellspend.data.TransactionType.TRANSFER || targetAccountId != null),

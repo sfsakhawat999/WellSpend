@@ -317,8 +317,10 @@ class MainViewModel(
         transactionType: com.h2.wellspend.data.TransactionType,
         accountId: String?,
         targetAccountId: String?,
+
         feeAmount: Double,
-        feeConfigName: String?
+        feeConfigName: String?,
+        note: String? = null
     ) {
         viewModelScope.launch {
             val categoryName = category?.name ?: SystemCategory.Others.name
@@ -333,7 +335,8 @@ class MainViewModel(
                 accountId = accountId,
                 transferTargetAccountId = targetAccountId,
                 feeAmount = feeAmount,
-                feeConfigName = feeConfigName
+                feeConfigName = feeConfigName,
+                note = note
             )
             repository.addExpense(expense)
 
@@ -370,8 +373,10 @@ class MainViewModel(
         accountId: String?,
         targetAccountId: String?,
         feeAmount: Double,
+
         feeConfigName: String?,
-        loanId: String? = null
+        loanId: String? = null,
+        note: String? = null
     ) {
         viewModelScope.launch {
             val categoryName = category?.name ?: SystemCategory.Others.name
@@ -388,7 +393,8 @@ class MainViewModel(
                 transferTargetAccountId = targetAccountId,
                 feeAmount = feeAmount,
                 feeConfigName = feeConfigName,
-                loanId = loanId
+                loanId = loanId,
+                note = note
             )
             repository.addExpense(expense) // Room's Insert(onConflict = REPLACE) handles update
 
@@ -711,7 +717,8 @@ private data class ImportExpense(
     val transferTargetAccountId: String? = null,
     val feeAmount: Double? = null,
     val feeConfigName: String? = null,
-    val loanId: String? = null
+    val loanId: String? = null,
+    val note: String? = null
 ) {
     fun toExpense(): Expense {
         return Expense(
@@ -727,7 +734,8 @@ private data class ImportExpense(
             transferTargetAccountId = transferTargetAccountId,
             feeAmount = feeAmount ?: 0.0,
             feeConfigName = feeConfigName,
-            loanId = loanId
+            loanId = loanId,
+            note = note
         )
     }
 }
