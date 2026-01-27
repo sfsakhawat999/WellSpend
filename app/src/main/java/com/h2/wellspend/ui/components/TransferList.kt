@@ -263,7 +263,7 @@ fun TransferItem(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = transfer.description.ifEmpty { "Transfer" },
+                            text = transfer.title.ifEmpty { "Transfer" },
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.onSurface

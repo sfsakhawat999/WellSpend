@@ -104,7 +104,7 @@ fun ExpenseList(
                         id = "fee_${expense.id}",
                         amount = expense.feeAmount,
                         category = SystemCategory.TransactionFee.name,
-                        description = "Fee for ${expense.description}",
+                        title = "Fee for ${expense.title}",
                         feeAmount = 0.0, // Virtual item has no fee on itself
                         transactionType = com.h2.wellspend.data.TransactionType.EXPENSE // Fees are always Expenses
                     )
@@ -471,7 +471,7 @@ fun ExpenseItem(
     val isBalanceAdjustment = expense.category == SystemCategory.BalanceAdjustment.name
     
     // Check if this is an initial loan transaction (non-editable/deletable)
-    val isInitialLoanTransaction = expense.loanId != null && expense.description.startsWith("New Loan:")
+    val isInitialLoanTransaction = expense.loanId != null && expense.title.startsWith("New Loan:")
     
     // Combine flags for actions that should be disabled
     val isNonEditable = isBalanceAdjustment || isInitialLoanTransaction
@@ -635,7 +635,7 @@ fun ExpenseItem(
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = expense.description.ifEmpty { "No description" },
+                        text = expense.title.ifEmpty { "No title" },
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurface,
                         fontWeight = FontWeight.SemiBold

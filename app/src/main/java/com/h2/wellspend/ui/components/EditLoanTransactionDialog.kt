@@ -75,11 +75,12 @@ fun EditLoanTransactionScreen(
     accountBalances: Map<String, Double>, // Added
     currency: String,
     onDismiss: () -> Unit,
-    onConfirm: (Double, String, String?, Double, String?, String) -> Unit // amount, desc, accId, fee, feeConfigName, date
+    onConfirm: (Double, String, String?, Double, String?, String, String?) -> Unit // amount, desc, accId, fee, feeConfigName, date, note
 ) {
     // BackHandler(onBack = onDismiss) // Handled by MainScreen
     var amount by remember { mutableStateOf(String.format("%.2f", transaction.amount).trimEnd('0').trimEnd('.')) }
-    var description by remember { mutableStateOf(transaction.description) }
+    var textDescription by remember { mutableStateOf(transaction.title) }
+    var note by remember { mutableStateOf(transaction.note ?: "") }
     var selectedAccountId by remember { mutableStateOf(transaction.accountId) }
     
     // Fee State
@@ -227,9 +228,10 @@ fun EditLoanTransactionScreen(
             }
                 
                 OutlinedTextField(
-                    value = description, 
-                    onValueChange = { description = it }, 
-                    label = { Text("Description") },
+                    value = textDescription, 
+                    onValueChange = { textDescription = it }, 
+                    label = { Text("Title") },
+                    singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
                 
@@ -280,7 +282,25 @@ fun EditLoanTransactionScreen(
                         }
                     )
                 }
-                
+
+                // Note
+                OutlinedTextField(
+                    value = note,
+                    onValueChange = { if (it.length <= 300) note = it },
+                    label = { Text("Note") },
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 3,
+                    maxLines = 5,
+                    supportingText = {
+                        Text(
+                            text = "${note.length}/300",
+                            modifier = Modifier.fillMaxWidth(),
+                            textAlign = TextAlign.End
+                        )
+                    }
+                )
+
                 Spacer(modifier = Modifier.height(16.dp))
             }
 
@@ -296,7 +316,7 @@ fun EditLoanTransactionScreen(
                      if (amt != null) {
                          val fee = feeAmount.toDoubleOrNull() ?: 0.0
                          val config = if(isCustomFee) "Custom" else selectedFeeConfigName
-                         onConfirm(amt, description, selectedAccountId, fee, config, date)
+                         onConfirm(amt, textDescription, selectedAccountId, fee, config, date, note)
                      }
                 },
                 enabled = amount.isNotEmpty() && amount.toDoubleOrNull() != null && selectedAccountId != null,

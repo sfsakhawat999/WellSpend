@@ -32,10 +32,10 @@ data class Expense(
     @PrimaryKey val id: String = UUID.randomUUID().toString(),
     val amount: Double,
     val category: String, // Changed from Category enum to String
-    val description: String,
+    val title: String,
     val date: String, // ISO String
     val timestamp: Long,
-    val isRecurring: Boolean = false,
+    // isRecurring removed as it's handled by recurring_configs table now
     
     // New fields for Account & Transaction support
     val transactionType: TransactionType = TransactionType.EXPENSE,
@@ -45,7 +45,8 @@ data class Expense(
     val feeConfigName: String? = null,
     
     // Loan Support
-    val loanId: String? = null
+    val loanId: String? = null,
+    val note: String? = null
 )
 
 @Keep
@@ -82,7 +83,8 @@ data class RecurringConfig(
     @PrimaryKey val id: String = UUID.randomUUID().toString(),
     val amount: Double,
     val category: String, // Changed from Category enum to String
-    val description: String,
+    val title: String,
+    val note: String? = null,
     val frequency: RecurringFrequency,
     val nextDueDate: String, // ISO String
     

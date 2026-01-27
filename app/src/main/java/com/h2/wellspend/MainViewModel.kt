@@ -31,11 +31,69 @@ class MainViewModel(
     initialOnboardingCompleted: Boolean = false
 ) : ViewModel() {
 
+
     val expenses = repository.expenses.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     val budgets = repository.budgets.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     val recurringConfigs = repository.recurringConfigs.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     val accounts = repository.accounts.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     val loans = repository.loans.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    // Search State
+    private val _searchQuery = MutableStateFlow("")
+    val searchQuery = _searchQuery.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "")
+
+    data class SearchFilter(
+        val type: com.h2.wellspend.data.TransactionType? = null, // null = All
+        val startDate: LocalDate? = null,
+        val endDate: LocalDate? = null
+    )
+    
+    private val _searchFilter = MutableStateFlow(SearchFilter())
+    val searchFilter = _searchFilter.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), SearchFilter())
+
+    val searchResults: StateFlow<List<Expense>> = combine(
+        expenses,
+        _searchQuery,
+        _searchFilter
+    ) { allExpenses, query, filter ->
+        if (query.isBlank() && filter.type == null && filter.startDate == null && filter.endDate == null) {
+            emptyList()
+        } else {
+            allExpenses.filter { expense ->
+                // Query Match
+                val queryMatch = if (query.isBlank()) true else {
+                    expense.title.contains(query, ignoreCase = true) ||
+                    (expense.note?.contains(query, ignoreCase = true) == true) ||
+                    (expense.amount.toInt().toString().contains(query))
+                }
+                
+                // Type Match
+                val typeMatch = filter.type == null || expense.transactionType == filter.type
+                
+                // Date Match
+                val dateMatch = try {
+                    val expDate = LocalDate.parse(expense.date.take(10))
+                    val startMatch = filter.startDate?.let { !expDate.isBefore(it) } ?: true
+                    val endMatch = filter.endDate?.let { !expDate.isAfter(it) } ?: true
+                    startMatch && endMatch
+                } catch (e: Exception) {
+                    true // If date parse fails, include it (or exclude, depending on policy. Including is safer)
+                }
+                
+                queryMatch && typeMatch && dateMatch
+            }.sortedByDescending { it.date }
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    fun updateSearchQuery(query: String) {
+        _searchQuery.value = query
+    }
+    
+    fun updateSearchFilter(filter: SearchFilter) {
+        _searchFilter.value = filter
+    }
+
+
 
 // ... (existing code) ...
 
@@ -74,7 +132,7 @@ class MainViewModel(
 
             val expense = Expense(
                 amount = amount,
-                description = "New Loan: $name",
+                title = "New Loan: $name",
                 category = SystemCategory.Loan.name,
                 date = date.atStartOfDay().toString(),
                 timestamp = System.currentTimeMillis(),
@@ -112,7 +170,8 @@ class MainViewModel(
         loanType: com.h2.wellspend.data.LoanType,
         feeAmount: Double,
         feeConfigName: String?,
-        date: java.time.LocalDate
+        date: java.time.LocalDate,
+        note: String? = null
     ) {
         viewModelScope.launch {
             try {
@@ -134,7 +193,7 @@ class MainViewModel(
 
                 val expense = Expense(
                     amount = amount,
-                    description = desc,
+                    title = desc,
                     category = SystemCategory.Loan.name,
                     date = date.atStartOfDay().toString(),
                     timestamp = System.currentTimeMillis(),
@@ -142,7 +201,8 @@ class MainViewModel(
                     accountId = accountId,
                     loanId = loanId,
                     feeAmount = feeAmount,
-                    feeConfigName = feeConfigName
+                    feeConfigName = feeConfigName,
+                    note = note
                 )
                 repository.addExpense(expense)
             } catch (e: Exception) {
@@ -164,7 +224,7 @@ class MainViewModel(
             } else {
                 // Just unlink transactions (orphaned history)
                 val expensesToUpdate = linkedExpenses.map { 
-                    it.copy(loanId = null, description = "${it.description} (Deleted Loan: ${loan.name})") 
+                    it.copy(loanId = null, title = "${it.title} (Deleted Loan: ${loan.name})") 
                 }
                 
                 if (expensesToUpdate.isNotEmpty()) {
@@ -276,10 +336,10 @@ class MainViewModel(
                             id = UUID.randomUUID().toString(),
                             amount = config.amount,
                             category = config.category,
-                            description = "${config.description} (Recurring)",
+                            title = "${config.title} (Recurring)",
                             date = nextDate.atStartOfDay().toString(), // ISO-ish
                             timestamp = System.currentTimeMillis(),
-                            isRecurring = true,
+                            // isRecurring removed
                             transactionType = config.transactionType,
                             accountId = config.accountId,
                             transferTargetAccountId = config.transferTargetAccountId,
@@ -309,7 +369,7 @@ class MainViewModel(
 
     fun addExpense(
         amount: Double, 
-        description: String, 
+        title: String, 
         category: Category?, 
         date: String, 
         isRecurring: Boolean, 
@@ -317,23 +377,26 @@ class MainViewModel(
         transactionType: com.h2.wellspend.data.TransactionType,
         accountId: String?,
         targetAccountId: String?,
+
         feeAmount: Double,
-        feeConfigName: String?
+        feeConfigName: String?,
+        note: String? = null
     ) {
         viewModelScope.launch {
             val categoryName = category?.name ?: SystemCategory.Others.name
             val expense = Expense(
                 amount = amount,
-                description = description,
+                title = title,
                 category = categoryName,
                 date = date, // Should be ISO string
                 timestamp = System.currentTimeMillis(),
-                isRecurring = false, // The manual entry itself
+                // isRecurring removed
                 transactionType = transactionType,
                 accountId = accountId,
                 transferTargetAccountId = targetAccountId,
                 feeAmount = feeAmount,
-                feeConfigName = feeConfigName
+                feeConfigName = feeConfigName,
+                note = note
             )
             repository.addExpense(expense)
 
@@ -344,7 +407,8 @@ class MainViewModel(
                 val config = RecurringConfig(
                     amount = amount,
                     category = categoryName,
-                    description = description,
+                    title = title,
+                    note = note,
                     frequency = frequency,
                     nextDueDate = nextDate.toString(),
                     transactionType = transactionType,
@@ -361,7 +425,7 @@ class MainViewModel(
     fun updateExpense(
         id: String, 
         amount: Double, 
-        description: String, 
+        title: String, 
         category: Category?, 
         date: String, 
         isRecurring: Boolean, 
@@ -370,25 +434,28 @@ class MainViewModel(
         accountId: String?,
         targetAccountId: String?,
         feeAmount: Double,
+
         feeConfigName: String?,
-        loanId: String? = null
+        loanId: String? = null,
+        note: String? = null
     ) {
         viewModelScope.launch {
             val categoryName = category?.name ?: SystemCategory.Others.name
             val expense = Expense(
                 id = id,
                 amount = amount,
-                description = description,
+                title = title,
                 category = categoryName,
                 date = date,
                 timestamp = System.currentTimeMillis(), 
-                isRecurring = false,
+                // isRecurring removed
                 transactionType = transactionType,
                 accountId = accountId,
                 transferTargetAccountId = targetAccountId,
                 feeAmount = feeAmount,
                 feeConfigName = feeConfigName,
-                loanId = loanId
+                loanId = loanId,
+                note = note
             )
             repository.addExpense(expense) // Room's Insert(onConflict = REPLACE) handles update
 
@@ -399,7 +466,8 @@ class MainViewModel(
                 val config = RecurringConfig(
                     amount = amount,
                     category = categoryName,
-                    description = description,
+                    title = title,
+                    note = note,
                     frequency = frequency,
                     nextDueDate = nextDate.toString(),
                     transactionType = transactionType,
@@ -416,6 +484,19 @@ class MainViewModel(
     fun deleteExpense(id: String) {
         viewModelScope.launch {
             repository.deleteExpense(id)
+        }
+    }
+
+    // Recurring Config Methods
+    fun updateRecurringConfig(config: RecurringConfig) {
+        viewModelScope.launch {
+            repository.addRecurringConfig(config) // Room REPLACE handles update
+        }
+    }
+
+    fun deleteRecurringConfig(id: String) {
+        viewModelScope.launch {
+            repository.deleteRecurringConfig(id)
         }
     }
 
@@ -501,11 +582,11 @@ class MainViewModel(
             
             val expense = Expense(
                 amount = amount,
-                description = "Balance Adjustment: $accountName",
+                title = "Balance Adjustment: $accountName",
                 category = SystemCategory.BalanceAdjustment.name,
                 date = LocalDate.now().atStartOfDay().toString(),
                 timestamp = System.currentTimeMillis(),
-                isRecurring = false,
+                // isRecurring removed
                 transactionType = type,
                 accountId = accountId,
                 feeAmount = 0.0
@@ -702,32 +783,35 @@ private data class ImportExpense(
     val id: String = UUID.randomUUID().toString(),
     val amount: Double,
     val category: String,
-    val description: String,
+    val title: String? = null, // New field name
+    val description: String? = null, // Legacy field name for backward compatibility
     val date: String,
     val timestamp: Long,
-    val isRecurring: Boolean = false,
+    // isRecurring removed
     val transactionType: com.h2.wellspend.data.TransactionType? = null,
     val accountId: String? = null,
     val transferTargetAccountId: String? = null,
     val feeAmount: Double? = null,
     val feeConfigName: String? = null,
-    val loanId: String? = null
+    val loanId: String? = null,
+    val note: String? = null
 ) {
     fun toExpense(): Expense {
         return Expense(
             id = id,
             amount = amount,
             category = category,
-            description = description,
+            title = title ?: description ?: "", // Use title if available, fallback to description
             date = date,
             timestamp = timestamp,
-            isRecurring = isRecurring,
+            // isRecurring removed
             transactionType = transactionType ?: com.h2.wellspend.data.TransactionType.EXPENSE,
             accountId = accountId,
             transferTargetAccountId = transferTargetAccountId,
             feeAmount = feeAmount ?: 0.0,
             feeConfigName = feeConfigName,
-            loanId = loanId
+            loanId = loanId,
+            note = note
         )
     }
 }
@@ -737,7 +821,9 @@ private data class ImportRecurringConfig(
     val id: String = UUID.randomUUID().toString(),
     val amount: Double,
     val category: String,
-    val description: String,
+    val title: String? = null,
+    val description: String? = null,
+    val note: String? = null,
     val frequency: RecurringFrequency,
     val nextDueDate: String,
     val transactionType: com.h2.wellspend.data.TransactionType? = null,
@@ -751,7 +837,8 @@ private data class ImportRecurringConfig(
             id = id,
             amount = amount,
             category = category,
-            description = description,
+            title = title ?: description ?: "",
+            note = note,
             frequency = frequency,
             nextDueDate = nextDueDate,
             transactionType = transactionType ?: com.h2.wellspend.data.TransactionType.EXPENSE,

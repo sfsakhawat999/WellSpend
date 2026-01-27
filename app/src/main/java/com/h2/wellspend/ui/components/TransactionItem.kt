@@ -89,7 +89,7 @@ fun TransactionItem(
     
     // Check if this is an initial loan transaction (non-editable/deletable)
     // These are the automatic transactions created when a loan is created
-    val isInitialLoanTransaction = transaction.loanId != null && transaction.description.startsWith("New Loan:")
+    val isInitialLoanTransaction = transaction.loanId != null && transaction.title.startsWith("New Loan:")
     
     // Combine flags for actions that should be disabled
     val isNonEditable = isBalanceAdjustment || isInitialLoanTransaction
@@ -98,9 +98,9 @@ fun TransactionItem(
     val displayDesc = when {
         isTransfer && targetAccountName != null -> "Transfer: $sourceAccountName → $targetAccountName"
         isTransfer -> "Transfer: $sourceAccountName → ?"
-        loanName != null -> transaction.description.ifEmpty { transaction.category }
-        isBalanceAdjustment -> transaction.description.ifEmpty { transaction.category }
-        transaction.description.isNotEmpty() -> "${transaction.category}: ${transaction.description}"
+        loanName != null -> transaction.title.ifEmpty { transaction.category }
+        isBalanceAdjustment -> transaction.title.ifEmpty { transaction.category }
+        transaction.title.isNotEmpty() -> "${transaction.category}: ${transaction.title}"
         else -> transaction.category
     }
     

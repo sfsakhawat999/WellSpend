@@ -60,12 +60,17 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.automirrored.filled.Label
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material.icons.filled.Repeat
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -128,9 +133,16 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material.icons.filled.MoreVert
 import com.h2.wellspend.ui.components.TransactionItem
+import com.h2.wellspend.ui.components.SearchScreen
+import com.h2.wellspend.ui.components.SearchFilterDialog
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 
 
 import com.h2.wellspend.ui.components.LoanScreen
+import com.h2.wellspend.ui.components.RecurringConfigScreen
 import com.h2.wellspend.data.Budget
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.foundation.gestures.Orientation
@@ -154,6 +166,7 @@ enum class Screen {
     HOME, ACCOUNTS, INCOME, EXPENSES
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(viewModel: MainViewModel) {
     var currentDate by remember { mutableStateOf(LocalDate.now()) }
@@ -170,8 +183,11 @@ fun MainScreen(viewModel: MainViewModel) {
     var showSettings by remember { mutableStateOf(false) }
     var showTransfers by remember { mutableStateOf(false) }
     var showLoans by remember { mutableStateOf(false) }
+    var showRecurringConfigs by remember { mutableStateOf(false) }
     var showCategoryManagement by remember { mutableStateOf(false) }
     var showAddCategoryDialog by remember { mutableStateOf(false) }
+    var showSearch by remember { mutableStateOf(false) }
+    var showSearchFilterDialog by remember { mutableStateOf(false) }
 
     var loanTransactionToEdit by remember { mutableStateOf<Expense?>(null) }
     
@@ -193,6 +209,10 @@ fun MainScreen(viewModel: MainViewModel) {
     val excludeLoanTransactions by viewModel.excludeLoanTransactions.collectAsState()
     val showAccountsOnHomepage by viewModel.showAccountsOnHomepage.collectAsState()
     val allCategories by viewModel.categoryOrder.collectAsState(initial = emptyList())
+    val searchQuery by viewModel.searchQuery.collectAsState()
+    val searchFilter by viewModel.searchFilter.collectAsState()
+    val searchResults by viewModel.searchResults.collectAsState(initial = emptyList())
+    val recurringConfigs by viewModel.recurringConfigs.collectAsState(initial = emptyList())
 
     // Hoisted States for Sub-screens
     // Budgets
@@ -209,6 +229,7 @@ fun MainScreen(viewModel: MainViewModel) {
 
     // Loans
     var isCreatingLoan by remember { mutableStateOf(false) }
+    var newLoanType by remember { mutableStateOf(com.h2.wellspend.data.LoanType.LEND) }
     var editingLoan by remember { mutableStateOf<com.h2.wellspend.data.Loan?>(null) }
     var loanForTransaction by remember { mutableStateOf<com.h2.wellspend.data.Loan?>(null) }
 
@@ -229,7 +250,7 @@ fun MainScreen(viewModel: MainViewModel) {
         isDataLoaded = true
     }
 
-    val canNavigateBack = showAddExpense || showReport || showBudgets || showSettings || showTransfers || showLoans || showCategoryManagement || showAccountInput || loanTransactionToEdit != null || currentScreen != Screen.HOME || (showLoans && (isCreatingLoan || editingLoan != null || loanForTransaction != null))
+    val canNavigateBack = showAddExpense || showReport || showBudgets || showSettings || showTransfers || showLoans || showRecurringConfigs || showCategoryManagement || showAccountInput || loanTransactionToEdit != null || currentScreen != Screen.HOME || (showLoans && (isCreatingLoan || editingLoan != null || loanForTransaction != null)) || showSearch
     androidx.activity.compose.BackHandler(enabled = canNavigateBack) {
         when {
             loanTransactionToEdit != null -> loanTransactionToEdit = null
@@ -241,9 +262,16 @@ fun MainScreen(viewModel: MainViewModel) {
             showTransfers -> showTransfers = false
             // Handle Loan Sub-screens
             showLoans && loanForTransaction != null -> loanForTransaction = null
-            showLoans && (isCreatingLoan || editingLoan != null) -> { isCreatingLoan = false; editingLoan = null }
+            showLoans && (isCreatingLoan || editingLoan != null) -> { 
+                isCreatingLoan = false; editingLoan = null; newLoanType = com.h2.wellspend.data.LoanType.LEND 
+            }
             showLoans -> showLoans = false
             showCategoryManagement -> showCategoryManagement = false
+            showSearch -> {
+                 showSearch = false
+                 viewModel.updateSearchQuery("") // Clear query on exit
+                 viewModel.updateSearchFilter(MainViewModel.SearchFilter()) // Clear filters on exit
+            }
             currentScreen != Screen.HOME -> currentScreen = Screen.HOME
         }
     }
@@ -310,7 +338,7 @@ fun MainScreen(viewModel: MainViewModel) {
         }
     }
 
-    val isBottomBarVisible = !showAddExpense && !showReport && !showBudgets && !showSettings && !showTransfers && !showLoans && !showAccountInput && !showCategoryManagement && loanTransactionToEdit == null
+    val isBottomBarVisible = !showAddExpense && !showReport && !showBudgets && !showSettings && !showTransfers && !showLoans && !showAccountInput && !showCategoryManagement && loanTransactionToEdit == null && !showSearch && !showRecurringConfigs
 
     val view = LocalView.current
     if (!view.isInEditMode) {
@@ -362,12 +390,14 @@ fun MainScreen(viewModel: MainViewModel) {
                 isCreatingLoan -> "OVERLAY_LOANS_ADD"
                 editingLoan != null -> "OVERLAY_LOANS_EDIT"
                 showLoans -> "OVERLAY_LOANS_LIST"
+                showRecurringConfigs -> "OVERLAY_RECURRING_CONFIGS"
                 
                 showReport -> "OVERLAY_REPORT"
                 showBudgets -> "OVERLAY_BUDGETS"
                 showSettings -> "OVERLAY_SETTINGS"
                 showTransfers -> "OVERLAY_TRANSFERS"
                 showCategoryManagement -> "OVERLAY_CATEGORIES"
+                showSearch -> "OVERLAY_SEARCH"
                 else -> currentScreen.name
             }
 
@@ -378,8 +408,8 @@ fun MainScreen(viewModel: MainViewModel) {
                     val isOverlayInitial = initialState.startsWith("OVERLAY_")
                     
                     // Specific Logic for Loan Sub-screens
-                    val isLoanSubScreenTarget = targetState == "OVERLAY_LOANS_ADD" || targetState == "OVERLAY_LOANS_EDIT" || targetState == "OVERLAY_LOANS_TRANSACTION"
-                    val isLoanSubScreenInitial = initialState == "OVERLAY_LOANS_ADD" || initialState == "OVERLAY_LOANS_EDIT" || initialState == "OVERLAY_LOANS_TRANSACTION"
+                    val isLoanSubScreenTarget = targetState == "OVERLAY_LOANS_ADD" || targetState == "OVERLAY_LOANS_EDIT" || targetState == "OVERLAY_LOANS_TRANSACTION" || targetState == "OVERLAY_EDIT_LOAN_TRANSACTION"
+                    val isLoanSubScreenInitial = initialState == "OVERLAY_LOANS_ADD" || initialState == "OVERLAY_LOANS_EDIT" || initialState == "OVERLAY_LOANS_TRANSACTION" || initialState == "OVERLAY_EDIT_LOAN_TRANSACTION"
                     
                     if (isLoanSubScreenTarget && initialState == "OVERLAY_LOANS_LIST") {
                          // Push Sub-screen over List
@@ -428,9 +458,125 @@ fun MainScreen(viewModel: MainViewModel) {
                     
                     val isOverlay = state.startsWith("OVERLAY_")
                     
-                    if (state != "OVERLAY_ADD") {
+
+                    
+                    if (state == "OVERLAY_SEARCH") {
+                         val focusRequester = remember { FocusRequester() }
+                         LaunchedEffect(Unit) {
+                             focusRequester.requestFocus()
+                         }
+                         
+                         TopAppBar(
+                            title = {
+                                OutlinedTextField(
+                                    value = searchQuery,
+                                    onValueChange = { viewModel.updateSearchQuery(it) },
+                                    placeholder = { Text("Search transactions...") },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .focusRequester(focusRequester),
+                                    singleLine = true,
+                                    colors = TextFieldDefaults.colors(
+                                        focusedContainerColor = Color.Transparent,
+                                        unfocusedContainerColor = Color.Transparent,
+                                        disabledContainerColor = Color.Transparent,
+                                        focusedIndicatorColor = Color.Transparent,
+                                        unfocusedIndicatorColor = Color.Transparent
+                                    ),
+                                    trailingIcon = {
+                                        if (searchQuery.isNotEmpty()) {
+                                            IconButton(onClick = { viewModel.updateSearchQuery("") }) {
+                                                Icon(Icons.Default.Close, "Clear")
+                                            }
+                                        }
+                                    }
+                                )
+                            },
+                            navigationIcon = {
+                                IconButton(onClick = { 
+                                     showSearch = false
+                                     viewModel.updateSearchQuery("")
+                                     viewModel.updateSearchFilter(MainViewModel.SearchFilter())
+                                }) {
+                                    Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
+                                }
+                            },
+                            actions = {
+                                IconButton(onClick = { showSearchFilterDialog = true }) {
+                                    Icon(
+                                        Icons.Default.FilterList, 
+                                        "Filter",
+                                        tint = if (searchFilter.type != null || searchFilter.startDate != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
+                            },
+                             colors = TopAppBarDefaults.topAppBarColors(
+                                containerColor = MaterialTheme.colorScheme.background,
+                                titleContentColor = MaterialTheme.colorScheme.onBackground
+                            )
+                         )
+                    } else if (state != "OVERLAY_ADD") {
+                        val isAddLoan = state == "OVERLAY_LOANS_ADD"
+                        
                         WellSpendTopAppBar(
-                            title = title,
+                            title = if (!isAddLoan) title else null,
+                            titleContent = {
+                                if (isAddLoan) {
+                                    var showTypeMenu by remember { mutableStateOf(false) }
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            "New Loan",
+                                            style = MaterialTheme.typography.titleLarge.copy(fontSize = 20.sp),
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        
+                                        Spacer(modifier = Modifier.width(16.dp))
+                                        
+                                        Box {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                modifier = Modifier
+                                                    .widthIn(min = 120.dp)
+                                                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha=0.5f), RoundedCornerShape(8.dp))
+                                                    .clickable { showTypeMenu = true }
+                                                    .padding(horizontal = 12.dp, vertical = 6.dp)
+                                            ) {
+                                                Text(
+                                                    text = if(newLoanType == com.h2.wellspend.data.LoanType.LEND) "Lend" else "Borrow",
+                                                    style = MaterialTheme.typography.titleMedium.copy(fontSize = 16.sp),
+                                                    fontWeight = FontWeight.Medium,
+                                                    color = MaterialTheme.colorScheme.onSurface
+                                                )
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Icon(Icons.Default.ArrowDropDown, contentDescription = "Select Type", tint = MaterialTheme.colorScheme.onSurface)
+                                            }
+                                            
+                                            DropdownMenu(
+                                                expanded = showTypeMenu,
+                                                onDismissRequest = { showTypeMenu = false }
+                                            ) {
+                                                DropdownMenuItem(
+                                                    text = { Text("Lend (I give)") },
+                                                    onClick = { newLoanType = com.h2.wellspend.data.LoanType.LEND; showTypeMenu = false }
+                                                )
+                                                DropdownMenuItem(
+                                                    text = { Text("Borrow (I take)") },
+                                                    onClick = { newLoanType = com.h2.wellspend.data.LoanType.BORROW; showTypeMenu = false }
+                                                )
+                                            }
+                                        }
+                                    }
+                                } else {
+                                     Text(
+                                        title ?: "", 
+                                        style = MaterialTheme.typography.titleLarge.copy(fontSize = 20.sp),
+                                        fontWeight = FontWeight.Bold 
+                                    ) 
+                                }
+                            },
                             // Enable back if it's an overlay (except root tabs), OR if we are in a loan sub-screen
                             canNavigateBack = (isOverlay && state != "HOME" && state != "ACCOUNTS" && state != "INCOME" && state != "EXPENSES") || 
                                               (state.startsWith("OVERLAY_LOANS_") && state != "OVERLAY_LOANS_LIST"),
@@ -446,9 +592,12 @@ fun MainScreen(viewModel: MainViewModel) {
                                     "OVERLAY_LOANS_ADD", "OVERLAY_LOANS_EDIT" -> {
                                         isCreatingLoan = false
                                         editingLoan = null
+                                        newLoanType = com.h2.wellspend.data.LoanType.LEND
                                     }
                                     "OVERLAY_LOANS_LIST" -> showLoans = false
+                                    "OVERLAY_RECURRING_CONFIGS" -> showRecurringConfigs = false
                                     "OVERLAY_CATEGORIES" -> showCategoryManagement = false
+                                    "OVERLAY_SEARCH" -> { /* Handled above */ }
                                 }
                             },
                             actions = {
@@ -482,8 +631,8 @@ fun MainScreen(viewModel: MainViewModel) {
                                         val localContext = androidx.compose.ui.platform.LocalContext.current
                                         IconButton(onClick = {
                                             try {
-                                                 val csvHeader = "Date,Category,Type,Amount,Fee,Description,Recurring\n"
-                                                 val csvData = reportExpenses.joinToString("\n") { "${it.date},${it.category},${it.transactionType},${it.amount},${it.feeAmount},${it.description},${it.isRecurring}" }
+                                                 val csvHeader = "Date,Category,Type,Amount,Fee,Title\n"
+                                                 val csvData = reportExpenses.joinToString("\n") { "${it.date},${it.category},${it.transactionType},${it.amount},${it.feeAmount},${it.title}" }
                                                  val csvContent = csvHeader + csvData
                                                  val fileName = "expenses_${currentDate.format(java.time.format.DateTimeFormatter.ofPattern("MMM_yyyy"))}.csv"
                                                  val file = java.io.File(localContext.cacheDir, fileName)
@@ -503,6 +652,9 @@ fun MainScreen(viewModel: MainViewModel) {
                                     else -> {
                                         // Only show the menu on main root tabs
                                         if (state == "HOME" || state == "ACCOUNTS" || state == "INCOME" || state == "EXPENSES") {
+                                            IconButton(onClick = { showSearch = true }) {
+                                                Icon(Icons.Default.Search, contentDescription = "Search")
+                                            }
                                             IconButton(onClick = { showMenu = true }) { Icon(Icons.Default.MoreVert, "Menu") }
                                             DropdownMenu(
                                                 expanded = showMenu, 
@@ -512,6 +664,7 @@ fun MainScreen(viewModel: MainViewModel) {
                                                 DropdownMenuItem(text = { Text("Budgets") }, onClick = { showMenu = false; showBudgets = true }, leadingIcon = { Icon(Icons.Default.BarChart, null) })
                                                 DropdownMenuItem(text = { Text("Transfers") }, onClick = { showMenu = false; showTransfers = true }, leadingIcon = { Icon(Icons.AutoMirrored.Filled.CompareArrows, null) })
                                                 DropdownMenuItem(text = { Text("Loans") }, onClick = { showMenu = false; showLoans = true }, leadingIcon = { Icon(Icons.Default.AttachMoney, null) })
+                                                DropdownMenuItem(text = { Text("Recurring") }, onClick = { showMenu = false; showRecurringConfigs = true }, leadingIcon = { Icon(Icons.Default.Repeat, null) })
                                                 DropdownMenuItem(text = { Text("Categories") }, onClick = { showMenu = false; showCategoryManagement = true }, leadingIcon = { Icon(Icons.AutoMirrored.Filled.Label, null) })
                                                 DropdownMenuItem(text = { Text("Monthly Report") }, onClick = { showMenu = false; showReport = true }, leadingIcon = { Icon(Icons.Default.Description, null) })
                                                 DropdownMenuItem(text = { Text("Settings") }, onClick = { showMenu = false; showSettings = true }, leadingIcon = { Icon(Icons.Default.Settings, null) })
@@ -534,12 +687,12 @@ fun MainScreen(viewModel: MainViewModel) {
                             categories = categoryOrder,
                             initialExpense = lastExpenseToEdit, // Use cached
                             initialTransactionType = defaultTransactionType,
-                            onAdd = { amount, desc, cat, date, isRecurring, freq, type, accId, targetAccId, fee, feeName ->
+                            onAdd = { amount, desc, cat, date, isRecurring, freq, type, accId, targetAccId, fee, feeName, note ->
                                 if (lastExpenseToEdit != null) {
                                     viewModel.updateExpense(
                                         id = lastExpenseToEdit!!.id, 
                                         amount = amount, 
-                                        description = desc, 
+                                        title = desc, 
                                         category = cat, 
                                         date = date, 
                                         isRecurring = isRecurring, 
@@ -548,12 +701,13 @@ fun MainScreen(viewModel: MainViewModel) {
                                         accountId = accId,
                                         targetAccountId = targetAccId,
                                         feeAmount = fee,
-                                        feeConfigName = feeName
+                                        feeConfigName = feeName,
+                                        note = note
                                     )
                                 } else {
                                     viewModel.addExpense(
                                         amount = amount, 
-                                        description = desc, 
+                                        title = desc, 
                                         category = cat, 
                                         date = date, 
                                         isRecurring = isRecurring, 
@@ -562,7 +716,8 @@ fun MainScreen(viewModel: MainViewModel) {
                                         accountId = accId,
                                         targetAccountId = targetAccId,
                                         feeAmount = fee,
-                                        feeConfigName = feeName
+                                        feeConfigName = feeName,
+                                        note = note
                                     )
                                 }
                                 showAddExpense = false
@@ -585,11 +740,11 @@ fun MainScreen(viewModel: MainViewModel) {
                                     accountBalances = balances,
                                     currency = currency,
                                     onDismiss = { loanTransactionToEdit = null },
-                                    onConfirm = { amt, desc, accId, fee, feeName, date ->
+                                    onConfirm = { amt, desc, accId, fee, feeName, date, note ->
                                         viewModel.updateExpense(
                                             id = transaction.id,
                                             amount = amt,
-                                            description = desc,
+                                            title = desc,
                                             category = allCategories.find { it.name == transaction.category },
                                             date = date,
                                             isRecurring = false,
@@ -599,7 +754,8 @@ fun MainScreen(viewModel: MainViewModel) {
                                             targetAccountId = transaction.transferTargetAccountId,
                                             feeAmount = fee,
                                             feeConfigName = feeName,
-                                            loanId = transaction.loanId
+                                            loanId = transaction.loanId,
+                                            note = note
                                         )
                                         loanTransactionToEdit = null
                                     }
@@ -617,7 +773,8 @@ fun MainScreen(viewModel: MainViewModel) {
                             showCompareDialog = showReportCompareDialog,
                             onDismissCompareDialog = { showReportCompareDialog = false },
                             comparisonDate = reportComparisonDate,
-                            onComparisonDateChange = { reportComparisonDate = it }
+                            onComparisonDateChange = { reportComparisonDate = it },
+                            excludeLoanTransactions = excludeLoanTransactions
                         )
                     }
                     "OVERLAY_BUDGETS" -> {
@@ -652,8 +809,8 @@ fun MainScreen(viewModel: MainViewModel) {
                                 accountBalances = balances,
                                 currency = currency,
                                 onDismiss = { loanForTransaction = null },
-                                onConfirm = { amount, isPayment, accId, fee, feeName, date ->
-                                    viewModel.addLoanTransaction(loan.id, loan.name, amount, isPayment, accId, loan.type, fee, feeName, date)
+                                onConfirm = { amount, isPayment, accId, fee, feeName, date, note ->
+                                    viewModel.addLoanTransaction(loan.id, loan.name, amount, isPayment, accId, loan.type, fee, feeName, date, note)
                                     loanForTransaction = null
                                 }
                             )
@@ -665,6 +822,8 @@ fun MainScreen(viewModel: MainViewModel) {
                             accounts = accounts,
                             accountBalances = balances,
                             currency = currency,
+                            selectedType = lastEditingLoan?.type ?: newLoanType,
+                            onTypeChange = { newLoanType = it },
                             onSave = { name, amount, type, desc, accId, fee, feeName, date ->
                                 if (lastEditingLoan != null) {
                                     viewModel.updateLoan(lastEditingLoan!!.copy(name = name, amount = amount, description = desc, type = type))
@@ -672,11 +831,13 @@ fun MainScreen(viewModel: MainViewModel) {
                                 } else {
                                     viewModel.addLoan(name, amount, type, desc, accId, fee, feeName, date)
                                     isCreatingLoan = false
+                                    newLoanType = com.h2.wellspend.data.LoanType.LEND // Reset
                                 }
                             },
                             onCancel = {
                                 isCreatingLoan = false
                                 editingLoan = null
+                                newLoanType = com.h2.wellspend.data.LoanType.LEND
                             }
                         )
                     }
@@ -691,11 +852,23 @@ fun MainScreen(viewModel: MainViewModel) {
                             onEditLoan = { editingLoan = it },
                             onDeleteLoan = { loan, deleteTransactions -> viewModel.deleteLoan(loan, deleteTransactions) },
                             onEditTransaction = { expense -> 
-                                expenseToEdit = expense
-                                showAddExpense = true
+                                loanTransactionToEdit = expense
                             },
                             onDeleteTransaction = { expenseId -> viewModel.deleteExpense(expenseId) },
-                            onAddLoanStart = { isCreatingLoan = true }
+                            onAddLoanStart = { 
+                                isCreatingLoan = true 
+                                newLoanType = com.h2.wellspend.data.LoanType.LEND
+                            }
+                        )
+                    }
+                    "OVERLAY_RECURRING_CONFIGS" -> {
+                        RecurringConfigScreen(
+                            configs = recurringConfigs,
+                            accounts = accounts,
+                            currency = currency,
+                            onUpdate = { viewModel.updateRecurringConfig(it) },
+                            onDelete = { viewModel.deleteRecurringConfig(it) },
+                            onBack = { showRecurringConfigs = false }
                         )
                     }
                     "OVERLAY_SETTINGS" -> {
@@ -722,11 +895,17 @@ fun MainScreen(viewModel: MainViewModel) {
                     }
                     "HOME" -> {
                         // Filter out virtual loan transactions (same logic as expense/income pages)
-                        // AND respect value of excludeLoanTransactions
-                        val validTransactionsForDisplay = currentMonthTransactions.filter { transaction ->
+                        // AND respect value of excludeLoanTransactions for Totals/Income
+                        val filteredTransactions = currentMonthTransactions.filter { transaction ->
                             val isVirtualLoan = transaction.loanId != null && transaction.accountId == null
                             val isExcludedLoan = excludeLoanTransactions && transaction.loanId != null
                             !isVirtualLoan && !isExcludedLoan
+                        }
+
+                        // For Transaction List: Only exclude virtual loans, SHOW real loans even if excluded from totals
+                        val unfilteredTransactions = currentMonthTransactions.filter { transaction ->
+                            val isVirtualLoan = transaction.loanId != null && transaction.accountId == null
+                            !isVirtualLoan
                         }
                         
                         // Calculate balance at end of selected month
@@ -755,12 +934,12 @@ fun MainScreen(viewModel: MainViewModel) {
                         }
                         
                         // Calculate income for this month (excluding virtual loan transactions)
-                        val totalIncome = validTransactionsForDisplay
+                        val totalIncome = filteredTransactions
                             .filter { it.transactionType == com.h2.wellspend.data.TransactionType.INCOME }
                             .sumOf { it.amount - it.feeAmount }
                         
                         // All transactions for lazy loading (sorted by date desc)
-                        val allMonthTransactions = validTransactionsForDisplay
+                        val allMonthTransactions = unfilteredTransactions
                             .sortedByDescending { it.date }
                         
                         DashboardScreen(
@@ -819,6 +998,32 @@ fun MainScreen(viewModel: MainViewModel) {
                             showAddDialog = showAddCategoryDialog,
                             onDismissAddDialog = { showAddCategoryDialog = false }
                         )
+                    }
+                    "OVERLAY_SEARCH" -> {
+                        SearchScreen(
+                            searchResults = searchResults,
+                            accounts = accounts,
+                            loans = loans,
+                            categories = allCategories,
+                            currency = currency,
+                            onEdit = { expense ->
+                                if (expense.loanId != null) {
+                                    loanTransactionToEdit = expense
+                                } else {
+                                    expenseToEdit = expense
+                                    showAddExpense = true
+                                }
+                            },
+                            onDelete = { viewModel.deleteExpense(it) }
+                        )
+                        
+                        if (showSearchFilterDialog) {
+                            SearchFilterDialog(
+                                currentFilter = searchFilter,
+                                onApply = { viewModel.updateSearchFilter(it) },
+                                onDismiss = { showSearchFilterDialog = false }
+                            )
+                        }
                     }
                     "ACCOUNTS" -> {
                         com.h2.wellspend.ui.AccountScreen(
@@ -937,7 +1142,7 @@ fun MainScreen(viewModel: MainViewModel) {
                 .padding(bottom = if (isBottomBarVisible) 90.dp else 24.dp, end = 24.dp)
             ) {
                 if ((currentScreen == Screen.HOME || currentScreen == Screen.EXPENSES || currentScreen == Screen.INCOME || currentScreen == Screen.ACCOUNTS || currentScreen == Screen.ACCOUNTS || showTransfers || showLoans) && 
-                    !showAddExpense && !showReport && !showBudgets && !showSettings && !showAccountInput && loanTransactionToEdit == null && !showCategoryManagement) {
+                    !showAddExpense && !showReport && !showBudgets && !showSettings && !showAccountInput && loanTransactionToEdit == null && !showCategoryManagement && !showSearch && !showRecurringConfigs) {
                         // Logic for deciding which FAB to show
                         // If standard add expense/transaction
                         if (!showLoans || (showLoans && !isCreatingLoan && editingLoan == null && loanForTransaction == null)) {
@@ -945,6 +1150,7 @@ fun MainScreen(viewModel: MainViewModel) {
                                 onClick = { 
                                     if(showLoans) {
                                          isCreatingLoan = true
+                                         newLoanType = com.h2.wellspend.data.LoanType.LEND
                                     } else if (showTransfers) {
                                          // Transfer FAB if needed, though Transfers page usually has its own
                                          expenseToEdit = null
@@ -985,19 +1191,20 @@ fun MainScreen(viewModel: MainViewModel) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WellSpendTopAppBar(
-    title: String,
+    title: String? = null,
+    titleContent: @Composable () -> Unit = { 
+        Text(
+            title ?: "", 
+            style = MaterialTheme.typography.titleLarge.copy(fontSize = 20.sp),
+            fontWeight = FontWeight.Bold 
+        ) 
+    },
     canNavigateBack: Boolean,
     onBack: () -> Unit,
     actions: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit = {}
 ) {
     TopAppBar(
-        title = { 
-            Text(
-                title, 
-                style = MaterialTheme.typography.titleLarge.copy(fontSize = 20.sp),
-                fontWeight = FontWeight.Bold 
-            ) 
-        },
+        title = titleContent,
         navigationIcon = {
             if (canNavigateBack) {
                 IconButton(onClick = onBack) {

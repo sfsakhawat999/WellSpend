@@ -204,7 +204,7 @@ fun IncomeItem(
                     .clip(backgroundShape)
             ) {
                 // Non-editable constraints
-                val isInitialLoanTransaction = income.loanId != null && income.description.startsWith("New Loan:")
+                val isInitialLoanTransaction = income.loanId != null && income.title.startsWith("New Loan:")
                 val isNonEditable = isBalanceAdjustment || isInitialLoanTransaction
 
                 // Left Action (Edit)
@@ -333,7 +333,7 @@ fun IncomeItem(
                         
                         Column {
                             Text(
-                                text = income.description.ifEmpty { "No description" },
+                                text = income.title.ifEmpty { "No title" },
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurface,
                                 fontWeight = FontWeight.SemiBold
