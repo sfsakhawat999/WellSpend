@@ -66,6 +66,9 @@ interface RecurringDao {
     
     @Update
     suspend fun updateRecurringConfigs(configs: List<RecurringConfig>)
+    
+    @Query("DELETE FROM recurring_configs WHERE id = :id")
+    suspend fun deleteRecurringConfigById(id: String)
 }
 
 @Dao

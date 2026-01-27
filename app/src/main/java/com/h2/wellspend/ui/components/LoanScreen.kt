@@ -158,14 +158,14 @@ fun LoanCard(
     val context = androidx.compose.ui.platform.LocalContext.current
     
     val initialTransaction = remember(transactions) {
-        transactions.find { it.description.trim().startsWith("New Loan:", ignoreCase = true) }
+        transactions.find { it.title.trim().startsWith("New Loan:", ignoreCase = true) }
     }
     val isInitialAmountTracked = initialTransaction != null
 
     // Filter out the initial "New Loan" transaction to prevent double counting/listing
     // The Initial Amount is already shown in the header row
     val displayTransactions = remember(transactions) {
-        transactions.filter { !it.description.trim().startsWith("New Loan:", ignoreCase = true) }
+        transactions.filter { !it.title.trim().startsWith("New Loan:", ignoreCase = true) }
     }
     
     // Calculate Progress

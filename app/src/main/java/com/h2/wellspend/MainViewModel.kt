@@ -62,7 +62,7 @@ class MainViewModel(
             allExpenses.filter { expense ->
                 // Query Match
                 val queryMatch = if (query.isBlank()) true else {
-                    expense.description.contains(query, ignoreCase = true) ||
+                    expense.title.contains(query, ignoreCase = true) ||
                     (expense.note?.contains(query, ignoreCase = true) == true) ||
                     (expense.amount.toInt().toString().contains(query))
                 }
@@ -132,7 +132,7 @@ class MainViewModel(
 
             val expense = Expense(
                 amount = amount,
-                description = "New Loan: $name",
+                title = "New Loan: $name",
                 category = SystemCategory.Loan.name,
                 date = date.atStartOfDay().toString(),
                 timestamp = System.currentTimeMillis(),
@@ -193,7 +193,7 @@ class MainViewModel(
 
                 val expense = Expense(
                     amount = amount,
-                    description = desc,
+                    title = desc,
                     category = SystemCategory.Loan.name,
                     date = date.atStartOfDay().toString(),
                     timestamp = System.currentTimeMillis(),
@@ -224,7 +224,7 @@ class MainViewModel(
             } else {
                 // Just unlink transactions (orphaned history)
                 val expensesToUpdate = linkedExpenses.map { 
-                    it.copy(loanId = null, description = "${it.description} (Deleted Loan: ${loan.name})") 
+                    it.copy(loanId = null, title = "${it.title} (Deleted Loan: ${loan.name})") 
                 }
                 
                 if (expensesToUpdate.isNotEmpty()) {
@@ -336,10 +336,10 @@ class MainViewModel(
                             id = UUID.randomUUID().toString(),
                             amount = config.amount,
                             category = config.category,
-                            description = "${config.description} (Recurring)",
+                            title = "${config.title} (Recurring)",
                             date = nextDate.atStartOfDay().toString(), // ISO-ish
                             timestamp = System.currentTimeMillis(),
-                            isRecurring = true,
+                            // isRecurring removed
                             transactionType = config.transactionType,
                             accountId = config.accountId,
                             transferTargetAccountId = config.transferTargetAccountId,
@@ -369,7 +369,7 @@ class MainViewModel(
 
     fun addExpense(
         amount: Double, 
-        description: String, 
+        title: String, 
         category: Category?, 
         date: String, 
         isRecurring: Boolean, 
@@ -386,11 +386,11 @@ class MainViewModel(
             val categoryName = category?.name ?: SystemCategory.Others.name
             val expense = Expense(
                 amount = amount,
-                description = description,
+                title = title,
                 category = categoryName,
                 date = date, // Should be ISO string
                 timestamp = System.currentTimeMillis(),
-                isRecurring = false, // The manual entry itself
+                // isRecurring removed
                 transactionType = transactionType,
                 accountId = accountId,
                 transferTargetAccountId = targetAccountId,
@@ -407,7 +407,8 @@ class MainViewModel(
                 val config = RecurringConfig(
                     amount = amount,
                     category = categoryName,
-                    description = description,
+                    title = title,
+                    note = note,
                     frequency = frequency,
                     nextDueDate = nextDate.toString(),
                     transactionType = transactionType,
@@ -424,7 +425,7 @@ class MainViewModel(
     fun updateExpense(
         id: String, 
         amount: Double, 
-        description: String, 
+        title: String, 
         category: Category?, 
         date: String, 
         isRecurring: Boolean, 
@@ -443,11 +444,11 @@ class MainViewModel(
             val expense = Expense(
                 id = id,
                 amount = amount,
-                description = description,
+                title = title,
                 category = categoryName,
                 date = date,
                 timestamp = System.currentTimeMillis(), 
-                isRecurring = false,
+                // isRecurring removed
                 transactionType = transactionType,
                 accountId = accountId,
                 transferTargetAccountId = targetAccountId,
@@ -465,7 +466,8 @@ class MainViewModel(
                 val config = RecurringConfig(
                     amount = amount,
                     category = categoryName,
-                    description = description,
+                    title = title,
+                    note = note,
                     frequency = frequency,
                     nextDueDate = nextDate.toString(),
                     transactionType = transactionType,
@@ -482,6 +484,19 @@ class MainViewModel(
     fun deleteExpense(id: String) {
         viewModelScope.launch {
             repository.deleteExpense(id)
+        }
+    }
+
+    // Recurring Config Methods
+    fun updateRecurringConfig(config: RecurringConfig) {
+        viewModelScope.launch {
+            repository.addRecurringConfig(config) // Room REPLACE handles update
+        }
+    }
+
+    fun deleteRecurringConfig(id: String) {
+        viewModelScope.launch {
+            repository.deleteRecurringConfig(id)
         }
     }
 
@@ -567,11 +582,11 @@ class MainViewModel(
             
             val expense = Expense(
                 amount = amount,
-                description = "Balance Adjustment: $accountName",
+                title = "Balance Adjustment: $accountName",
                 category = SystemCategory.BalanceAdjustment.name,
                 date = LocalDate.now().atStartOfDay().toString(),
                 timestamp = System.currentTimeMillis(),
-                isRecurring = false,
+                // isRecurring removed
                 transactionType = type,
                 accountId = accountId,
                 feeAmount = 0.0
@@ -768,10 +783,11 @@ private data class ImportExpense(
     val id: String = UUID.randomUUID().toString(),
     val amount: Double,
     val category: String,
-    val description: String,
+    val title: String? = null, // New field name
+    val description: String? = null, // Legacy field name for backward compatibility
     val date: String,
     val timestamp: Long,
-    val isRecurring: Boolean = false,
+    // isRecurring removed
     val transactionType: com.h2.wellspend.data.TransactionType? = null,
     val accountId: String? = null,
     val transferTargetAccountId: String? = null,
@@ -785,10 +801,10 @@ private data class ImportExpense(
             id = id,
             amount = amount,
             category = category,
-            description = description,
+            title = title ?: description ?: "", // Use title if available, fallback to description
             date = date,
             timestamp = timestamp,
-            isRecurring = isRecurring,
+            // isRecurring removed
             transactionType = transactionType ?: com.h2.wellspend.data.TransactionType.EXPENSE,
             accountId = accountId,
             transferTargetAccountId = transferTargetAccountId,
@@ -805,7 +821,9 @@ private data class ImportRecurringConfig(
     val id: String = UUID.randomUUID().toString(),
     val amount: Double,
     val category: String,
-    val description: String,
+    val title: String? = null,
+    val description: String? = null,
+    val note: String? = null,
     val frequency: RecurringFrequency,
     val nextDueDate: String,
     val transactionType: com.h2.wellspend.data.TransactionType? = null,
@@ -819,7 +837,8 @@ private data class ImportRecurringConfig(
             id = id,
             amount = amount,
             category = category,
-            description = description,
+            title = title ?: description ?: "",
+            note = note,
             frequency = frequency,
             nextDueDate = nextDueDate,
             transactionType = transactionType ?: com.h2.wellspend.data.TransactionType.EXPENSE,

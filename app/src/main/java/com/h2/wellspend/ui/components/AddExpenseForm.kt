@@ -117,7 +117,7 @@ fun AddExpenseForm(
     initialTransactionType: com.h2.wellspend.data.TransactionType? = null
 ) {
     var amount by remember { mutableStateOf(initialExpense?.amount?.let { String.format("%.2f", it).trimEnd('0').trimEnd('.') } ?: "") }
-    var description by remember { mutableStateOf(initialExpense?.description ?: "") }
+    var title by remember { mutableStateOf(initialExpense?.title ?: "") }
     var note by remember { mutableStateOf(initialExpense?.note ?: "") }
     var category by remember { 
         mutableStateOf(
@@ -127,10 +127,12 @@ fun AddExpenseForm(
     var date by remember { mutableStateOf(initialExpense?.date?.substring(0, 10) ?: LocalDate.now().toString()) } // YYYY-MM-DD
 
     var frequency by remember { mutableStateOf(RecurringFrequency.MONTHLY) }
+    var isRecurring by remember { mutableStateOf(false) }
     var showDatePicker by remember { mutableStateOf(false) }
     var expanded by remember { mutableStateOf(false) }
     var showAddCategoryDialog by remember { mutableStateOf(false) }
     var showTypeDropdown by remember { mutableStateOf(false) }
+    var showAdvancedOptions by remember { mutableStateOf(initialExpense != null) } // Expand if editing
     val datePickerState = rememberDatePickerState()
 
     // New State
@@ -427,35 +429,6 @@ fun AddExpenseForm(
                 Spacer(modifier = Modifier.height(24.dp))
             }
             
-            // Fees (Move Before Category)
-            if (transactionType != com.h2.wellspend.data.TransactionType.INCOME) {
-                FeeSelector(
-                    account = currentAccount,
-                    transactionAmount = amount.toDoubleOrNull() ?: 0.0,
-                    currency = currency,
-                    selectedConfigName = selectedFeeConfigName,
-                    currentFeeAmount = feeAmount,
-                    isCustomFee = isCustomFee,
-                    onFeeChanged = { name, amt, isCustom ->
-                        selectedFeeConfigName = name
-                        feeAmount = amt
-                        isCustomFee = isCustom
-                    }
-                )
-                
-                val total = (amount.toDoubleOrNull() ?: 0.0) + (feeAmount.toDoubleOrNull() ?: 0.0)
-                if (total > 0 && (feeAmount.toDoubleOrNull() ?: 0.0) > 0) {
-                     Text(
-                        text = "Total Deduction: $currency${String.format("%.2f", total)}",
-                        style = MaterialTheme.typography.bodyMedium, 
-                        fontWeight = FontWeight.SemiBold, 
-                        color = MaterialTheme.colorScheme.onSurfaceVariant, 
-                        modifier = Modifier.padding(top = 8.dp, start = 4.dp)
-                     )
-                }
-                Spacer(modifier = Modifier.height(24.dp))
-            }
-
             if (transactionType == com.h2.wellspend.data.TransactionType.EXPENSE) {
                 // Category Selection
                 CategoryGrid(
@@ -471,34 +444,128 @@ fun AddExpenseForm(
                 Spacer(modifier = Modifier.height(24.dp))
             }
 
-            // Description (Moved After Category)
+            // Title (outside Advanced Options)
             OutlinedTextField(
-                value = description,
-                onValueChange = { description = it },
-                label = { Text(if(transactionType == com.h2.wellspend.data.TransactionType.INCOME) "Income Source" else "Description") },
+                value = title,
+                onValueChange = { title = it },
+                label = { Text(if(transactionType == com.h2.wellspend.data.TransactionType.INCOME) "Income Source" else "Title") },
                 shape = RoundedCornerShape(12.dp),
+                singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
-            // Note (Moved After Description)
-            OutlinedTextField(
-                value = note,
-                onValueChange = { if (it.length <= 300) note = it },
-                label = { Text("Note") },
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.fillMaxWidth(),
-                minLines = 3,
-                maxLines = 5,
-                supportingText = {
-                    Text(
-                        text = "${note.length}/300",
+            // Advanced Options Toggle
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { showAdvancedOptions = !showAdvancedOptions }
+                    .padding(vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = "Advanced Options",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Icon(
+                    imageVector = if (showAdvancedOptions) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
+                    contentDescription = if (showAdvancedOptions) "Collapse" else "Expand",
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
+
+            androidx.compose.animation.AnimatedVisibility(
+                visible = showAdvancedOptions,
+                enter = androidx.compose.animation.expandVertically(),
+                exit = androidx.compose.animation.shrinkVertically()
+            ) {
+                Column {
+                    // Fees
+                    if (transactionType != com.h2.wellspend.data.TransactionType.INCOME) {
+                        FeeSelector(
+                            account = currentAccount,
+                            transactionAmount = amount.toDoubleOrNull() ?: 0.0,
+                            currency = currency,
+                            selectedConfigName = selectedFeeConfigName,
+                            currentFeeAmount = feeAmount,
+                            isCustomFee = isCustomFee,
+                            onFeeChanged = { name, amt, isCustom ->
+                                selectedFeeConfigName = name
+                                feeAmount = amt
+                                isCustomFee = isCustom
+                            }
+                        )
+                        
+                        val total = (amount.toDoubleOrNull() ?: 0.0) + (feeAmount.toDoubleOrNull() ?: 0.0)
+                        if (total > 0 && (feeAmount.toDoubleOrNull() ?: 0.0) > 0) {
+                             Text(
+                                text = "Total Deduction: $currency${String.format("%.2f", total)}",
+                                style = MaterialTheme.typography.bodyMedium, 
+                                fontWeight = FontWeight.SemiBold, 
+                                color = MaterialTheme.colorScheme.onSurfaceVariant, 
+                                modifier = Modifier.padding(top = 8.dp, start = 4.dp)
+                             )
+                        }
+                        Spacer(modifier = Modifier.height(24.dp))
+                    }
+
+                    // Note
+                    OutlinedTextField(
+                        value = note,
+                        onValueChange = { if (it.length <= 300) note = it },
+                        label = { Text("Note") },
+                        shape = RoundedCornerShape(12.dp),
                         modifier = Modifier.fillMaxWidth(),
-                        textAlign = TextAlign.End
+                        minLines = 3,
+                        maxLines = 5,
+                        supportingText = {
+                            Text(
+                                text = "${note.length}/300",
+                                modifier = Modifier.fillMaxWidth(),
+                                textAlign = TextAlign.End
+                            )
+                        }
                     )
+                    Spacer(modifier = Modifier.height(24.dp))
+
+                    // Recurring Transaction Toggle
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = "Recurring Transaction",
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                        Switch(
+                            checked = isRecurring,
+                            onCheckedChange = { isRecurring = it }
+                        )
+                    }
+                    
+                    // Frequency Selector (visible when recurring is enabled)
+                    if (isRecurring) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            RecurringFrequency.entries.forEach { freq ->
+                                FilterChip(
+                                    selected = frequency == freq,
+                                    onClick = { frequency = freq },
+                                    label = { Text(freq.name.lowercase().replaceFirstChar { it.uppercase() }) }
+                                )
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(24.dp))
                 }
-            )
-            Spacer(modifier = Modifier.height(24.dp))
+            }
         }
 
         // Save Button
@@ -516,9 +583,9 @@ fun AddExpenseForm(
                              category ?: categories.find { it.name == SystemCategory.Others.name }
                         } else null
                         
-                        onAdd(amountVal, description,
+                        onAdd(amountVal, title,
                             finalCategory,
-                            date, false, frequency,
+                            date, isRecurring, frequency,
                             transactionType, accountId, targetAccountId, feeVal, selectedFeeConfigName, note)
                     }
                 },
@@ -569,8 +636,8 @@ fun CategoryGrid(
     onReorder: (List<Category>) -> Unit
 ) {
     val totalCategories = categories.size
-    val showExpandButton = totalCategories > 8
-    val visibleCount = if (showExpandButton && !expanded) 4 else totalCategories
+    val showExpandButton = totalCategories > 12
+    val visibleCount = if (showExpandButton && !expanded) 8 else totalCategories
     val visibleCategories = categories.take(visibleCount)
     
     val itemsPerRow = 4

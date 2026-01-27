@@ -79,7 +79,7 @@ fun EditLoanTransactionScreen(
 ) {
     // BackHandler(onBack = onDismiss) // Handled by MainScreen
     var amount by remember { mutableStateOf(String.format("%.2f", transaction.amount).trimEnd('0').trimEnd('.')) }
-    var description by remember { mutableStateOf(transaction.description) }
+    var textDescription by remember { mutableStateOf(transaction.title) }
     var note by remember { mutableStateOf(transaction.note ?: "") }
     var selectedAccountId by remember { mutableStateOf(transaction.accountId) }
     
@@ -228,9 +228,10 @@ fun EditLoanTransactionScreen(
             }
                 
                 OutlinedTextField(
-                    value = description, 
-                    onValueChange = { description = it }, 
-                    label = { Text("Description") },
+                    value = textDescription, 
+                    onValueChange = { textDescription = it }, 
+                    label = { Text("Title") },
+                    singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
                 
@@ -315,7 +316,7 @@ fun EditLoanTransactionScreen(
                      if (amt != null) {
                          val fee = feeAmount.toDoubleOrNull() ?: 0.0
                          val config = if(isCustomFee) "Custom" else selectedFeeConfigName
-                         onConfirm(amt, description, selectedAccountId, fee, config, date, note)
+                         onConfirm(amt, textDescription, selectedAccountId, fee, config, date, note)
                      }
                 },
                 enabled = amount.isNotEmpty() && amount.toDoubleOrNull() != null && selectedAccountId != null,

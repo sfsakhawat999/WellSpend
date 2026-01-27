@@ -62,6 +62,7 @@ import androidx.compose.material.icons.automirrored.filled.Label
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -140,6 +141,7 @@ import androidx.compose.ui.focus.focusRequester
 
 
 import com.h2.wellspend.ui.components.LoanScreen
+import com.h2.wellspend.ui.components.RecurringConfigScreen
 import com.h2.wellspend.data.Budget
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.foundation.gestures.Orientation
@@ -180,6 +182,7 @@ fun MainScreen(viewModel: MainViewModel) {
     var showSettings by remember { mutableStateOf(false) }
     var showTransfers by remember { mutableStateOf(false) }
     var showLoans by remember { mutableStateOf(false) }
+    var showRecurringConfigs by remember { mutableStateOf(false) }
     var showCategoryManagement by remember { mutableStateOf(false) }
     var showAddCategoryDialog by remember { mutableStateOf(false) }
     var showSearch by remember { mutableStateOf(false) }
@@ -208,6 +211,7 @@ fun MainScreen(viewModel: MainViewModel) {
     val searchQuery by viewModel.searchQuery.collectAsState()
     val searchFilter by viewModel.searchFilter.collectAsState()
     val searchResults by viewModel.searchResults.collectAsState(initial = emptyList())
+    val recurringConfigs by viewModel.recurringConfigs.collectAsState(initial = emptyList())
 
     // Hoisted States for Sub-screens
     // Budgets
@@ -244,7 +248,7 @@ fun MainScreen(viewModel: MainViewModel) {
         isDataLoaded = true
     }
 
-    val canNavigateBack = showAddExpense || showReport || showBudgets || showSettings || showTransfers || showLoans || showCategoryManagement || showAccountInput || loanTransactionToEdit != null || currentScreen != Screen.HOME || (showLoans && (isCreatingLoan || editingLoan != null || loanForTransaction != null)) || showSearch
+    val canNavigateBack = showAddExpense || showReport || showBudgets || showSettings || showTransfers || showLoans || showRecurringConfigs || showCategoryManagement || showAccountInput || loanTransactionToEdit != null || currentScreen != Screen.HOME || (showLoans && (isCreatingLoan || editingLoan != null || loanForTransaction != null)) || showSearch
     androidx.activity.compose.BackHandler(enabled = canNavigateBack) {
         when {
             loanTransactionToEdit != null -> loanTransactionToEdit = null
@@ -330,7 +334,7 @@ fun MainScreen(viewModel: MainViewModel) {
         }
     }
 
-    val isBottomBarVisible = !showAddExpense && !showReport && !showBudgets && !showSettings && !showTransfers && !showLoans && !showAccountInput && !showCategoryManagement && loanTransactionToEdit == null && !showSearch
+    val isBottomBarVisible = !showAddExpense && !showReport && !showBudgets && !showSettings && !showTransfers && !showLoans && !showAccountInput && !showCategoryManagement && loanTransactionToEdit == null && !showSearch && !showRecurringConfigs
 
     val view = LocalView.current
     if (!view.isInEditMode) {
@@ -382,6 +386,7 @@ fun MainScreen(viewModel: MainViewModel) {
                 isCreatingLoan -> "OVERLAY_LOANS_ADD"
                 editingLoan != null -> "OVERLAY_LOANS_EDIT"
                 showLoans -> "OVERLAY_LOANS_LIST"
+                showRecurringConfigs -> "OVERLAY_RECURRING_CONFIGS"
                 
                 showReport -> "OVERLAY_REPORT"
                 showBudgets -> "OVERLAY_BUDGETS"
@@ -526,6 +531,7 @@ fun MainScreen(viewModel: MainViewModel) {
                                         editingLoan = null
                                     }
                                     "OVERLAY_LOANS_LIST" -> showLoans = false
+                                    "OVERLAY_RECURRING_CONFIGS" -> showRecurringConfigs = false
                                     "OVERLAY_CATEGORIES" -> showCategoryManagement = false
                                     "OVERLAY_SEARCH" -> { /* Handled above */ }
                                 }
@@ -561,8 +567,8 @@ fun MainScreen(viewModel: MainViewModel) {
                                         val localContext = androidx.compose.ui.platform.LocalContext.current
                                         IconButton(onClick = {
                                             try {
-                                                 val csvHeader = "Date,Category,Type,Amount,Fee,Description,Recurring\n"
-                                                 val csvData = reportExpenses.joinToString("\n") { "${it.date},${it.category},${it.transactionType},${it.amount},${it.feeAmount},${it.description},${it.isRecurring}" }
+                                                 val csvHeader = "Date,Category,Type,Amount,Fee,Title\n"
+                                                 val csvData = reportExpenses.joinToString("\n") { "${it.date},${it.category},${it.transactionType},${it.amount},${it.feeAmount},${it.title}" }
                                                  val csvContent = csvHeader + csvData
                                                  val fileName = "expenses_${currentDate.format(java.time.format.DateTimeFormatter.ofPattern("MMM_yyyy"))}.csv"
                                                  val file = java.io.File(localContext.cacheDir, fileName)
@@ -594,6 +600,7 @@ fun MainScreen(viewModel: MainViewModel) {
                                                 DropdownMenuItem(text = { Text("Budgets") }, onClick = { showMenu = false; showBudgets = true }, leadingIcon = { Icon(Icons.Default.BarChart, null) })
                                                 DropdownMenuItem(text = { Text("Transfers") }, onClick = { showMenu = false; showTransfers = true }, leadingIcon = { Icon(Icons.AutoMirrored.Filled.CompareArrows, null) })
                                                 DropdownMenuItem(text = { Text("Loans") }, onClick = { showMenu = false; showLoans = true }, leadingIcon = { Icon(Icons.Default.AttachMoney, null) })
+                                                DropdownMenuItem(text = { Text("Recurring") }, onClick = { showMenu = false; showRecurringConfigs = true }, leadingIcon = { Icon(Icons.Default.Repeat, null) })
                                                 DropdownMenuItem(text = { Text("Categories") }, onClick = { showMenu = false; showCategoryManagement = true }, leadingIcon = { Icon(Icons.AutoMirrored.Filled.Label, null) })
                                                 DropdownMenuItem(text = { Text("Monthly Report") }, onClick = { showMenu = false; showReport = true }, leadingIcon = { Icon(Icons.Default.Description, null) })
                                                 DropdownMenuItem(text = { Text("Settings") }, onClick = { showMenu = false; showSettings = true }, leadingIcon = { Icon(Icons.Default.Settings, null) })
@@ -621,7 +628,7 @@ fun MainScreen(viewModel: MainViewModel) {
                                     viewModel.updateExpense(
                                         id = lastExpenseToEdit!!.id, 
                                         amount = amount, 
-                                        description = desc, 
+                                        title = desc, 
                                         category = cat, 
                                         date = date, 
                                         isRecurring = isRecurring, 
@@ -636,7 +643,7 @@ fun MainScreen(viewModel: MainViewModel) {
                                 } else {
                                     viewModel.addExpense(
                                         amount = amount, 
-                                        description = desc, 
+                                        title = desc, 
                                         category = cat, 
                                         date = date, 
                                         isRecurring = isRecurring, 
@@ -673,7 +680,7 @@ fun MainScreen(viewModel: MainViewModel) {
                                         viewModel.updateExpense(
                                             id = transaction.id,
                                             amount = amt,
-                                            description = desc,
+                                            title = desc,
                                             category = allCategories.find { it.name == transaction.category },
                                             date = date,
                                             isRecurring = false,
@@ -780,6 +787,16 @@ fun MainScreen(viewModel: MainViewModel) {
                             },
                             onDeleteTransaction = { expenseId -> viewModel.deleteExpense(expenseId) },
                             onAddLoanStart = { isCreatingLoan = true }
+                        )
+                    }
+                    "OVERLAY_RECURRING_CONFIGS" -> {
+                        RecurringConfigScreen(
+                            configs = recurringConfigs,
+                            accounts = accounts,
+                            currency = currency,
+                            onUpdate = { viewModel.updateRecurringConfig(it) },
+                            onDelete = { viewModel.deleteRecurringConfig(it) },
+                            onBack = { showRecurringConfigs = false }
                         )
                     }
                     "OVERLAY_SETTINGS" -> {
@@ -1047,7 +1064,7 @@ fun MainScreen(viewModel: MainViewModel) {
                 .padding(bottom = if (isBottomBarVisible) 90.dp else 24.dp, end = 24.dp)
             ) {
                 if ((currentScreen == Screen.HOME || currentScreen == Screen.EXPENSES || currentScreen == Screen.INCOME || currentScreen == Screen.ACCOUNTS || currentScreen == Screen.ACCOUNTS || showTransfers || showLoans) && 
-                    !showAddExpense && !showReport && !showBudgets && !showSettings && !showAccountInput && loanTransactionToEdit == null && !showCategoryManagement && !showSearch) {
+                    !showAddExpense && !showReport && !showBudgets && !showSettings && !showAccountInput && loanTransactionToEdit == null && !showCategoryManagement && !showSearch && !showRecurringConfigs) {
                         // Logic for deciding which FAB to show
                         // If standard add expense/transaction
                         if (!showLoans || (showLoans && !isCreatingLoan && editingLoan == null && loanForTransaction == null)) {

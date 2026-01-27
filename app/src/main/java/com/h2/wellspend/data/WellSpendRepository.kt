@@ -48,6 +48,10 @@ class WellSpendRepository(private val database: AppDatabase) {
     suspend fun getRecurringConfigsOneShot(): List<RecurringConfig> {
         return database.recurringDao().getAllRecurringConfigsOneShot()
     }
+    
+    suspend fun deleteRecurringConfig(id: String) {
+        database.recurringDao().deleteRecurringConfigById(id)
+    }
     suspend fun setCurrency(symbol: String) {
         database.settingDao().insertSetting(Setting("currency", symbol))
     }
