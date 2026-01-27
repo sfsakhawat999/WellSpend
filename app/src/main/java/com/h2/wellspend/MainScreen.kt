@@ -70,6 +70,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -228,6 +229,7 @@ fun MainScreen(viewModel: MainViewModel) {
 
     // Loans
     var isCreatingLoan by remember { mutableStateOf(false) }
+    var newLoanType by remember { mutableStateOf(com.h2.wellspend.data.LoanType.LEND) }
     var editingLoan by remember { mutableStateOf<com.h2.wellspend.data.Loan?>(null) }
     var loanForTransaction by remember { mutableStateOf<com.h2.wellspend.data.Loan?>(null) }
 
@@ -260,7 +262,9 @@ fun MainScreen(viewModel: MainViewModel) {
             showTransfers -> showTransfers = false
             // Handle Loan Sub-screens
             showLoans && loanForTransaction != null -> loanForTransaction = null
-            showLoans && (isCreatingLoan || editingLoan != null) -> { isCreatingLoan = false; editingLoan = null }
+            showLoans && (isCreatingLoan || editingLoan != null) -> { 
+                isCreatingLoan = false; editingLoan = null; newLoanType = com.h2.wellspend.data.LoanType.LEND 
+            }
             showLoans -> showLoans = false
             showCategoryManagement -> showCategoryManagement = false
             showSearch -> {
@@ -512,8 +516,67 @@ fun MainScreen(viewModel: MainViewModel) {
                             )
                          )
                     } else if (state != "OVERLAY_ADD") {
+                        val isAddLoan = state == "OVERLAY_LOANS_ADD"
+                        
                         WellSpendTopAppBar(
-                            title = title,
+                            title = if (!isAddLoan) title else null,
+                            titleContent = {
+                                if (isAddLoan) {
+                                    var showTypeMenu by remember { mutableStateOf(false) }
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            "New Loan",
+                                            style = MaterialTheme.typography.titleLarge.copy(fontSize = 20.sp),
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        
+                                        Spacer(modifier = Modifier.width(16.dp))
+                                        
+                                        Box {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                modifier = Modifier
+                                                    .widthIn(min = 120.dp)
+                                                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha=0.5f), RoundedCornerShape(8.dp))
+                                                    .clickable { showTypeMenu = true }
+                                                    .padding(horizontal = 12.dp, vertical = 6.dp)
+                                            ) {
+                                                Text(
+                                                    text = if(newLoanType == com.h2.wellspend.data.LoanType.LEND) "Lend" else "Borrow",
+                                                    style = MaterialTheme.typography.titleMedium.copy(fontSize = 16.sp),
+                                                    fontWeight = FontWeight.Medium,
+                                                    color = MaterialTheme.colorScheme.onSurface
+                                                )
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Icon(Icons.Default.ArrowDropDown, contentDescription = "Select Type", tint = MaterialTheme.colorScheme.onSurface)
+                                            }
+                                            
+                                            DropdownMenu(
+                                                expanded = showTypeMenu,
+                                                onDismissRequest = { showTypeMenu = false }
+                                            ) {
+                                                DropdownMenuItem(
+                                                    text = { Text("Lend (I give)") },
+                                                    onClick = { newLoanType = com.h2.wellspend.data.LoanType.LEND; showTypeMenu = false }
+                                                )
+                                                DropdownMenuItem(
+                                                    text = { Text("Borrow (I take)") },
+                                                    onClick = { newLoanType = com.h2.wellspend.data.LoanType.BORROW; showTypeMenu = false }
+                                                )
+                                            }
+                                        }
+                                    }
+                                } else {
+                                     Text(
+                                        title ?: "", 
+                                        style = MaterialTheme.typography.titleLarge.copy(fontSize = 20.sp),
+                                        fontWeight = FontWeight.Bold 
+                                    ) 
+                                }
+                            },
                             // Enable back if it's an overlay (except root tabs), OR if we are in a loan sub-screen
                             canNavigateBack = (isOverlay && state != "HOME" && state != "ACCOUNTS" && state != "INCOME" && state != "EXPENSES") || 
                                               (state.startsWith("OVERLAY_LOANS_") && state != "OVERLAY_LOANS_LIST"),
@@ -529,6 +592,7 @@ fun MainScreen(viewModel: MainViewModel) {
                                     "OVERLAY_LOANS_ADD", "OVERLAY_LOANS_EDIT" -> {
                                         isCreatingLoan = false
                                         editingLoan = null
+                                        newLoanType = com.h2.wellspend.data.LoanType.LEND
                                     }
                                     "OVERLAY_LOANS_LIST" -> showLoans = false
                                     "OVERLAY_RECURRING_CONFIGS" -> showRecurringConfigs = false
@@ -757,6 +821,8 @@ fun MainScreen(viewModel: MainViewModel) {
                             accounts = accounts,
                             accountBalances = balances,
                             currency = currency,
+                            selectedType = lastEditingLoan?.type ?: newLoanType,
+                            onTypeChange = { newLoanType = it },
                             onSave = { name, amount, type, desc, accId, fee, feeName, date ->
                                 if (lastEditingLoan != null) {
                                     viewModel.updateLoan(lastEditingLoan!!.copy(name = name, amount = amount, description = desc, type = type))
@@ -764,11 +830,13 @@ fun MainScreen(viewModel: MainViewModel) {
                                 } else {
                                     viewModel.addLoan(name, amount, type, desc, accId, fee, feeName, date)
                                     isCreatingLoan = false
+                                    newLoanType = com.h2.wellspend.data.LoanType.LEND // Reset
                                 }
                             },
                             onCancel = {
                                 isCreatingLoan = false
                                 editingLoan = null
+                                newLoanType = com.h2.wellspend.data.LoanType.LEND
                             }
                         )
                     }
@@ -786,7 +854,10 @@ fun MainScreen(viewModel: MainViewModel) {
                                 loanTransactionToEdit = expense
                             },
                             onDeleteTransaction = { expenseId -> viewModel.deleteExpense(expenseId) },
-                            onAddLoanStart = { isCreatingLoan = true }
+                            onAddLoanStart = { 
+                                isCreatingLoan = true 
+                                newLoanType = com.h2.wellspend.data.LoanType.LEND
+                            }
                         )
                     }
                     "OVERLAY_RECURRING_CONFIGS" -> {
@@ -1072,6 +1143,7 @@ fun MainScreen(viewModel: MainViewModel) {
                                 onClick = { 
                                     if(showLoans) {
                                          isCreatingLoan = true
+                                         newLoanType = com.h2.wellspend.data.LoanType.LEND
                                     } else if (showTransfers) {
                                          // Transfer FAB if needed, though Transfers page usually has its own
                                          expenseToEdit = null
@@ -1112,19 +1184,20 @@ fun MainScreen(viewModel: MainViewModel) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WellSpendTopAppBar(
-    title: String,
+    title: String? = null,
+    titleContent: @Composable () -> Unit = { 
+        Text(
+            title ?: "", 
+            style = MaterialTheme.typography.titleLarge.copy(fontSize = 20.sp),
+            fontWeight = FontWeight.Bold 
+        ) 
+    },
     canNavigateBack: Boolean,
     onBack: () -> Unit,
     actions: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit = {}
 ) {
     TopAppBar(
-        title = { 
-            Text(
-                title, 
-                style = MaterialTheme.typography.titleLarge.copy(fontSize = 20.sp),
-                fontWeight = FontWeight.Bold 
-            ) 
-        },
+        title = titleContent,
         navigationIcon = {
             if (canNavigateBack) {
                 IconButton(onClick = onBack) {

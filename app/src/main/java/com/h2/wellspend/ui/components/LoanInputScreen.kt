@@ -32,6 +32,7 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.time.Instant
 import java.time.ZoneId
+import java.time.ZoneOffset
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -40,6 +41,8 @@ fun LoanInputScreen(
     accounts: List<Account>,
     accountBalances: Map<String, Double>,
     currency: String,
+    selectedType: LoanType = LoanType.LEND, // Hoisted defaults
+    onTypeChange: (LoanType) -> Unit = {}, 
     onSave: (String, Double, LoanType, String?, String?, Double, String?, LocalDate) -> Unit, // name, amount, type, desc, accId, fee, feeConfigName, date
     onCancel: () -> Unit
 ) {
@@ -48,7 +51,7 @@ fun LoanInputScreen(
     // State initialization
     var name by remember { mutableStateOf(initialLoan?.name ?: "") }
     var amount by remember { mutableStateOf(initialLoan?.amount?.let { String.format("%.2f", it).trimEnd('0').trimEnd('.') } ?: "") }
-    var selectedType by remember { mutableStateOf(initialLoan?.type ?: LoanType.LEND) }
+    // selectedType hoisted to MainScreen
     var description by remember { mutableStateOf(initialLoan?.description ?: "") }
     var selectedAccountId by remember { mutableStateOf<String?>(null) } 
     var doNotTrack by remember { mutableStateOf(false) }
@@ -62,7 +65,7 @@ fun LoanInputScreen(
     
     var showDatePicker by remember { mutableStateOf(false) }
     val datePickerState = rememberDatePickerState(
-        initialSelectedDateMillis = date.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
+        initialSelectedDateMillis = date.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
     )
 
     // Calculate Fee
@@ -76,7 +79,7 @@ fun LoanInputScreen(
             confirmButton = {
                 TextButton(onClick = {
                     datePickerState.selectedDateMillis?.let { millis ->
-                        date = Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault()).toLocalDate()
+                        date = Instant.ofEpochMilli(millis).atZone(ZoneOffset.UTC).toLocalDate()
                     }
                     showDatePicker = false
                 }) { Text("OK") }
@@ -167,71 +170,31 @@ fun LoanInputScreen(
             }
 
             // Name
-            Text("Person / Entity", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             OutlinedTextField(
                 value = name, 
                 onValueChange = { name = it }, 
-                modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 16.dp),
+                modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
                 shape = RoundedCornerShape(12.dp),
-                placeholder = { Text("Who is this loan for?") }
+                label = { Text("Person / Entity") },
+                placeholder = { Text("Who is this loan for?") },
+                singleLine = true,
+                maxLines = 1,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text)
             )
 
-            // Type Selector (Disabled if editing)
-            Text("Loan Type", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 8.dp, bottom = 16.dp)
-                    .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(12.dp))
-                    .padding(4.dp),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                val types = listOf(LoanType.LEND, LoanType.BORROW)
-                types.forEach { type ->
-                    val isSelected = selectedType == type
-                    // If initialLoan exists, disable changing type interaction visually or logically
-                    val isEnabled = initialLoan == null
-                    
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent)
-                            .clickable(enabled = isEnabled) { selectedType = type }
-                            .padding(vertical = 12.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = if (type == LoanType.LEND) "Lend (I give)" else "Borrow (I take)",
-                            color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = if (isEnabled) 1f else 0.5f),
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-                }
-            }
+            // Type Selector removed (Hoisted to TopAppBar)
             if (initialLoan != null) {
                 Text("Loan type cannot be changed after creation.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 16.dp))
             }
 
-            // Description
-            Text("Description", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            OutlinedTextField(
-                value = description, 
-                onValueChange = { description = it }, 
-                modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 16.dp),
-                shape = RoundedCornerShape(12.dp),
-                placeholder = { Text("Optional description") }
-            )
-
             // Date
-            Text("Date", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             OutlinedTextField(
                 value = date.format(DateTimeFormatter.ofPattern("EEE, MMM d, yyyy")),
                 onValueChange = {},
                 readOnly = true,
-                modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 16.dp).then(if (initialLoan == null) Modifier.clickable { showDatePicker = true } else Modifier),
+                modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp).then(if (initialLoan == null) Modifier.clickable { showDatePicker = true } else Modifier),
                 shape = RoundedCornerShape(12.dp),
+                label = { Text("Date") },
                 trailingIcon = { Icon(Icons.Default.DateRange, "Select Date", tint = if (initialLoan == null) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface.copy(alpha=0.3f)) },
                 enabled = false, 
                 colors = OutlinedTextFieldDefaults.colors(
@@ -288,6 +251,18 @@ fun LoanInputScreen(
                     )
                 }
             }
+
+            // Description (Moved to bottom)
+            OutlinedTextField(
+                value = description, 
+                onValueChange = { description = it }, 
+                modifier = Modifier.fillMaxWidth().padding(top=8.dp, bottom = 16.dp),
+                shape = RoundedCornerShape(12.dp),
+                label = { Text("Description") },
+                placeholder = { Text("Optional description") },
+                minLines = 3,
+                maxLines = 5
+            )
         }
         
         // Save Button
