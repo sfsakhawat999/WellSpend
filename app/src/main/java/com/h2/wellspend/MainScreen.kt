@@ -773,7 +773,8 @@ fun MainScreen(viewModel: MainViewModel) {
                             showCompareDialog = showReportCompareDialog,
                             onDismissCompareDialog = { showReportCompareDialog = false },
                             comparisonDate = reportComparisonDate,
-                            onComparisonDateChange = { reportComparisonDate = it }
+                            onComparisonDateChange = { reportComparisonDate = it },
+                            excludeLoanTransactions = excludeLoanTransactions
                         )
                     }
                     "OVERLAY_BUDGETS" -> {
@@ -894,11 +895,17 @@ fun MainScreen(viewModel: MainViewModel) {
                     }
                     "HOME" -> {
                         // Filter out virtual loan transactions (same logic as expense/income pages)
-                        // AND respect value of excludeLoanTransactions
-                        val validTransactionsForDisplay = currentMonthTransactions.filter { transaction ->
+                        // AND respect value of excludeLoanTransactions for Totals/Income
+                        val filteredTransactions = currentMonthTransactions.filter { transaction ->
                             val isVirtualLoan = transaction.loanId != null && transaction.accountId == null
                             val isExcludedLoan = excludeLoanTransactions && transaction.loanId != null
                             !isVirtualLoan && !isExcludedLoan
+                        }
+
+                        // For Transaction List: Only exclude virtual loans, SHOW real loans even if excluded from totals
+                        val unfilteredTransactions = currentMonthTransactions.filter { transaction ->
+                            val isVirtualLoan = transaction.loanId != null && transaction.accountId == null
+                            !isVirtualLoan
                         }
                         
                         // Calculate balance at end of selected month
@@ -927,12 +934,12 @@ fun MainScreen(viewModel: MainViewModel) {
                         }
                         
                         // Calculate income for this month (excluding virtual loan transactions)
-                        val totalIncome = validTransactionsForDisplay
+                        val totalIncome = filteredTransactions
                             .filter { it.transactionType == com.h2.wellspend.data.TransactionType.INCOME }
                             .sumOf { it.amount - it.feeAmount }
                         
                         // All transactions for lazy loading (sorted by date desc)
-                        val allMonthTransactions = validTransactionsForDisplay
+                        val allMonthTransactions = unfilteredTransactions
                             .sortedByDescending { it.date }
                         
                         DashboardScreen(

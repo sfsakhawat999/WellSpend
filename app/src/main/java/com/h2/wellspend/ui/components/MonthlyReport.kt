@@ -69,11 +69,13 @@ fun MonthlyReport(
     showCompareDialog: Boolean,
     onDismissCompareDialog: () -> Unit,
     comparisonDate: LocalDate?,
-    onComparisonDateChange: (LocalDate) -> Unit
+    onComparisonDateChange: (LocalDate) -> Unit,
+    excludeLoanTransactions: Boolean
 ) {
     // 1. Filter by Date first
-    val (incomeTotal, expenseTotal, transferTotal, _, expensePercentChange, categoryData) = remember(expenses, currentDate, comparisonDate) {
+    val (incomeTotal, expenseTotal, transferTotal, _, expensePercentChange, categoryData, breakdownData) = remember(expenses, currentDate, comparisonDate, excludeLoanTransactions) {
         // Refinement: Exclude untracked loan transactions (No Account)
+        // Base valid expenses (ignoring exclusion pref, but handling virtuals)
         val validExpenses = expenses.filter { !(it.loanId != null && it.accountId == null) }
         
         val currentMonthTransactions = validExpenses.filter {
@@ -88,32 +90,41 @@ fun MonthlyReport(
             date.month == prevDate.month && date.year == prevDate.year
         }
 
-        // 2. Separate by Type for Current Month
-        val currentIncomes = currentMonthTransactions.filter { it.transactionType == com.h2.wellspend.data.TransactionType.INCOME }
-        val currentExpenses = currentMonthTransactions.filter { it.transactionType == com.h2.wellspend.data.TransactionType.EXPENSE }
-        val currentTransfers = currentMonthTransactions.filter { it.transactionType == com.h2.wellspend.data.TransactionType.TRANSFER }
+        // Apply Exclusion Pref for SUMMARIES and CHARTS
+        val filteredCurrentTransactions = if (excludeLoanTransactions) {
+            currentMonthTransactions.filter { it.loanId == null }
+        } else currentMonthTransactions
+        
+        val filteredPrevTransactions = if (excludeLoanTransactions) {
+            prevMonthTransactions.filter { it.loanId == null }
+        } else prevMonthTransactions
 
-        // Totals
+        // 2. Separate by Type for Current Month (Filtered)
+        val currentIncomes = filteredCurrentTransactions.filter { it.transactionType == com.h2.wellspend.data.TransactionType.INCOME }
+        val currentExpenses = filteredCurrentTransactions.filter { it.transactionType == com.h2.wellspend.data.TransactionType.EXPENSE }
+        val currentTransfers = filteredCurrentTransactions.filter { it.transactionType == com.h2.wellspend.data.TransactionType.TRANSFER }
+
+        // Totals (Filtered)
         val incTotal = currentIncomes.sumOf { it.amount }
         // Expense Total = Expense Amount + ALL Fees (Expense Fees + Transfer Fees + Income Fees)
-        val allFees = currentMonthTransactions.sumOf { it.feeAmount }
+        val allFees = filteredCurrentTransactions.sumOf { it.feeAmount }
         val expTotal = currentExpenses.sumOf { it.amount } + allFees 
         val trTotal = currentTransfers.sumOf { it.amount }
 
-        // 3. Comparison specific to EXPENSES (Base Amount + Fees)
-        val prevExpenses = prevMonthTransactions.filter { it.transactionType == com.h2.wellspend.data.TransactionType.EXPENSE }
-        val prevAllFees = prevMonthTransactions.sumOf { it.feeAmount }
+        // 3. Comparison specific to EXPENSES (Base Amount + Fees) (Filtered)
+        val prevExpenses = filteredPrevTransactions.filter { it.transactionType == com.h2.wellspend.data.TransactionType.EXPENSE }
+        val prevAllFees = filteredPrevTransactions.sumOf { it.feeAmount }
         val prevExpTotal = prevExpenses.sumOf { it.amount } + prevAllFees
         
         val diff = expTotal - prevExpTotal
         val expChange = if (prevExpTotal == 0.0) 100.0 else (diff / prevExpTotal) * 100.0
 
-        // 4. Category Data (Expenses + Fees)
+        // 4. Category Data for CHART (Filtered)
         val currentCatMap = currentExpenses.groupBy { it.category }
             .mapValues { it.value.sumOf { exp -> exp.amount } } 
             .toMutableMap()
             
-        val allTransactionFees = currentMonthTransactions.sumOf { it.feeAmount }
+        val allTransactionFees = filteredCurrentTransactions.sumOf { it.feeAmount }
         if (allTransactionFees > 0) {
             val feeCat = com.h2.wellspend.data.SystemCategory.TransactionFee.name
             currentCatMap[feeCat] = (currentCatMap[feeCat] ?: 0.0) + allTransactionFees
@@ -140,8 +151,45 @@ fun MonthlyReport(
             )
             CategoryData(category, amount, prevAmount)
         }.sortedByDescending { it.amount }
+        
+        // 5. Category Data for BREAKDOWN (Unfiltered - Show Loans)
+        // We calculate this separately so the list shows everything
+        val breakdownCurrentExpenses = currentMonthTransactions.filter { it.transactionType == com.h2.wellspend.data.TransactionType.EXPENSE }
+        val breakdownPrevExpenses = prevMonthTransactions.filter { it.transactionType == com.h2.wellspend.data.TransactionType.EXPENSE }
+        
+        val breakdownCatMap = breakdownCurrentExpenses.groupBy { it.category }
+            .mapValues { it.value.sumOf { exp -> exp.amount } }
+            .toMutableMap()
+            
+        val breakdownAllFees = currentMonthTransactions.sumOf { it.feeAmount }
+        if (breakdownAllFees > 0) {
+            val feeCat = com.h2.wellspend.data.SystemCategory.TransactionFee.name
+            breakdownCatMap[feeCat] = (breakdownCatMap[feeCat] ?: 0.0) + breakdownAllFees
+        }
+        
+        val breakdownPrevCatMap = breakdownPrevExpenses.groupBy { it.category }
+            .mapValues { it.value.sumOf { exp -> exp.amount } }
+            .toMutableMap()
+            
+        if (prevMonthTransactions.sumOf { it.feeAmount } > 0) {
+             val feeCat = com.h2.wellspend.data.SystemCategory.TransactionFee.name
+             breakdownPrevCatMap[feeCat] = (breakdownPrevCatMap[feeCat] ?: 0.0) + prevMonthTransactions.sumOf { it.feeAmount }
+        }
+        
+        val breakdownData = breakdownCatMap.map { (catName, amount) ->
+             val prevAmount = breakdownPrevCatMap[catName] ?: 0.0
+             val category = categories.find { it.name == catName } ?: Category(
+                name = catName,
+                iconName = catName,
+                color = com.h2.wellspend.ui.getSystemCategoryColor(com.h2.wellspend.data.SystemCategory.Others).toArgb().toLong().also {
+                     try { com.h2.wellspend.ui.getSystemCategoryColor(com.h2.wellspend.data.SystemCategory.valueOf(catName)).toArgb().toLong() } catch(e:Exception) {}
+                },
+                isSystem = false
+            )
+            CategoryData(category, amount, prevAmount)
+        }.sortedByDescending { it.amount }
 
-        ReportData(incTotal, expTotal, trTotal, prevExpTotal, expChange, catData)
+        ReportData(incTotal, expTotal, trTotal, prevExpTotal, expChange, catData, breakdownData)
     }
 
     // Available months for comparison
@@ -376,7 +424,7 @@ fun MonthlyReport(
             )
 
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                categoryData.forEach { data ->
+                breakdownData.forEach { data ->
                     val diff = data.amount - data.prevAmount
                     val isIncrease = diff > 0
                     
@@ -431,6 +479,7 @@ data class ReportData(
     val transfer: Double,
     val prevExpense: Double,
     val expenseChange: Double,
-    val categoryData: List<CategoryData>
+    val categoryData: List<CategoryData>,
+    val breakdownData: List<CategoryData>
 )
 data class CategoryData(val category: Category, val amount: Double, val prevAmount: Double)
