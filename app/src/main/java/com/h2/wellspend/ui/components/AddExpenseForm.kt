@@ -404,6 +404,18 @@ fun AddExpenseForm(
                 }
             }
 
+            Spacer(modifier = Modifier.height(16.dp))  
+
+            // Title (Moved here)
+            OutlinedTextField(
+                value = title,
+                onValueChange = { title = it },
+                label = { Text(if(transactionType == com.h2.wellspend.data.TransactionType.INCOME) "Income Source" else "Title") },
+                shape = RoundedCornerShape(12.dp),
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+
             Spacer(modifier = Modifier.height(8.dp))
 
             // Account Selection
@@ -444,16 +456,7 @@ fun AddExpenseForm(
                 Spacer(modifier = Modifier.height(24.dp))
             }
 
-            // Title (outside Advanced Options)
-            OutlinedTextField(
-                value = title,
-                onValueChange = { title = it },
-                label = { Text(if(transactionType == com.h2.wellspend.data.TransactionType.INCOME) "Income Source" else "Title") },
-                shape = RoundedCornerShape(12.dp),
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth()
-            )
-            Spacer(modifier = Modifier.height(16.dp))
+
 
             // Advanced Options Toggle
             Row(
