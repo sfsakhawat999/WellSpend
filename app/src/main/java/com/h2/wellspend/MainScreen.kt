@@ -281,7 +281,7 @@ fun MainScreen(viewModel: MainViewModel) {
     val currentMonthTransactions = expenses.filter {
         val date = try { LocalDate.parse(it.date.take(10)) } catch(e:Exception) { LocalDate.now() }
         date.month == currentDate.month && date.year == currentDate.year
-    }.sortedWith(compareByDescending<Expense> { it.date }.thenByDescending { it.timestamp })
+    }.sortedWith(compareByDescending<Expense> { it.date.take(10) }.thenByDescending { it.timestamp })
 
     // Calculate Total Spend: (All Expenses Base Amount) + (All Fees from any transaction type)
     // EXCLUDING Loan transactions with NO Account (Virtual/Cash/Untracked)
@@ -1018,9 +1018,9 @@ fun MainScreen(viewModel: MainViewModel) {
                             .filter { it.transactionType == com.h2.wellspend.data.TransactionType.INCOME }
                             .sumOf { it.amount - it.feeAmount }
                         
-                        // All transactions for lazy loading (sorted by date desc)
+                        // All transactions for lazy loading (sorted by date desc, then by timestamp desc)
                         val allMonthTransactions = unfilteredTransactions
-                            .sortedByDescending { it.date }
+                            .sortedWith(compareByDescending<Expense> { it.date.take(10) }.thenByDescending { it.timestamp })
                         
                         DashboardScreen(
                             currentDate = currentDate,
@@ -1782,6 +1782,7 @@ fun TransferListScreen(
         
         // Filter only Transfers
         val transfers = expenses.filter { it.transactionType == com.h2.wellspend.data.TransactionType.TRANSFER }
+            .sortedWith(compareByDescending<com.h2.wellspend.data.Expense> { it.date.take(10) }.thenByDescending { it.timestamp })
         
         com.h2.wellspend.ui.components.TransferList(
             transfers = transfers,
@@ -1818,7 +1819,7 @@ fun IncomeListScreen(
         val incomes = expenses.filter { 
             it.transactionType == com.h2.wellspend.data.TransactionType.INCOME &&
             !(it.loanId != null && it.accountId == null)
-        }
+        }.sortedWith(compareByDescending<com.h2.wellspend.data.Expense> { it.date.take(10) }.thenByDescending { it.timestamp })
         
         com.h2.wellspend.ui.components.IncomeList(
             incomes = incomes,
