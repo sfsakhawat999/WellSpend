@@ -10,10 +10,10 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface ExpenseDao {
-    @Query("SELECT * FROM expenses ORDER BY date DESC, timestamp DESC")
+    @Query("SELECT * FROM transactions ORDER BY date DESC, timestamp DESC")
     fun getAllExpenses(): Flow<List<Expense>>
 
-    @Query("SELECT * FROM expenses ORDER BY date DESC, timestamp DESC")
+    @Query("SELECT * FROM transactions ORDER BY date DESC, timestamp DESC")
     suspend fun getAllExpensesOneShot(): List<Expense>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -25,7 +25,7 @@ interface ExpenseDao {
     @Delete
     suspend fun deleteExpense(expense: Expense)
     
-    @Query("DELETE FROM expenses WHERE id = :id")
+    @Query("DELETE FROM transactions WHERE id = :id")
     suspend fun deleteExpenseById(id: String)
 
     @Delete
