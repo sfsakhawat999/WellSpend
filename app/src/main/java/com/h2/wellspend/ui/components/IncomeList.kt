@@ -55,7 +55,8 @@ fun IncomeList(
     loans: List<com.h2.wellspend.data.Loan>,
     currency: String,
     onDelete: (String) -> Unit,
-    onEdit: (Expense) -> Unit
+    onEdit: (Expense) -> Unit,
+    onTransactionClick: (Expense) -> Unit = {}
 ) {
     if (incomes.isEmpty()) {
         Box(
@@ -89,6 +90,7 @@ fun IncomeList(
                         currency = currency,
                         onEdit = onEdit,
                         onDelete = onDelete,
+                        onTransactionClick = onTransactionClick,
                         shape = shape,
                         backgroundShape = backgroundShape
                     )
@@ -122,6 +124,7 @@ fun IncomeItem(
     currency: String,
     onEdit: (Expense) -> Unit,
     onDelete: (String) -> Unit,
+    onTransactionClick: (Expense) -> Unit,
     shape: Shape = RoundedCornerShape(16.dp),
     backgroundShape: Shape = shape
 ) {
@@ -286,16 +289,8 @@ fun IncomeItem(
                     .combinedClickable(
                         interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
                         indication = null,
-                        onClick = {
-                            scope.launch {
-                                com.h2.wellspend.ui.performWiggle(offsetX, actionWidthPx, context)
-                            }
-                        },
-                        onLongClick = {
-                            scope.launch {
-                                com.h2.wellspend.ui.performWiggle(offsetX, actionWidthPx, context)
-                            }
-                        }
+                        onClick = { onTransactionClick(income) },
+                        onLongClick = { onTransactionClick(income) }
                     )
                     .padding(16.dp)
             ) {

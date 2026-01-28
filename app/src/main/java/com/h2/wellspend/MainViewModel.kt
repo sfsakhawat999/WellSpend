@@ -64,7 +64,8 @@ class MainViewModel(
                 val queryMatch = if (query.isBlank()) true else {
                     expense.title.contains(query, ignoreCase = true) ||
                     (expense.note?.contains(query, ignoreCase = true) == true) ||
-                    (expense.amount.toInt().toString().contains(query))
+                    (expense.amount.toInt().toString().contains(query)) ||
+                    (expense.category.contains(query, ignoreCase = true))
                 }
                 
                 // Type Match

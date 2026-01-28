@@ -63,7 +63,9 @@ fun LoanScreen(
     onEditLoan: (Loan) -> Unit,
     onDeleteLoan: (Loan, Boolean) -> Unit,
     onEditTransaction: (Expense) -> Unit,
+
     onDeleteTransaction: (String) -> Unit,
+    onTransactionItemClick: (Expense) -> Unit = {},
     @Suppress("UNUSED_PARAMETER") onAddLoanStart: () -> Unit
 ) {
     var selectedTab by remember { mutableIntStateOf(0) }
@@ -113,6 +115,7 @@ fun LoanScreen(
                         onDeleteClick = { deleteTransactions -> onDeleteLoan(loan, deleteTransactions) },
                         onEditTransaction = onEditTransaction,
                         onDeleteTransaction = onDeleteTransaction,
+                        onTransactionItemClick = onTransactionItemClick,
                         shape = RoundedCornerShape(16.dp),
                         backgroundShape = RoundedCornerShape(17.dp)
                     )
@@ -151,6 +154,7 @@ fun LoanCard(
     onDeleteClick: (Boolean) -> Unit,
     onEditTransaction: (Expense) -> Unit,
     onDeleteTransaction: (String) -> Unit,
+    onTransactionItemClick: (Expense) -> Unit,
     shape: Shape,
     backgroundShape: Shape
 ) {
@@ -436,7 +440,8 @@ fun LoanCard(
                         currency = currency,
                         accounts = accounts,
                         onEdit = onEditTransaction,
-                        onDelete = onDeleteTransaction
+                        onDelete = onDeleteTransaction,
+                        onTransactionClick = onTransactionItemClick
                      )
                  }
 
@@ -519,14 +524,18 @@ fun LoanCard(
                              )
                              .fillMaxWidth()
                              .background(cardBackgroundColor(), initialShape)
-                             .combinedClickable(
-                                 onClick = {
-                                     initialScope.launch { performWiggle(initialOffsetX, initialActionWidthPx, initialContext, "Swipe left/right for options") }
-                                 },
-                                 onLongClick = {
-                                     initialScope.launch { performWiggle(initialOffsetX, initialActionWidthPx, initialContext, "Swipe left/right for options") }
-                                 }
-                             )
+                                .combinedClickable(
+                                     onClick = {
+                                         if (initialTransaction != null) {
+                                             onTransactionItemClick(initialTransaction)
+                                         } else {
+                                             initialScope.launch { performWiggle(initialOffsetX, initialActionWidthPx, initialContext, "Swipe left/right for options") }
+                                         }
+                                     },
+                                     onLongClick = {
+                                         initialScope.launch { performWiggle(initialOffsetX, initialActionWidthPx, initialContext, "Swipe left/right for options") }
+                                     }
+                                 )
                              .padding(16.dp),
                          horizontalArrangement = Arrangement.SpaceBetween,
                          verticalAlignment = Alignment.CenterVertically
@@ -583,6 +592,7 @@ fun LoanTransactionItem(
     accounts: List<Account>,
     onEdit: (Expense) -> Unit,
     onDelete: (String) -> Unit,
+    onTransactionClick: (Expense) -> Unit,
     shape: Shape = RoundedCornerShape(3.dp),
     backgroundShape: Shape = RoundedCornerShape(4.dp)
 ) {
@@ -709,12 +719,8 @@ fun LoanTransactionItem(
                 .fillMaxWidth()
                 .background(cardBackgroundColor(), shape)
                 .combinedClickable(
-                    onClick = {
-                        scope.launch { performWiggle(offsetX, actionWidthPx, context, "Swipe left/right for options") }
-                    },
-                    onLongClick = {
-                        scope.launch { performWiggle(offsetX, actionWidthPx, context, "Swipe left/right for options") }
-                    }
+                    onClick = { onTransactionClick(transaction) },
+                    onLongClick = { onTransactionClick(transaction) }
                 )
                 .padding(16.dp),
             horizontalArrangement = Arrangement.SpaceBetween,

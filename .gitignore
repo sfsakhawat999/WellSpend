@@ -4,3 +4,5 @@
 build
 release
 run_debug.sh
+KeyStore.jks
+compile_release.sh

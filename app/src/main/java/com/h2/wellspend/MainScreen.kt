@@ -190,6 +190,7 @@ fun MainScreen(viewModel: MainViewModel) {
     var showSearchFilterDialog by remember { mutableStateOf(false) }
 
     var loanTransactionToEdit by remember { mutableStateOf<Expense?>(null) }
+    var transactionToPreview by remember { mutableStateOf<Expense?>(null) }
     
     // Account Input State: Wrapper to handle "Add" (null content) vs "Edit" (account content)
     // If showAccountInput is true, we show the screen. The content depends on accountToEdit.
@@ -250,12 +251,13 @@ fun MainScreen(viewModel: MainViewModel) {
         isDataLoaded = true
     }
 
-    val canNavigateBack = showAddExpense || showReport || showBudgets || showSettings || showTransfers || showLoans || showRecurringConfigs || showCategoryManagement || showAccountInput || loanTransactionToEdit != null || currentScreen != Screen.HOME || (showLoans && (isCreatingLoan || editingLoan != null || loanForTransaction != null)) || showSearch
+    val canNavigateBack = showAddExpense || showReport || showBudgets || showSettings || showTransfers || showLoans || showRecurringConfigs || showCategoryManagement || showAccountInput || loanTransactionToEdit != null || transactionToPreview != null || currentScreen != Screen.HOME || (showLoans && (isCreatingLoan || editingLoan != null || loanForTransaction != null)) || showSearch
     androidx.activity.compose.BackHandler(enabled = canNavigateBack) {
         when {
             loanTransactionToEdit != null -> loanTransactionToEdit = null
             showAddExpense -> { showAddExpense = false; defaultTransactionType = null }
             showAccountInput -> { showAccountInput = false; accountToEdit = null }
+            transactionToPreview != null -> transactionToPreview = null
             showReport -> showReport = false
             showBudgets -> showBudgets = false
             showSettings -> showSettings = false
@@ -338,7 +340,7 @@ fun MainScreen(viewModel: MainViewModel) {
         }
     }
 
-    val isBottomBarVisible = !showAddExpense && !showReport && !showBudgets && !showSettings && !showTransfers && !showLoans && !showAccountInput && !showCategoryManagement && loanTransactionToEdit == null && !showSearch && !showRecurringConfigs
+    val isBottomBarVisible = !showAddExpense && !showReport && !showBudgets && !showSettings && !showTransfers && !showLoans && !showAccountInput && !showCategoryManagement && loanTransactionToEdit == null && !showSearch && !showRecurringConfigs && transactionToPreview == null
 
     val view = LocalView.current
     if (!view.isInEditMode) {
@@ -381,7 +383,9 @@ fun MainScreen(viewModel: MainViewModel) {
 
     ) { paddingValues ->
         Box(modifier = Modifier.padding(paddingValues).fillMaxSize()) {
-            val targetState = when {
+    val targetState = when {
+
+
                 showAddExpense -> "OVERLAY_ADD"
                 showAccountInput -> "OVERLAY_ACCOUNT_INPUT"
                 loanTransactionToEdit != null -> "OVERLAY_EDIT_LOAN_TRANSACTION"
@@ -389,7 +393,11 @@ fun MainScreen(viewModel: MainViewModel) {
                 loanForTransaction != null -> "OVERLAY_LOANS_TRANSACTION"
                 isCreatingLoan -> "OVERLAY_LOANS_ADD"
                 editingLoan != null -> "OVERLAY_LOANS_EDIT"
+                
+                transactionToPreview != null -> "OVERLAY_PREVIEW"
+                
                 showLoans -> "OVERLAY_LOANS_LIST"
+                
                 showRecurringConfigs -> "OVERLAY_RECURRING_CONFIGS"
                 
                 showReport -> "OVERLAY_REPORT"
@@ -407,28 +415,50 @@ fun MainScreen(viewModel: MainViewModel) {
                     val isOverlayTarget = targetState.startsWith("OVERLAY_")
                     val isOverlayInitial = initialState.startsWith("OVERLAY_")
                     
-                    // Specific Logic for Loan Sub-screens
-                    val isLoanSubScreenTarget = targetState == "OVERLAY_LOANS_ADD" || targetState == "OVERLAY_LOANS_EDIT" || targetState == "OVERLAY_LOANS_TRANSACTION" || targetState == "OVERLAY_EDIT_LOAN_TRANSACTION"
-                    val isLoanSubScreenInitial = initialState == "OVERLAY_LOANS_ADD" || initialState == "OVERLAY_LOANS_EDIT" || initialState == "OVERLAY_LOANS_TRANSACTION" || initialState == "OVERLAY_EDIT_LOAN_TRANSACTION"
-                    
-                    if (isLoanSubScreenTarget && initialState == "OVERLAY_LOANS_LIST") {
-                         // Push Sub-screen over List
+                    val isLoanSubScreenTarget = targetState.startsWith("OVERLAY_LOANS_") && targetState != "OVERLAY_LOANS_LIST"
+                    val isLoanSubScreenInitial = initialState.startsWith("OVERLAY_LOANS_") && initialState != "OVERLAY_LOANS_LIST"
+
+                    // Determine animation type
+                    val isPush = when {
+                        // 1. Enter Loan Sub-screen from Loan List
+                        isLoanSubScreenTarget && initialState == "OVERLAY_LOANS_LIST" -> true
+                        
+                        // 2. Enter Preview (from anywhere BUT NOT BACK FROM EDIT)
+                        targetState == "OVERLAY_PREVIEW" && !(initialState == "OVERLAY_ADD" || initialState == "OVERLAY_EDIT_LOAN_TRANSACTION" || initialState == "OVERLAY_ACCOUNT_INPUT") -> true
+                        
+                        // 3. Preview -> Edit (Forward)
+                        initialState == "OVERLAY_PREVIEW" && (targetState == "OVERLAY_ADD" || targetState == "OVERLAY_EDIT_LOAN_TRANSACTION" || targetState == "OVERLAY_ACCOUNT_INPUT") -> true
+                        
+                        // 4. Entering any Overlay from Base (if not covered above)
+                        isOverlayTarget && !isOverlayInitial -> true
+                        
+                        else -> false
+                    }
+
+                    val isPop = when {
+                        // 1. Exit Loan Sub-screen back to Loan List
+                        isLoanSubScreenInitial && targetState == "OVERLAY_LOANS_LIST" -> true
+                        
+                        // 2. Exit Preview (Back)
+                        initialState == "OVERLAY_PREVIEW" && !(targetState == "OVERLAY_ADD" || targetState == "OVERLAY_EDIT_LOAN_TRANSACTION" || targetState == "OVERLAY_ACCOUNT_INPUT") -> true
+
+                        // 3. Back to Preview from Edit (Pop)
+                        targetState == "OVERLAY_PREVIEW" && (initialState == "OVERLAY_ADD" || initialState == "OVERLAY_EDIT_LOAN_TRANSACTION" || initialState == "OVERLAY_ACCOUNT_INPUT") -> true
+                        
+                        // 4. Exiting any Overlay to Base
+                        !isOverlayTarget && isOverlayInitial -> true
+                        
+                        else -> false
+                    }
+
+                    if (isPush) {
                          slideInHorizontally(initialOffsetX = { fullWidth -> fullWidth }, animationSpec = tween(300)) togetherWith
-                         fadeOut(animationSpec = tween(200))
-                    } else if (targetState == "OVERLAY_LOANS_LIST" && isLoanSubScreenInitial) {
-                         // Pop Sub-screen
+                         fadeOut(animationSpec = tween(200)) using SizeTransform(clip = false)
+                    } else if (isPop) {
                          fadeIn(animationSpec = tween(300)) togetherWith
-                         slideOutHorizontally(targetOffsetX = { fullWidth -> fullWidth }, animationSpec = tween(300))
-                    } else if (isOverlayTarget && !isOverlayInitial) {
-                        // Entering an overlay (Push)
-                        slideInHorizontally(initialOffsetX = { fullWidth -> fullWidth }, animationSpec = tween(300)) togetherWith
-                        fadeOut(animationSpec = tween(200)) using SizeTransform(clip = false)
-                    } else if (!isOverlayTarget && isOverlayInitial) {
-                        // Exiting an overlay (Pop)
-                        fadeIn(animationSpec = tween(300)) togetherWith
-                        slideOutHorizontally(targetOffsetX = { fullWidth -> fullWidth }, animationSpec = tween(300)) using SizeTransform(clip = false)
+                         slideOutHorizontally(targetOffsetX = { fullWidth -> fullWidth }, animationSpec = tween(300)) using SizeTransform(clip = false)
                     } else {
-                        // Tab changes or Overlay to Overlay (default fade/scale)
+                        // Tab changes or unknown Overlay-to-Overlay (default fade/scale)
                         (fadeIn(animationSpec = tween(300)) + scaleIn(initialScale = 0.95f, animationSpec = tween(300))) togetherWith
                         (fadeOut(animationSpec = tween(200)) + scaleOut(targetScale = 0.95f, animationSpec = tween(200))) using SizeTransform(clip = false)
                     }
@@ -437,6 +467,7 @@ fun MainScreen(viewModel: MainViewModel) {
             ) { state ->
                 Column(modifier = Modifier.fillMaxSize()) {
                     val title = when(state) {
+                        "OVERLAY_PREVIEW" -> "Transaction Details"
                         "OVERLAY_ADD" -> if(lastExpenseToEdit != null) "Edit Expense" else "Add Expense"
                         "OVERLAY_REPORT" -> "Monthly Report"
                         "OVERLAY_BUDGETS" -> "Budgets"
@@ -582,6 +613,7 @@ fun MainScreen(viewModel: MainViewModel) {
                                               (state.startsWith("OVERLAY_LOANS_") && state != "OVERLAY_LOANS_LIST"),
                             onBack = {
                                 when(state) {
+                                    "OVERLAY_PREVIEW" -> transactionToPreview = null
                                     "OVERLAY_EDIT_LOAN_TRANSACTION" -> loanTransactionToEdit = null
                                     "OVERLAY_ACCOUNT_INPUT" -> { showAccountInput = false; accountToEdit = null }
                                     "OVERLAY_REPORT" -> showReport = false
@@ -678,6 +710,27 @@ fun MainScreen(viewModel: MainViewModel) {
                     
                     Box(modifier = Modifier.weight(1f)) {
                 when (state) {
+                    "OVERLAY_PREVIEW" -> {
+                         if (transactionToPreview != null) {
+                             com.h2.wellspend.ui.components.TransactionPreviewScreen(
+                                transaction = transactionToPreview!!,
+                                categories = allCategories,
+                                accounts = accounts,
+                                loans = loans,
+                                currency = currency,
+                                onDismiss = { transactionToPreview = null },
+                                onEdit = { 
+                                    if (it.loanId != null) {
+                                        loanTransactionToEdit = it
+                                    } else {
+                                        expenseToEdit = it
+                                        showAddExpense = true
+                                    }
+                                },
+                                onDelete = { id -> viewModel.deleteExpense(id); transactionToPreview = null }
+                             )
+                         }
+                    }
                     "OVERLAY_ADD" -> {
                         val categoryOrder by viewModel.categoryOrder.collectAsState()
                         AddExpenseForm(
@@ -704,6 +757,18 @@ fun MainScreen(viewModel: MainViewModel) {
                                         feeConfigName = feeName,
                                         note = note
                                     )
+                                    // Update preview if active
+                                    if (transactionToPreview != null && transactionToPreview!!.id == lastExpenseToEdit!!.id) {
+                                         transactionToPreview = transactionToPreview!!.copy(
+                                            amount = amount,
+                                            title = desc,
+                                            category = cat?.name ?: "",
+                                            date = date,
+                                            accountId = accId,
+                                            feeAmount = fee,
+                                            note = note
+                                         )
+                                    }
                                 } else {
                                     viewModel.addExpense(
                                         amount = amount, 
@@ -757,6 +822,17 @@ fun MainScreen(viewModel: MainViewModel) {
                                             loanId = transaction.loanId,
                                             note = note
                                         )
+                                        // Update preview if active
+                                        if (transactionToPreview != null && transactionToPreview!!.id == transaction.id) {
+                                             transactionToPreview = transactionToPreview!!.copy(
+                                                amount = amt,
+                                                title = desc,
+                                                date = date,
+                                                accountId = accId,
+                                                feeAmount = fee,
+                                                note = note
+                                             )
+                                        }
                                         loanTransactionToEdit = null
                                     }
                                  )
@@ -797,8 +873,10 @@ fun MainScreen(viewModel: MainViewModel) {
                             onEdit = { 
                                 expenseToEdit = it
                                 showAddExpense = true
-                            }
+                            },
+                            onTransactionClick = { transactionToPreview = it }
                         )
+
                     }
                     "OVERLAY_LOANS_TRANSACTION" -> {
                         val loan = lastLoanForTransaction // Use cached
@@ -858,7 +936,9 @@ fun MainScreen(viewModel: MainViewModel) {
                             onAddLoanStart = { 
                                 isCreatingLoan = true 
                                 newLoanType = com.h2.wellspend.data.LoanType.LEND
-                            }
+                            },
+
+                            onTransactionItemClick = { transactionToPreview = it }
                         )
                     }
                     "OVERLAY_RECURRING_CONFIGS" -> {
@@ -968,7 +1048,8 @@ fun MainScreen(viewModel: MainViewModel) {
                             onIncomeClick = { currentScreen = Screen.INCOME },
                             onExpenseClick = { currentScreen = Screen.EXPENSES },
                             onAccountClick = { currentScreen = Screen.ACCOUNTS },
-                            categories = allCategories
+                            categories = allCategories,
+                            onTransactionClick = { transactionToPreview = it }
                         )
                     }
                     "OVERLAY_ACCOUNT_INPUT" -> {
@@ -1014,7 +1095,9 @@ fun MainScreen(viewModel: MainViewModel) {
                                     showAddExpense = true
                                 }
                             },
-                            onDelete = { viewModel.deleteExpense(it) }
+
+                            onDelete = { viewModel.deleteExpense(it) },
+                            onTransactionClick = { transactionToPreview = it }
                         )
                         
                         if (showSearchFilterDialog) {
@@ -1059,7 +1142,8 @@ fun MainScreen(viewModel: MainViewModel) {
                                     expenseToEdit = it
                                     showAddExpense = true
                                 }
-                            }
+                            },
+                            onTransactionClick = { transactionToPreview = it }
                         )
                     }
                     "EXPENSES" -> {
@@ -1080,6 +1164,7 @@ fun MainScreen(viewModel: MainViewModel) {
                                     showAddExpense = true
                                 }
                             },
+                            onTransactionClick = { transactionToPreview = it },
                             state = listState,
                             chartData = chartData,
                             totalSpend = totalSpend,
@@ -1142,7 +1227,7 @@ fun MainScreen(viewModel: MainViewModel) {
                 .padding(bottom = if (isBottomBarVisible) 90.dp else 24.dp, end = 24.dp)
             ) {
                 if ((currentScreen == Screen.HOME || currentScreen == Screen.EXPENSES || currentScreen == Screen.INCOME || currentScreen == Screen.ACCOUNTS || currentScreen == Screen.ACCOUNTS || showTransfers || showLoans) && 
-                    !showAddExpense && !showReport && !showBudgets && !showSettings && !showAccountInput && loanTransactionToEdit == null && !showCategoryManagement && !showSearch && !showRecurringConfigs) {
+                    !showAddExpense && !showReport && !showBudgets && !showSettings && !showAccountInput && loanTransactionToEdit == null && !showCategoryManagement && !showSearch && !showRecurringConfigs && transactionToPreview == null) {
                         // Logic for deciding which FAB to show
                         // If standard add expense/transaction
                         if (!showLoans || (showLoans && !isCreatingLoan && editingLoan == null && loanForTransaction == null)) {
@@ -1244,7 +1329,8 @@ fun DashboardScreen(
     onIncomeClick: () -> Unit,
     onExpenseClick: () -> Unit,
     onAccountClick: (String) -> Unit,
-    categories: List<com.h2.wellspend.data.Category>
+    categories: List<com.h2.wellspend.data.Category>,
+    onTransactionClick: (Expense) -> Unit = {}
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         DateSelector(
@@ -1592,7 +1678,8 @@ fun DashboardScreen(
                         onDelete = onDelete,
                         modifier = paddingModifier,
                         shape = shape,
-                        backgroundShape = backgroundShape
+                        backgroundShape = backgroundShape,
+                        onTransactionClick = onTransactionClick
                     )
 
                 }
@@ -1634,7 +1721,9 @@ fun ExpenseListScreen(
     state: LazyListState,
     chartData: List<ChartData>,
     totalSpend: Double,
-    budgets: List<Budget>
+
+    budgets: List<Budget>,
+    onTransactionClick: (Expense) -> Unit = {}
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         DateSelector(
@@ -1657,6 +1746,7 @@ fun ExpenseListScreen(
             onDelete = onDelete,
             onEdit = onEdit,
             state = state,
+            onTransactionClick = onTransactionClick,
             headerContent = {
                 // Donut Chart at the top (scrollable)
                 DonutChart(
@@ -1665,7 +1755,8 @@ fun ExpenseListScreen(
                     currency = currency,
                     onCenterClick = { /* Already on details page */ }
                 )
-            }
+            },
+
         )
     }
 }
@@ -1679,7 +1770,9 @@ fun TransferListScreen(
     accounts: List<com.h2.wellspend.data.Account>,
     currency: String,
     onDelete: (String) -> Unit,
-    onEdit: (Expense) -> Unit
+
+    onEdit: (Expense) -> Unit,
+    onTransactionClick: (Expense) -> Unit = {}
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         DateSelector(
@@ -1695,7 +1788,8 @@ fun TransferListScreen(
             accounts = accounts,
             currency = currency,
             onDelete = onDelete,
-            onEdit = onEdit
+            onEdit = onEdit,
+            onTransactionClick = onTransactionClick
         )
     }
 }
@@ -1710,7 +1804,8 @@ fun IncomeListScreen(
     loans: List<com.h2.wellspend.data.Loan>,
     currency: String,
     onDelete: (String) -> Unit,
-    onEdit: (Expense) -> Unit
+    onEdit: (Expense) -> Unit,
+    onTransactionClick: (Expense) -> Unit = {}
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         DateSelector(
@@ -1731,7 +1826,8 @@ fun IncomeListScreen(
             loans = loans,
             currency = currency,
             onDelete = onDelete,
-            onEdit = onEdit
+            onEdit = onEdit,
+            onTransactionClick = onTransactionClick
         )
     }
 }

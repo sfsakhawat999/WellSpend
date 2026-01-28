@@ -5,6 +5,16 @@ plugins {
 }
 
 android {
+    signingConfigs {
+        create("release") {
+           if (project.hasProperty("releaseKeyStore")) {
+               storeFile = file(project.property("releaseKeyStore") as String)
+               storePassword = project.property("releaseKeyStorePassword") as String
+               keyAlias = project.property("releaseKeyAlias") as String
+               keyPassword = project.property("releaseKeyPassword") as String
+           }
+        }
+    }
     namespace = "com.h2.wellspend"
     compileSdk = 34
 
@@ -12,8 +22,8 @@ android {
         applicationId = "com.h2.wellspend"
         minSdk = 26
         targetSdk = 34
-        versionCode = 5
-        versionName = "1.0.4"
+        versionCode = 6
+        versionName = "1.0.5"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -30,6 +40,9 @@ android {
             applicationIdSuffix = ".debug"
         }
         release {
+            if (project.hasProperty("releaseKeyStore")) {
+                signingConfig = signingConfigs.getByName("release")
+            }
             isMinifyEnabled = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }

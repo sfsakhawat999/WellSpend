@@ -535,38 +535,40 @@ fun AddExpenseForm(
                     Spacer(modifier = Modifier.height(24.dp))
 
                     // Recurring Transaction Toggle
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(
-                            text = "Recurring Transaction",
-                            style = MaterialTheme.typography.bodyLarge
-                        )
-                        Switch(
-                            checked = isRecurring,
-                            onCheckedChange = { isRecurring = it }
-                        )
-                    }
-                    
-                    // Frequency Selector (visible when recurring is enabled)
-                    if (isRecurring) {
-                        Spacer(modifier = Modifier.height(12.dp))
+                    if (initialExpense == null) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            RecurringFrequency.entries.forEach { freq ->
-                                FilterChip(
-                                    selected = frequency == freq,
-                                    onClick = { frequency = freq },
-                                    label = { Text(freq.name.lowercase().replaceFirstChar { it.uppercase() }) }
-                                )
+                            Text(
+                                text = "Recurring Transaction",
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                            Switch(
+                                checked = isRecurring,
+                                onCheckedChange = { isRecurring = it }
+                            )
+                        }
+                        
+                        // Frequency Selector (visible when recurring is enabled)
+                        if (isRecurring) {
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                RecurringFrequency.entries.forEach { freq ->
+                                    FilterChip(
+                                        selected = frequency == freq,
+                                        onClick = { frequency = freq },
+                                        label = { Text(freq.name.lowercase().replaceFirstChar { it.uppercase() }) }
+                                    )
+                                }
                             }
                         }
+                        Spacer(modifier = Modifier.height(24.dp))
                     }
-                    Spacer(modifier = Modifier.height(24.dp))
                 }
             }
         }
