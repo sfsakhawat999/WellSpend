@@ -71,6 +71,7 @@ fun TransactionItem(
     currency: String,
     onEdit: (Expense) -> Unit,
     onDelete: (String) -> Unit,
+    onTransactionClick: (Expense) -> Unit = {},
     modifier: Modifier = Modifier,
     shape: Shape = RoundedCornerShape(12.dp),
     backgroundShape: Shape = shape
@@ -251,16 +252,8 @@ fun TransactionItem(
                 .combinedClickable(
                     interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
                     indication = null, // Custom ripple handled by material? or just disable visual feedback here to avoid conflict
-                    onClick = {
-                        scope.launch {
-                            performWiggle(offsetX, actionWidthPx, context)
-                        }
-                    },
-                    onLongClick = {
-                        scope.launch {
-                            performWiggle(offsetX, actionWidthPx, context)
-                        }
-                    }
+                    onClick = { onTransactionClick(transaction) },
+                    onLongClick = { onTransactionClick(transaction) }
                 )
                 .padding(12.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),

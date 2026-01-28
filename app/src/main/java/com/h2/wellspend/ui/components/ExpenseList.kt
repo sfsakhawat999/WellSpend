@@ -91,6 +91,7 @@ fun ExpenseList(
     currency: String,
     onDelete: (String) -> Unit,
     onEdit: (Expense) -> Unit,
+    onTransactionClick: (Expense) -> Unit = {},
     state: LazyListState = rememberLazyListState(),
     headerContent: @Composable () -> Unit = {}
 ) {
@@ -182,10 +183,10 @@ fun ExpenseList(
                             if (realExpense != null) {
                                 onEdit(realExpense)
                             }
-                        } else {
                             onEdit(expense)
                         }
-                    }
+                    },
+                    onTransactionClick = onTransactionClick // Pass it down
                 )
             }
             item {
@@ -216,7 +217,8 @@ fun ExpenseCategoryItem(
     currency: String,
     budget: com.h2.wellspend.data.Budget? = null,
     onDelete: (String) -> Unit,
-    onEdit: (Expense) -> Unit
+    onEdit: (Expense) -> Unit,
+    onTransactionClick: (Expense) -> Unit
 ) {
     var isExpanded by remember { mutableStateOf(false) }
     val color = Color(category.color)
@@ -377,6 +379,7 @@ fun ExpenseCategoryItem(
                                 loans = loans,
                                 onDelete = onDelete,
                                 onEdit = onEdit,
+                                onTransactionClick = onTransactionClick,
                                 shape = shape,
                                 backgroundShape = backgroundShape
                             )
@@ -442,6 +445,7 @@ fun ExpenseItem(
     loans: List<com.h2.wellspend.data.Loan>,
     onDelete: (String) -> Unit,
     onEdit: (Expense) -> Unit,
+    onTransactionClick: (Expense) -> Unit,
     shape: Shape = RoundedCornerShape(12.dp),
     backgroundShape: Shape = shape
 ) {
@@ -618,16 +622,8 @@ fun ExpenseItem(
                     .combinedClickable(
                         interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
                         indication = null,
-                        onClick = {
-                            scope.launch {
-                                com.h2.wellspend.ui.performWiggle(offsetX, actionWidthPx, context)
-                            }
-                        },
-                        onLongClick = {
-                            scope.launch {
-                                com.h2.wellspend.ui.performWiggle(offsetX, actionWidthPx, context)
-                            }
-                        }
+                        onClick = { onTransactionClick(expense) },
+                        onLongClick = { onTransactionClick(expense) }
                     )
                     .padding(16.dp),
                 verticalAlignment = Alignment.Top,

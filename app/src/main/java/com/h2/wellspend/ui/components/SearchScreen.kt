@@ -29,7 +29,8 @@ fun SearchScreen(
     categories: List<Category>,
     currency: String,
     onEdit: (Expense) -> Unit,
-    onDelete: (String) -> Unit
+    onDelete: (String) -> Unit,
+    onTransactionClick: (Expense) -> Unit = {}
 ) {
     if (searchResults.isEmpty()) {
         Box(
@@ -156,6 +157,7 @@ fun SearchScreen(
                     currency = currency,
                     onEdit = onEdit,
                     onDelete = onDelete,
+                    onTransactionClick = onTransactionClick,
                     modifier = paddingModifier,
                     shape = shape,
                     backgroundShape = backgroundShape
