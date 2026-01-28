@@ -111,7 +111,10 @@ fun EditLoanTransactionScreen(
         else -> "Edit Transaction"
     }
 
-    val showFee = isLendMore || isRepay
+    val showFee = (isLendMore || isRepay) && selectedAccountId != null
+    
+    // Confirmation dialog state for saving without account
+    var showNoAccountConfirmation by remember { mutableStateOf(false) }
     
     // Helper to calculate fee based on account rule
     val currentAccount = accounts.find { it.id == selectedAccountId }
@@ -310,22 +313,55 @@ fun EditLoanTransactionScreen(
                 .fillMaxWidth()
                 .padding(16.dp)
         ) {
+            // Helper function to perform the save
+            val performSave = {
+                val amt = amount.toDoubleOrNull()
+                if (amt != null) {
+                    val fee = if (selectedAccountId != null) feeAmount.toDoubleOrNull() ?: 0.0 else 0.0
+                    val config = if (selectedAccountId != null) {
+                        if(isCustomFee) "Custom" else selectedFeeConfigName
+                    } else null
+                    onConfirm(amt, textDescription, selectedAccountId, fee, config, date, note)
+                }
+            }
+            
             Button(
                 onClick = {
-                     val amt = amount.toDoubleOrNull()
-                     if (amt != null) {
-                         val fee = feeAmount.toDoubleOrNull() ?: 0.0
-                         val config = if(isCustomFee) "Custom" else selectedFeeConfigName
-                         onConfirm(amt, textDescription, selectedAccountId, fee, config, date, note)
-                     }
+                    if (selectedAccountId == null) {
+                        showNoAccountConfirmation = true
+                    } else {
+                        performSave()
+                    }
                 },
-                enabled = amount.isNotEmpty() && amount.toDoubleOrNull() != null && selectedAccountId != null,
+                enabled = amount.isNotEmpty() && amount.toDoubleOrNull() != null,
                 shape = RoundedCornerShape(16.dp),
                 modifier = Modifier.fillMaxWidth().height(56.dp)
             ) {
                  Icon(Icons.Default.Check, contentDescription = null)
                  Spacer(modifier = Modifier.size(8.dp))
                  Text("Save Changes", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            }
+            
+            // Confirmation dialog for no account
+            if (showNoAccountConfirmation) {
+                androidx.compose.material3.AlertDialog(
+                    onDismissRequest = { showNoAccountConfirmation = false },
+                    title = { Text("No Account Selected") },
+                    text = { Text("This transaction will not be linked to any account and won't affect account balances. Continue?") },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            showNoAccountConfirmation = false
+                            performSave()
+                        }) {
+                            Text("Save Anyway")
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showNoAccountConfirmation = false }) {
+                            Text("Cancel")
+                        }
+                    }
+                )
             }
         }
     }
