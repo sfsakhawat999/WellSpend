@@ -14,6 +14,7 @@ import androidx.compose.material.icons.automirrored.filled.CompareArrows
 import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.CalendarToday
+import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Notes
 import androidx.compose.material3.*
@@ -134,6 +135,20 @@ fun TransactionPreviewScreen(
             
             // Details List
             DetailRow(icon = Icons.Default.CalendarToday, label = "Date", value = dateStr)
+            
+            val createdAtStr = remember(transaction.timestamp) {
+                try {
+                    java.time.Instant.ofEpochMilli(transaction.timestamp)
+                        .atZone(java.time.ZoneId.systemDefault())
+                        .format(DateTimeFormatter.ofPattern("d MMM yyyy, hh:mm a"))
+                } catch (e: Exception) {
+                    ""
+                }
+            }
+            
+            if (createdAtStr.isNotEmpty()) {
+                 DetailRow(icon = androidx.compose.material.icons.Icons.Default.AccessTime, label = "Created At", value = createdAtStr)
+            }
             DetailRow(icon = Icons.Default.Category, label = "Category", value = transaction.category)
             
             if (isTransfer && targetAccountName != null) {
