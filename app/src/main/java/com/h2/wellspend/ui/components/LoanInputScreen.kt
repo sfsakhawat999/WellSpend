@@ -54,12 +54,14 @@ fun LoanInputScreen(
     // selectedType hoisted to MainScreen
     var description by remember { mutableStateOf(initialLoan?.description ?: "") }
     var selectedAccountId by remember { mutableStateOf<String?>(null) } 
-    var doNotTrack by remember { mutableStateOf(false) }
     
     // Fee State
     var selectedFeeConfigName by remember { mutableStateOf<String?>(null) }
     var feeAmount by remember { mutableStateOf("") }
     var isCustomFee by remember { mutableStateOf(false) }
+    
+    // Confirmation dialog state for saving without account
+    var showNoAccountConfirmation by remember { mutableStateOf(false) }
 
     var date by remember { mutableStateOf(if (initialLoan != null) Instant.ofEpochMilli(initialLoan.createdAt).atZone(ZoneId.systemDefault()).toLocalDate() else LocalDate.now()) }
     
@@ -210,31 +212,18 @@ fun LoanInputScreen(
             // Account Section
             if (initialLoan == null) {
                 // Account Selector
-                
-                Row(
-                    verticalAlignment = Alignment.CenterVertically, 
-                    modifier = Modifier.fillMaxWidth().clickable { doNotTrack = !doNotTrack }.padding(vertical = 8.dp)
-                ) {
-                    Checkbox(checked = doNotTrack, onCheckedChange = { doNotTrack = it })
-                    Text("Do not track as transaction")
-                }
+                val accountLabel = if (selectedType == LoanType.LEND) "Pay From Account" else "Deposit To Account"
+                AccountSelector(
+                    accounts = accounts,
+                    accountBalances = accountBalances,
+                    selectedAccountId = selectedAccountId,
+                    onAccountSelected = { selectedAccountId = it },
+                    currency = currency,
+                    title = accountLabel
+                )
 
-                if (!doNotTrack) {
-                    val accountLabel = if (selectedType == LoanType.LEND) "Pay From Account" else "Deposit To Account"
-                    AccountSelector(
-                        accounts = accounts,
-                        accountBalances = accountBalances,
-                        selectedAccountId = selectedAccountId,
-                        onAccountSelected = { selectedAccountId = it },
-                        currency = currency,
-                        title = accountLabel
-                    )
-                } else {
-                    LaunchedEffect(Unit) { selectedAccountId = null }
-                }
-
-                // Fee (Only if Lending AND not tracking? No, Fee applies to transaction.)
-                if (selectedType == LoanType.LEND && !doNotTrack) {
+                // Fee (Only if Lending AND account is selected)
+                if (selectedType == LoanType.LEND && selectedAccountId != null) {
                     Spacer(Modifier.height(16.dp))
                     FeeSelector(
                         account = currentAccount,
@@ -243,8 +232,8 @@ fun LoanInputScreen(
                         selectedConfigName = selectedFeeConfigName,
                         currentFeeAmount = feeAmount,
                         isCustomFee = isCustomFee,
-                        onFeeChanged = { name, amt, isCustom ->
-                            selectedFeeConfigName = name
+                        onFeeChanged = { n, amt, isCustom ->
+                            selectedFeeConfigName = n
                             feeAmount = amt
                             isCustomFee = isCustom
                         }
@@ -267,21 +256,53 @@ fun LoanInputScreen(
         
         // Save Button
         Box(modifier = Modifier.padding(16.dp)) {
+            // Helper function to perform the save
+            val performSave = {
+                val amt = amount.toDoubleOrNull()
+                val fee = if (selectedAccountId != null) feeAmount.toDoubleOrNull() ?: 0.0 else 0.0
+                val finalFeeConfigName = if (selectedAccountId != null) selectedFeeConfigName else null
+                if (name.isNotBlank() && amt != null) {
+                    onSave(name, amt, selectedType, description.ifBlank { null }, selectedAccountId, fee, finalFeeConfigName, date)
+                }
+            }
+            
             Button(
                 onClick = {
-                    val amt = amount.toDoubleOrNull()
-                    val fee = feeAmount.toDoubleOrNull() ?: 0.0
-                    if (name.isNotBlank() && amt != null) {
-                        onSave(name, amt, selectedType, description.ifBlank { null }, if (doNotTrack) null else selectedAccountId, fee, selectedFeeConfigName, date)
+                    if (selectedAccountId == null && initialLoan == null) {
+                        showNoAccountConfirmation = true
+                    } else {
+                        performSave()
                     }
                 },
                 modifier = Modifier.fillMaxWidth().height(56.dp),
                 shape = RoundedCornerShape(16.dp),
-                enabled = name.isNotBlank() && amount.toDoubleOrNull() != null && (doNotTrack || selectedAccountId != null || initialLoan != null)
+                enabled = name.isNotBlank() && amount.toDoubleOrNull() != null
             ) {
                  Icon(Icons.Default.Check, contentDescription = null)
                  Spacer(Modifier.width(8.dp))
                  Text("Save Loan", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            }
+            
+            // Confirmation dialog for no account
+            if (showNoAccountConfirmation) {
+                AlertDialog(
+                    onDismissRequest = { showNoAccountConfirmation = false },
+                    title = { Text("No Account Selected") },
+                    text = { Text("This loan will not be linked to any account and won't affect account balances. Continue?") },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            showNoAccountConfirmation = false
+                            performSave()
+                        }) {
+                            Text("Save Anyway")
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showNoAccountConfirmation = false }) {
+                            Text("Cancel")
+                        }
+                    }
+                )
             }
         }
     }

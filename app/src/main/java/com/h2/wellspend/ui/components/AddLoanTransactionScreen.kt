@@ -90,6 +90,9 @@ fun AddLoanTransactionScreen(
     var date by remember { mutableStateOf(LocalDate.now()) }
     var showDatePicker by remember { mutableStateOf(false) }
     val datePickerState = rememberDatePickerState()
+    
+    // Confirmation dialog state for saving without account
+    var showNoAccountConfirmation by remember { mutableStateOf(false) }
 
     // var doNotTrack by remember { mutableStateOf(false) } // Removed
 
@@ -265,8 +268,8 @@ fun AddLoanTransactionScreen(
                 
 
 
-                 // Fee Logic
-                 val showFee = (loan.type == LoanType.LEND && !isPayment) || (loan.type == LoanType.BORROW && isPayment)
+                 // Fee Logic (only show when account is selected)
+                 val showFee = ((loan.type == LoanType.LEND && !isPayment) || (loan.type == LoanType.BORROW && isPayment)) && selectedAccountId != null
                  if (showFee) {
                     FeeSelector(
                         account = currentAccount,
@@ -310,21 +313,53 @@ fun AddLoanTransactionScreen(
                 .fillMaxWidth()
                 .padding(16.dp)
         ) {
+            // Helper function to perform the save
+            val performSave = {
+                val amt = amount.toDoubleOrNull()
+                if (amt != null) {
+                    val fee = if (selectedAccountId != null) feeAmount.toDoubleOrNull() ?: 0.0 else 0.0
+                    val finalFeeConfigName = if (selectedAccountId != null) selectedFeeConfigName else null
+                    onConfirm(amt, isPayment, selectedAccountId, fee, finalFeeConfigName, date, note)
+                }
+            }
+            
             Button(
                 onClick = {
-                     val amt = amount.toDoubleOrNull()
-                     if (amt != null) {
-                         val fee = feeAmount.toDoubleOrNull() ?: 0.0
-                         onConfirm(amt, isPayment, selectedAccountId, fee, selectedFeeConfigName, date, note)
-                     }
+                    if (selectedAccountId == null) {
+                        showNoAccountConfirmation = true
+                    } else {
+                        performSave()
+                    }
                 },
-                enabled = amount.isNotEmpty() && amount.toDoubleOrNull() != null && selectedAccountId != null,
+                enabled = amount.isNotEmpty() && amount.toDoubleOrNull() != null,
                 shape = RoundedCornerShape(16.dp),
                 modifier = Modifier.fillMaxWidth().height(56.dp)
             ) {
                  Icon(Icons.Default.Check, contentDescription = null)
                  Spacer(modifier = Modifier.size(8.dp))
                  Text("Save Transaction", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            }
+            
+            // Confirmation dialog for no account
+            if (showNoAccountConfirmation) {
+                androidx.compose.material3.AlertDialog(
+                    onDismissRequest = { showNoAccountConfirmation = false },
+                    title = { Text("No Account Selected") },
+                    text = { Text("This transaction will not be linked to any account and won't affect account balances. Continue?") },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            showNoAccountConfirmation = false
+                            performSave()
+                        }) {
+                            Text("Save Anyway")
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showNoAccountConfirmation = false }) {
+                            Text("Cancel")
+                        }
+                    }
+                )
             }
         }
     }

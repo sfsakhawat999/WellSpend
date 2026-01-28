@@ -144,6 +144,9 @@ fun AddExpenseForm(
     var selectedFeeConfigName by remember { mutableStateOf<String?>(initialExpense?.feeConfigName) } // "Custom" or config name
     var feeAmount by remember { mutableStateOf(initialExpense?.feeAmount?.toString() ?: "0.0") }
     var isCustomFee by remember { mutableStateOf(initialExpense?.feeConfigName == "Custom") }
+    
+    // Confirmation dialog state for saving without account
+    var showNoAccountConfirmation by remember { mutableStateOf(false) }
 
     // Helper to calculate fee based on account rule
     val currentAccount = accounts.find { it.id == accountId }
@@ -486,8 +489,8 @@ fun AddExpenseForm(
                 exit = androidx.compose.animation.shrinkVertically()
             ) {
                 Column {
-                    // Fees
-                    if (transactionType != com.h2.wellspend.data.TransactionType.INCOME) {
+                    // Fees (only show when account is selected)
+                    if (transactionType != com.h2.wellspend.data.TransactionType.INCOME && accountId != null) {
                         FeeSelector(
                             account = currentAccount,
                             transactionAmount = amount.toDoubleOrNull() ?: 0.0,
@@ -579,28 +582,60 @@ fun AddExpenseForm(
                 .fillMaxWidth()
                 .padding(16.dp)
         ) {
+            // Helper function to perform the save
+            val performSave = {
+                val amountVal = amount.toDoubleOrNull()
+                if (amountVal != null) {
+                    val feeVal = if (accountId != null) feeAmount.toDoubleOrNull() ?: 0.0 else 0.0
+                    val finalFeeConfigName = if (accountId != null) selectedFeeConfigName else null
+                    val finalCategory = if(transactionType == com.h2.wellspend.data.TransactionType.EXPENSE) {
+                         category ?: categories.find { it.name == SystemCategory.Others.name }
+                    } else null
+                    
+                    onAdd(amountVal, title,
+                        finalCategory,
+                        date, isRecurring, frequency,
+                        transactionType, accountId, targetAccountId, feeVal, finalFeeConfigName, note)
+                }
+            }
+            
             Button(
                 onClick = {
-                    val amountVal = amount.toDoubleOrNull()
-                    if (amountVal != null) {
-                        val feeVal = feeAmount.toDoubleOrNull() ?: 0.0
-                        val finalCategory = if(transactionType == com.h2.wellspend.data.TransactionType.EXPENSE) {
-                             category ?: categories.find { it.name == SystemCategory.Others.name }
-                        } else null
-                        
-                        onAdd(amountVal, title,
-                            finalCategory,
-                            date, isRecurring, frequency,
-                            transactionType, accountId, targetAccountId, feeVal, selectedFeeConfigName, note)
+                    if (accountId == null && transactionType != com.h2.wellspend.data.TransactionType.TRANSFER) {
+                        showNoAccountConfirmation = true
+                    } else {
+                        performSave()
                     }
                 },
-                enabled = amount.isNotEmpty() && accountId != null && (transactionType != com.h2.wellspend.data.TransactionType.TRANSFER || targetAccountId != null),
+                enabled = amount.isNotEmpty() && (transactionType != com.h2.wellspend.data.TransactionType.TRANSFER || (accountId != null && targetAccountId != null)),
                 shape = RoundedCornerShape(16.dp),
                 modifier = Modifier.fillMaxWidth().height(56.dp)
             ) {
                 Icon(Icons.Default.Check, contentDescription = null)
                 Spacer(modifier = Modifier.size(8.dp))
                 Text("Save Transaction", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            }
+            
+            // Confirmation dialog for no account
+            if (showNoAccountConfirmation) {
+                androidx.compose.material3.AlertDialog(
+                    onDismissRequest = { showNoAccountConfirmation = false },
+                    title = { Text("No Account Selected") },
+                    text = { Text("This transaction will not be linked to any account and won't affect account balances. Continue?") },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            showNoAccountConfirmation = false
+                            performSave()
+                        }) {
+                            Text("Save Anyway")
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showNoAccountConfirmation = false }) {
+                            Text("Cancel")
+                        }
+                    }
+                )
             }
         }
     }

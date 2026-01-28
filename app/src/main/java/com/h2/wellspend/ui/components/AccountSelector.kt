@@ -37,7 +37,7 @@ fun AccountSelector(
     accounts: List<Account>,
     accountBalances: Map<String, Double>,
     selectedAccountId: String?,
-    onAccountSelected: (String) -> Unit,
+    onAccountSelected: (String?) -> Unit,
     currency: String,
     title: String = "Select Account",
     modifier: Modifier = Modifier
@@ -65,7 +65,14 @@ fun AccountSelector(
                     balance = balance,
                     currency = currency,
                     isSelected = isSelected,
-                    onClick = { onAccountSelected(account.id) }
+                    // Toggle: if already selected, unselect (null), otherwise select
+                    onClick = { 
+                        if (isSelected) {
+                            onAccountSelected(null)
+                        } else {
+                            onAccountSelected(account.id)
+                        }
+                    }
                 )
             }
         }

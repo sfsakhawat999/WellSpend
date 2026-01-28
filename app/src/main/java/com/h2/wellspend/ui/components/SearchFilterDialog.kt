@@ -29,6 +29,9 @@ fun SearchFilterDialog(
     var selectedType by remember { mutableStateOf(currentFilter.type) }
     var startDate by remember { mutableStateOf(currentFilter.startDate) }
     var endDate by remember { mutableStateOf(currentFilter.endDate) }
+    var searchField by remember { mutableStateOf(currentFilter.searchField) }
+    var sortOption by remember { mutableStateOf(currentFilter.sortOption) }
+    var sortOrder by remember { mutableStateOf(currentFilter.sortOrder) }
     
     // Helper to manage date picker dialogs
     var showStartDatePicker by remember { mutableStateOf(false) }
@@ -81,6 +84,90 @@ fun SearchFilterDialog(
                     selected = selectedType == TransactionType.TRANSFER,
                     onClick = { selectedType = TransactionType.TRANSFER },
                     label = { Text("Transfer") }
+                )
+            }
+            
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Search By Filter
+            Text("Search By", style = MaterialTheme.typography.titleMedium)
+            Spacer(modifier = Modifier.height(8.dp))
+            @OptIn(ExperimentalLayoutApi::class)
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                FilterChip(
+                    selected = searchField == MainViewModel.SearchField.ALL,
+                    onClick = { searchField = MainViewModel.SearchField.ALL },
+                    label = { Text("All") }
+                )
+                FilterChip(
+                    selected = searchField == MainViewModel.SearchField.TITLE,
+                    onClick = { searchField = MainViewModel.SearchField.TITLE },
+                    label = { Text("Title") }
+                )
+                FilterChip(
+                    selected = searchField == MainViewModel.SearchField.NOTE,
+                    onClick = { searchField = MainViewModel.SearchField.NOTE },
+                    label = { Text("Note") }
+                )
+                FilterChip(
+                    selected = searchField == MainViewModel.SearchField.AMOUNT,
+                    onClick = { searchField = MainViewModel.SearchField.AMOUNT },
+                    label = { Text("Amount") }
+                )
+                FilterChip(
+                    selected = searchField == MainViewModel.SearchField.CATEGORY,
+                    onClick = { searchField = MainViewModel.SearchField.CATEGORY },
+                    label = { Text("Category") }
+                )
+            }
+            
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Sort Options Header with Order Toggle
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Sort By", style = MaterialTheme.typography.titleMedium)
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    FilterChip(
+                        selected = sortOrder == MainViewModel.SortOrder.DESC,
+                        onClick = { sortOrder = MainViewModel.SortOrder.DESC },
+                        label = { Text("Desc") }
+                    )
+                    FilterChip(
+                        selected = sortOrder == MainViewModel.SortOrder.ASC,
+                        onClick = { sortOrder = MainViewModel.SortOrder.ASC },
+                        label = { Text("Asc") }
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            @OptIn(ExperimentalLayoutApi::class)
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                FilterChip(
+                    selected = sortOption == MainViewModel.SortOption.DATE,
+                    onClick = { sortOption = MainViewModel.SortOption.DATE },
+                    label = { Text("Date") }
+                )
+                FilterChip(
+                    selected = sortOption == MainViewModel.SortOption.AMOUNT,
+                    onClick = { sortOption = MainViewModel.SortOption.AMOUNT },
+                    label = { Text("Amount") }
+                )
+                FilterChip(
+                    selected = sortOption == MainViewModel.SortOption.TITLE,
+                    onClick = { sortOption = MainViewModel.SortOption.TITLE },
+                    label = { Text("Title") }
                 )
             }
             
@@ -156,7 +243,7 @@ fun SearchFilterDialog(
                 }
                 Spacer(modifier = Modifier.width(8.dp))
                 Button(onClick = {
-                    onApply(MainViewModel.SearchFilter(selectedType, startDate, endDate))
+                    onApply(MainViewModel.SearchFilter(selectedType, startDate, endDate, searchField, sortOption, sortOrder))
                     onDismiss()
                 }) {
                     Text("Apply")

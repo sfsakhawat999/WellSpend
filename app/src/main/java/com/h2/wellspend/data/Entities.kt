@@ -27,7 +27,7 @@ data class Category(
 )
 
 @Keep
-@Entity(tableName = "expenses")
+@Entity(tableName = "transactions")
 data class Expense(
     @PrimaryKey val id: String = UUID.randomUUID().toString(),
     val amount: Double,
