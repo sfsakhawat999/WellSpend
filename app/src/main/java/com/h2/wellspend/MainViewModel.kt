@@ -42,10 +42,25 @@ class MainViewModel(
     private val _searchQuery = MutableStateFlow("")
     val searchQuery = _searchQuery.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "")
 
+    enum class SearchField {
+        ALL, TITLE, NOTE, AMOUNT, CATEGORY
+    }
+
+    enum class SortOption {
+        DATE, AMOUNT, TITLE
+    }
+
+    enum class SortOrder {
+        ASC, DESC
+    }
+
     data class SearchFilter(
         val type: com.h2.wellspend.data.TransactionType? = null, // null = All
         val startDate: LocalDate? = null,
-        val endDate: LocalDate? = null
+        val endDate: LocalDate? = null,
+        val searchField: SearchField = SearchField.ALL,
+        val sortOption: SortOption = SortOption.DATE,
+        val sortOrder: SortOrder = SortOrder.DESC
     )
     
     private val _searchFilter = MutableStateFlow(SearchFilter())
@@ -60,12 +75,20 @@ class MainViewModel(
             emptyList()
         } else {
             allExpenses.filter { expense ->
-                // Query Match
+                // Query Match based on selected field
                 val queryMatch = if (query.isBlank()) true else {
-                    expense.title.contains(query, ignoreCase = true) ||
-                    (expense.note?.contains(query, ignoreCase = true) == true) ||
-                    (expense.amount.toInt().toString().contains(query)) ||
-                    (expense.category.contains(query, ignoreCase = true))
+                    when (filter.searchField) {
+                        SearchField.ALL -> {
+                            expense.title.contains(query, ignoreCase = true) ||
+                            (expense.note?.contains(query, ignoreCase = true) == true) ||
+                            (expense.amount.toInt().toString().contains(query)) ||
+                            (expense.category.contains(query, ignoreCase = true))
+                        }
+                        SearchField.TITLE -> expense.title.contains(query, ignoreCase = true)
+                        SearchField.NOTE -> expense.note?.contains(query, ignoreCase = true) == true
+                        SearchField.AMOUNT -> expense.amount.toInt().toString().contains(query)
+                        SearchField.CATEGORY -> expense.category.contains(query, ignoreCase = true)
+                    }
                 }
                 
                 // Type Match
@@ -82,7 +105,14 @@ class MainViewModel(
                 }
                 
                 queryMatch && typeMatch && dateMatch
-            }.sortedByDescending { it.date }
+            }.let { filtered ->
+                // Apply sorting with order
+                when (filter.sortOption) {
+                    SortOption.DATE -> if (filter.sortOrder == SortOrder.DESC) filtered.sortedByDescending { it.date } else filtered.sortedBy { it.date }
+                    SortOption.AMOUNT -> if (filter.sortOrder == SortOrder.DESC) filtered.sortedByDescending { it.amount } else filtered.sortedBy { it.amount }
+                    SortOption.TITLE -> if (filter.sortOrder == SortOrder.DESC) filtered.sortedByDescending { it.title.lowercase() } else filtered.sortedBy { it.title.lowercase() }
+                }
+            }
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
