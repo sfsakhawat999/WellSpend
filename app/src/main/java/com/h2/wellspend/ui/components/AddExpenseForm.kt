@@ -204,10 +204,11 @@ fun AddExpenseForm(
     }
 
     if (showAddCategoryDialog) {
-        AddCategoryDialog(
+        CategoryDialog(
+            initialCategory = null,
+            usedCategoryNames = categories.map { it.name }.toSet(),
             onDismiss = { showAddCategoryDialog = false },
-            onConfirm = { name, iconName, color ->
-                val newCategory = Category(name = name, iconName = iconName, color = color, isSystem = false)
+            onConfirm = { newCategory ->
                 onAddCategory(newCategory)
                 category = newCategory // Auto select
                 showAddCategoryDialog = false
@@ -454,7 +455,8 @@ fun AddExpenseForm(
                     },
                     expanded = expanded,
                     onExpandChange = { expanded = it },
-                    onReorder = onReorder
+                    onReorder = onReorder,
+                    onAddCategoryClick = { showAddCategoryDialog = true }
                 )
                 Spacer(modifier = Modifier.height(24.dp))
             }
@@ -673,12 +675,13 @@ fun CategoryGrid(
     onCategorySelected: (Category) -> Unit,
     expanded: Boolean,
     onExpandChange: (Boolean) -> Unit,
-    onReorder: (List<Category>) -> Unit
+    onReorder: (List<Category>) -> Unit,
+    onAddCategoryClick: () -> Unit
 ) {
     val totalCategories = categories.size
-    val showExpandButton = totalCategories > 12
-    val visibleCount = if (showExpandButton && !expanded) 8 else totalCategories
-    val visibleCategories = categories.take(visibleCount)
+    val totalItems = totalCategories + 1 // +1 for Add button
+    val showExpandButton = totalItems > 12
+    val visibleCount = if (showExpandButton && !expanded) 8 else totalItems
     
     val itemsPerRow = 4
     val itemHeight = 65.dp
@@ -688,7 +691,7 @@ fun CategoryGrid(
     var draggedItem by remember { mutableStateOf<Category?>(null) }
     var dragOffset by remember { mutableStateOf(Offset.Zero) }
     
-    val rows = (visibleCategories.size + itemsPerRow - 1) / itemsPerRow
+    val rows = (visibleCount + itemsPerRow - 1) / itemsPerRow
     val gridHeight = (itemHeight * rows) + (spacing * (rows - 1))
     
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
@@ -716,7 +719,8 @@ fun CategoryGrid(
                 }
 
                 // Calculate hover index
-                val draggedIndex = visibleCategories.indexOf(draggedItem)
+                // Note: We only allow reordering actual categories, not the add button
+                val draggedIndex = if (draggedItem != null) categories.indexOf(draggedItem) else -1
                 var hoverIndex by remember { mutableIntStateOf(-1) }
                 
                 if (draggedItem != null && draggedIndex != -1) {
@@ -724,11 +728,12 @@ fun CategoryGrid(
                     val currentCenterX = startPos.x + dragOffset.x + itemWidthPx / 2
                     val currentCenterY = startPos.y + dragOffset.y + itemHeightPx / 2
                     
-                    // Find closest slot
+
+                    // Find closest slot (only consider valid category slots)
                     var closestIndex = -1
                     var minDistance = Float.MAX_VALUE
                     
-                    for (i in visibleCategories.indices) {
+                    for (i in 0 until categories.size) { // Only iterate through actual categories for drop targets
                         val pos = getPosition(i)
                         val centerX = pos.x + itemWidthPx / 2
                         val centerY = pos.y + itemHeightPx / 2
@@ -744,8 +749,47 @@ fun CategoryGrid(
                     hoverIndex = -1
                 }
 
-                visibleCategories.forEachIndexed { index, cat ->
-                    key(cat) {
+
+
+                for (index in 0 until visibleCount) {
+                    // Check if it's the Add button
+                    if (index == categories.size) {
+                        val pos = getPosition(index)
+                        Box(
+                            modifier = Modifier
+                                .offset { IntOffset(pos.x.roundToInt(), pos.y.roundToInt()) }
+                                .width(itemWidth)
+                                .height(itemHeight)
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha=0.5f))
+                                .border(
+                                    width = 1.dp,
+                                    color = MaterialTheme.colorScheme.outlineVariant,
+                                    shape = RoundedCornerShape(16.dp)
+                                )
+                                .clickable { onAddCategoryClick() }
+                                .padding(2.dp, 12.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Icon(
+                                    imageVector = Icons.Default.Add,
+                                    contentDescription = "Add Category",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                                Text(
+                                    text = "Add",
+                                    style = TextStyle(fontSize = 10.sp),
+                                    color = MaterialTheme.colorScheme.primary,
+                                    maxLines = 1,
+                                    modifier = Modifier.padding(top = 4.dp)
+                                )
+                            }
+                        }
+                    } else {
+                        val cat = categories[index]
+                        key(cat.name) { // Use unique key
                         val isDragged = draggedItem == cat
                         val isSelected = selectedCategory == cat
                         
@@ -753,7 +797,7 @@ fun CategoryGrid(
                         var targetIndex = index
                         if (draggedItem != null && draggedIndex != -1 && hoverIndex != -1) {
                             if (index == draggedIndex) {
-                                targetIndex = index 
+                                targetIndex = index // Actually drag handles position, but for logic consistency
                             } else if (draggedIndex < hoverIndex) {
                                 if (index > draggedIndex && index <= hoverIndex) {
                                     targetIndex = index - 1
@@ -764,6 +808,9 @@ fun CategoryGrid(
                                 }
                             }
                         }
+                        
+                        // Don't animate category items into the add button slot or vice versa automatically
+                        // The add button is always at categories.size
                         
                         val targetPos = getPosition(targetIndex)
                         
@@ -779,7 +826,7 @@ fun CategoryGrid(
                         // Snap to drag position while dragging to keep Animatable in sync
                         LaunchedEffect(isDragged, dragOffset) {
                             if (isDragged) {
-                                val startPos = getPosition(index)
+                                val startPos = getPosition(index) // Use original index for start pos calculation
                                 animatedOffset.snapTo(startPos + dragOffset)
                             }
                         }
@@ -799,7 +846,7 @@ fun CategoryGrid(
                                     color = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent,
                                     shape = RoundedCornerShape(16.dp)
                                 )
-                                .pointerInput(visibleCategories) {
+                                .pointerInput(categories) { // Key on categories list for drag detection updates
                                     detectDragGesturesAfterLongPress(
                                         onDragStart = {
                                             draggedItem = cat
@@ -811,7 +858,7 @@ fun CategoryGrid(
                                             dragOffset += dragAmount
                                         },
                                         onDragEnd = {
-                                            val currentDraggedIndex = visibleCategories.indexOf(cat)
+                                            val currentDraggedIndex = categories.indexOf(cat) // Re-calculate index from source list
                                             if (currentDraggedIndex != -1 && hoverIndex != -1 && currentDraggedIndex != hoverIndex) {
                                                 // Commit reorder
                                                 val newList = categories.toMutableList()
@@ -854,8 +901,9 @@ fun CategoryGrid(
                                 )
                             }
                         }
-                    }
-                } // End of categories loop
+                    } // End of key
+                  } // End of else
+                } // End of loop
 
 
             }
