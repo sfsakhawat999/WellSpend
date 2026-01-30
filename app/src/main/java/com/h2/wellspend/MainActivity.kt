@@ -80,6 +80,11 @@ class MainActivity : ComponentActivity() {
                                 viewModel.importData(uri, contentResolver) { _, _ -> }
                             },
                             onCreateAccount = { viewModel.addAccount(it) },
+                            onCategoriesSelected = { categories ->
+                                categories.forEach { 
+                                    viewModel.addCategory(it) 
+                                }
+                            },
                             existingAccounts = accounts, // Pass observed accounts
                             initialTheme = themeMode,
                             initialDynamicColor = dynamicColor
