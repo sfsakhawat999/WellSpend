@@ -30,21 +30,35 @@ import com.h2.wellspend.data.Currencies
 import com.h2.wellspend.data.Currency
 import java.util.UUID
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import com.h2.wellspend.data.Category
+import com.h2.wellspend.data.SystemCategory
+import com.h2.wellspend.ui.getSystemCategoryColor
+import com.h2.wellspend.ui.getSystemCategoryIcon
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 
 enum class OnboardingStep {
     WELCOME,
     THEME,
     CURRENCY,
+    CATEGORY_SELECTION,
     START_OPTION,
     CREATE_ACCOUNT,
     RESTORE_BACKUP,
     COMPLETE
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun OnboardingScreen(
     onComplete: () -> Unit,
@@ -53,6 +67,7 @@ fun OnboardingScreen(
     onCurrencyChange: (String) -> Unit,
     onImportData: (android.net.Uri) -> Unit,
     onCreateAccount: (Account) -> Unit,
+    onCategoriesSelected: (List<Category>) -> Unit,
     existingAccounts: List<Account>, // Receive observed accounts
     initialTheme: String,
     initialDynamicColor: Boolean
@@ -68,6 +83,15 @@ fun OnboardingScreen(
     var selectedCurrencySymbol by remember { mutableStateOf("") }
     var selectedCurrencyCode by remember { mutableStateOf("") }
     
+    // Category Selection State
+    val systemInternalCategories = remember { setOf("Others", "Loan", "TransactionFee", "BalanceAdjustment") }
+    val availableCategories = remember {
+        SystemCategory.values()
+            .filter { !systemInternalCategories.contains(it.name) }
+            .sortedBy { it.name }
+    }
+    val selectedSystemCategories = remember { mutableStateListOf<SystemCategory>() }
+
     // Start Option State
     var selectedStartOption by remember { mutableStateOf<String?>(null) } // "FRESH" or "RESTORE"
 
@@ -104,7 +128,8 @@ fun OnboardingScreen(
                         currentStep = when (currentStep) {
                             OnboardingStep.THEME -> OnboardingStep.WELCOME
                             OnboardingStep.CURRENCY -> OnboardingStep.THEME
-                            OnboardingStep.START_OPTION -> OnboardingStep.CURRENCY
+                            OnboardingStep.CATEGORY_SELECTION -> OnboardingStep.CURRENCY
+                            OnboardingStep.START_OPTION -> OnboardingStep.CATEGORY_SELECTION
                             OnboardingStep.CREATE_ACCOUNT -> OnboardingStep.START_OPTION
                             OnboardingStep.RESTORE_BACKUP -> OnboardingStep.START_OPTION
                             else -> OnboardingStep.WELCOME
@@ -120,6 +145,7 @@ fun OnboardingScreen(
                 if (currentStep != OnboardingStep.COMPLETE && currentStep != OnboardingStep.RESTORE_BACKUP) {
                     val isNextEnabled = when(currentStep) {
                         OnboardingStep.CURRENCY -> selectedCurrencyCode.isNotEmpty()
+                        OnboardingStep.CATEGORY_SELECTION -> selectedSystemCategories.size >= 3
                         OnboardingStep.START_OPTION -> selectedStartOption != null
                         OnboardingStep.CREATE_ACCOUNT -> existingAccounts.isNotEmpty()
                         else -> true
@@ -127,11 +153,23 @@ fun OnboardingScreen(
                     
                     Button(
                         onClick = {
+                            if (currentStep == OnboardingStep.CATEGORY_SELECTION) {
+                                val categories = selectedSystemCategories.map { sysCat ->
+                                    Category(
+                                        name = sysCat.name,
+                                        iconName = sysCat.name,
+                                        color = getSystemCategoryColor(sysCat).toArgb().toLong(),
+                                        isSystem = false
+                                    )
+                                }
+                                onCategoriesSelected(categories)
+                            }
                             slideDirection = AnimatedContentTransitionScope.SlideDirection.Left
                             currentStep = when (currentStep) {
                                 OnboardingStep.WELCOME -> OnboardingStep.THEME
                                 OnboardingStep.THEME -> OnboardingStep.CURRENCY
-                                OnboardingStep.CURRENCY -> OnboardingStep.START_OPTION
+                                OnboardingStep.CURRENCY -> OnboardingStep.CATEGORY_SELECTION
+                                OnboardingStep.CATEGORY_SELECTION -> OnboardingStep.START_OPTION
                                 OnboardingStep.START_OPTION -> {
                                     if (selectedStartOption == "RESTORE") OnboardingStep.RESTORE_BACKUP 
                                     else OnboardingStep.CREATE_ACCOUNT
@@ -165,8 +203,9 @@ fun OnboardingScreen(
             // ... (Progress Indicator and AnimatedContent structure remains same) ...
              val progress = when(currentStep) {
                 OnboardingStep.WELCOME -> 0.1f
-                OnboardingStep.THEME -> 0.3f
-                OnboardingStep.CURRENCY -> 0.5f
+                OnboardingStep.THEME -> 0.25f
+                OnboardingStep.CURRENCY -> 0.4f
+                OnboardingStep.CATEGORY_SELECTION -> 0.55f
                 OnboardingStep.START_OPTION -> 0.7f
                 OnboardingStep.CREATE_ACCOUNT -> 0.9f
                 OnboardingStep.RESTORE_BACKUP -> 0.9f
@@ -361,6 +400,69 @@ fun OnboardingScreen(
                                             modifier = Modifier.fillMaxWidth().padding(16.dp),
                                             textAlign = TextAlign.Center,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                        OnboardingStep.CATEGORY_SELECTION -> {
+                            val selectedCount = selectedSystemCategories.size
+                            Text("Choose Categories", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Text(
+                                "Select the categories you want to use. Please select at least 3 categories ($selectedCount selected).",
+                                textAlign = TextAlign.Center,
+                                color = if(selectedCount >= 3) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error
+                            )
+                            Spacer(modifier = Modifier.height(24.dp))
+                            
+                            val scrollState = rememberScrollState()
+                            
+                            Column(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxWidth()
+                                    .verticalScroll(scrollState)
+                            ) {
+                                FlowRow(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    availableCategories.forEach { sysCat ->
+                                        val isSelected = selectedSystemCategories.contains(sysCat)
+                                        val color = getSystemCategoryColor(sysCat)
+                                        val icon = getSystemCategoryIcon(sysCat)
+
+                                        FilterChip(
+                                            selected = isSelected,
+                                            onClick = {
+                                                if (isSelected) {
+                                                    selectedSystemCategories.remove(sysCat)
+                                                } else {
+                                                    selectedSystemCategories.add(sysCat)
+                                                }
+                                            },
+                                            label = { 
+                                                Text(
+                                                    text = sysCat.name,
+                                                    style = MaterialTheme.typography.bodyMedium,
+                                                    textAlign = TextAlign.Center,
+                                                )
+                                            },
+                                            leadingIcon = {
+                                                Icon(
+                                                    imageVector = icon,
+                                                    contentDescription = null,
+                                                    modifier = Modifier.size(18.dp)
+                                                )
+                                            },
+                                            colors = FilterChipDefaults.filterChipColors(
+                                                selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                                                selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                selectedLeadingIconColor = MaterialTheme.colorScheme.onPrimaryContainer
+                                            ),
+                                            modifier = Modifier.heightIn(min = 40.dp)
                                         )
                                     }
                                 }
