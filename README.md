@@ -12,33 +12,39 @@ Track expenses, manage multiple accounts, set budgets, and gain insights into yo
 *   **Multiple Accounts**: Create and manage multiple accounts (e.g., Cash, Bank, Mobile Wallet).
 *   **Balance Tracking**: Automatically tracking of current balances based on income and expenses.
 *   **Transfers**: Seamlessly transfer money between accounts.
+*   **Reorder Accounts**: reorder accounts to your liking.
+*   **Balance Adjustments**: Manually adjust account balances to correct discrepancies.
 *   **Safe Deletion**: Smart handling of deleted accounts—orphan transactions are preserved and labeled.
+
+### 🤝 Loan Management
+*   **Track Loans**: Keep track of money you **Lend** and **Borrow**.
+*   **Partial Repayments**: Record partial payments and track remaining dues.
+*   **Transaction History**: View a full history of all payments and changes for each loan.
 
 ### 💸 Expense & Income Tracking
 *   **Dedicated Desks**: Separate tabs for **Income** and **Expenses**, with a dedicated page for **Transfers**.
+*   **Global Search**: Powerful search across all transactions by title, note, amount, or category.
 *   **Transaction Types**: Support for Expenses, Income, and Transfers with "From/To" account tracking.
 *   **Recurring Transactions**: Set up automatic weekly or monthly recurring bills and salary.
 *   **Transaction Fees**: Track extra fees separately from the base amount, included in total spending stats.
-*   **Smart Categorization**: Extensive list of built-in categories with color-coded icons.
-*   **Swipe Actions**: Quickly **Edit** or **Delete** transactions and accounts with simple swipe gestures.
+*   **Custom Categories**: Create, edit, and manage your own custom categories.
 
 ### 📊 Budgets & Analytics
 *   **Budgeting**: Set monthly spending limits for each category.
 *   **Visual Indicators**: Real-time progress bars show how close you are to your limit.
 *   **Donut Chart**: Beautiful visualization of your monthly spending breakdown (Expenses only).
-*   **Monthly Reports**: detailed summary comparing Spending vs Income, with trend arrows.
+*   **Smart Exclusions**: Option to exclude loan transactions from summaries and charts.
 *   **CSV Export**: Export detailed monthly reports including fees and categories for external analysis.
 
 ### 🎨 Modern UI/UX
 *   **Material 3 Design**: Fully compliant with the latest Material Design guidelines.
 *   **Dark & Light Themes**: Native support for dark mode, with a curated slate-based palette.
 *   **Dynamic Color**: Supports Android 12+ wallpaper-based theming (optional).
-*   **Edge-to-Edge**: Immersive design with matching system navigation bars.
+*   **Onboarding**: Smooth onboarding experience with customizable category selection.
 
 ### 💾 Data & Privacy
 *   **Offline First**: 100% local storage using **Room Database**. No internet required, no data collection.
 *   **Backup & Restore**: Export full database backups (JSON) and restore anytime.
-    *   *Backward compatible with older backup files.*
 
 ---
 
@@ -79,4 +85,10 @@ Contributions are welcome! If you have ideas for new features or bug fixes:
 
 ## 📄 License
 
-This project is licensed for personal and educational use. Feel free to explore, learn, and modify it for your own needs. 
+This project is licensed under the Apache License, Version 2.0. See the [LICENSE](LICENSE) file for details.
+
+---
+
+## 🤖 AI Assistance
+
+This project was developed with the assistance of advanced **AI Agents**, which helped in coding, debugging, and drafting documentation. 
