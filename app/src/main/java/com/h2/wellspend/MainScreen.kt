@@ -75,6 +75,8 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Text
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -214,6 +216,7 @@ fun MainScreen(viewModel: MainViewModel) {
     val searchFilter by viewModel.searchFilter.collectAsState()
     val searchResults by viewModel.searchResults.collectAsState(initial = emptyList())
     val recurringConfigs by viewModel.recurringConfigs.collectAsState(initial = emptyList())
+    val groupIncomeByAccount by viewModel.groupIncomeByAccount.collectAsState()
 
     // Hoisted States for Sub-screens
     // Budgets
@@ -323,6 +326,42 @@ fun MainScreen(viewModel: MainViewModel) {
         )
     }
     val chartData = chartDataList.sortedByDescending { it.value }
+
+    // Income Chart Data (Grouped by Account)
+    val validIncomes = currentMonthTransactions.filter { 
+        it.transactionType == com.h2.wellspend.data.TransactionType.INCOME &&
+        !(it.loanId != null && it.accountId == null) // Exclude virtual loan incomes
+    }
+    
+    val incomesByAccount = validIncomes.groupBy { it.accountId }
+
+    val accountColors = listOf(
+        Color(0xFF4CAF50), Color(0xFF2196F3), Color(0xFFFFC107), Color(0xFFE91E63), 
+        Color(0xFF9C27B0), Color(0xFF00BCD4), Color(0xFF8BC34A), Color(0xFFFF5722),
+        Color(0xFF795548), Color(0xFF607D8B)
+    )
+
+    val incomeChartData = incomesByAccount.mapNotNull { (accountId, list) ->
+        val account = accounts.find { it.id == accountId }
+        if (account != null) {
+             val colorIndex = kotlin.math.abs(account.id.hashCode()) % accountColors.size
+             ChartData(
+                name = account.name,
+                value = list.sumOf { it.amount },
+                color = accountColors[colorIndex]
+             )
+        } else {
+             // Handle deleted accounts or nulls if needed, for now skip or group as "Unknown"
+             ChartData(
+                name = "Unknown Account",
+                value = list.sumOf { it.amount },
+                color = Color.Gray
+             )
+        } 
+    }.sortedByDescending { it.value }
+    
+    val totalIncomeAmount = incomeChartData.sumOf { it.value }
+
 
     val context = LocalContext.current
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
@@ -958,6 +997,7 @@ fun MainScreen(viewModel: MainViewModel) {
                                 currentDynamicColor = dynamicColor,
                                 excludeLoanTransactions = excludeLoanTransactions,
                                 showAccountsOnHomepage = showAccountsOnHomepage,
+
                                 onCurrencyChange = { newCurrency ->
                                      viewModel.updateBudgets(emptyList(), newCurrency)
                                 },
@@ -965,6 +1005,7 @@ fun MainScreen(viewModel: MainViewModel) {
                                 onDynamicColorChange = { viewModel.updateDynamicColor(it) },
                                 onExcludeLoanTransactionsChange = { viewModel.updateExcludeLoanTransactions(it) },
                                 onShowAccountsOnHomepageChange = { viewModel.updateShowAccountsOnHomepage(it) },
+
                                 onExport = { 
                                     val timestamp = java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd_HHmm"))
                                     exportLauncher.launch("wellspend_backup_$timestamp.json") 
@@ -1143,7 +1184,11 @@ fun MainScreen(viewModel: MainViewModel) {
                                     showAddExpense = true
                                 }
                             },
-                            onTransactionClick = { transactionToPreview = it }
+                            onTransactionClick = { transactionToPreview = it },
+                            chartData = incomeChartData,
+                            totalIncome = totalIncomeAmount,
+                            groupIncomeByAccount = groupIncomeByAccount,
+                            onGroupToggle = { viewModel.updateGroupIncomeByAccount(it) }
                         )
                     }
                     "EXPENSES" -> {
@@ -1806,7 +1851,11 @@ fun IncomeListScreen(
     currency: String,
     onDelete: (String) -> Unit,
     onEdit: (Expense) -> Unit,
-    onTransactionClick: (Expense) -> Unit = {}
+    onTransactionClick: (Expense) -> Unit = {},
+    chartData: List<ChartData>,
+    totalIncome: Double,
+    groupIncomeByAccount: Boolean,
+    onGroupToggle: (Boolean) -> Unit = {}
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         DateSelector(
@@ -1814,7 +1863,6 @@ fun IncomeListScreen(
             onDateChange = onDateChange
         )
         
-        // Filter only Incomes
         // Filter only Incomes
         val incomes = expenses.filter { 
             it.transactionType == com.h2.wellspend.data.TransactionType.INCOME &&
@@ -1828,7 +1876,63 @@ fun IncomeListScreen(
             currency = currency,
             onDelete = onDelete,
             onEdit = onEdit,
-            onTransactionClick = onTransactionClick
+            onTransactionClick = onTransactionClick,
+            headerContent = {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Group by Account",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Switch(
+                        checked = groupIncomeByAccount,
+                        onCheckedChange = onGroupToggle,
+                         colors = SwitchDefaults.colors(
+                            checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
+                            checkedTrackColor = MaterialTheme.colorScheme.primary
+                        )
+                    )
+                }
+                
+                if (groupIncomeByAccount) {
+                    DonutChart(
+                        data = chartData,
+                        totalAmount = totalIncome,
+                        currency = currency,
+                        centerLabel = "Total Income",
+                        isCenterClickable = false,
+                        onCenterClick = { }
+                    )
+                } else {
+                     Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = "Total Income",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = "$currency${String.format("%.2f", totalIncome)}",
+                            style = MaterialTheme.typography.headlineLarge.copy(
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 32.sp
+                            ),
+                            color = Color(0xFF10b981) // Green
+                        )
+                    }
+                }
+            },
+            useGrouping = groupIncomeByAccount
         )
     }
 }

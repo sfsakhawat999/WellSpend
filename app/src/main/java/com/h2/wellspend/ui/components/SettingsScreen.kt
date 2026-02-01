@@ -71,11 +71,13 @@ fun SettingsScreen(
     currentDynamicColor: Boolean,
     excludeLoanTransactions: Boolean,
     showAccountsOnHomepage: Boolean,
+
     onCurrencyChange: (String) -> Unit,
     onThemeModeChange: (String) -> Unit,
     onDynamicColorChange: (Boolean) -> Unit,
     onExcludeLoanTransactionsChange: (Boolean) -> Unit,
     onShowAccountsOnHomepageChange: (Boolean) -> Unit,
+
     onExport: () -> Unit,
     onImport: () -> Unit,
     onBack: () -> Unit
@@ -355,6 +357,8 @@ fun SettingsScreen(
                         )
                     )
                 }
+
+
             }
 
             // Data Management

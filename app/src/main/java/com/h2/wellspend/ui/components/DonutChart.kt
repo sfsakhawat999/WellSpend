@@ -41,6 +41,8 @@ fun DonutChart(
     data: List<ChartData>,
     totalAmount: Double,
     currency: String,
+    centerLabel: String = "Total Spend",
+    isCenterClickable: Boolean = true,
     onCenterClick: () -> Unit
 ) {
     val animatedProgress = remember { Animatable(0f) }
@@ -98,10 +100,12 @@ fun DonutChart(
 
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.clickable { onCenterClick() }
+            modifier = Modifier.then(
+                if (isCenterClickable) Modifier.clickable { onCenterClick() } else Modifier
+            )
         ) {
             Text(
-                text = "Total Spend",
+                text = centerLabel,
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -113,11 +117,13 @@ fun DonutChart(
                 ),
                 color = MaterialTheme.colorScheme.onSurface
             )
-            Text(
-                text = "Tap for details",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            if (isCenterClickable) {
+                Text(
+                    text = "Tap for details",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
     }
 }
