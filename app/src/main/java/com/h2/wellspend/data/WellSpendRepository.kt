@@ -165,6 +165,12 @@ class WellSpendRepository(private val database: AppDatabase) {
         database.settingDao().insertSetting(Setting("show_accounts_on_homepage", show.toString()))
     }
 
+    val groupIncomeByAccount: Flow<String?> = database.settingDao().getSettingFlow("group_income_by_account")
+
+    suspend fun setGroupIncomeByAccount(group: Boolean) {
+        database.settingDao().insertSetting(Setting("group_income_by_account", group.toString()))
+    }
+
     suspend fun getAllExpensesOneShot(): List<Expense> {
         return database.expenseDao().getAllExpensesOneShot()
     }

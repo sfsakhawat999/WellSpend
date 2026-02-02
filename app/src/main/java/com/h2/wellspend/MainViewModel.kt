@@ -345,6 +345,10 @@ class MainViewModel(
         .map { it?.toBoolean() ?: false } // Default to false
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
+    val groupIncomeByAccount: StateFlow<Boolean> = repository.groupIncomeByAccount
+        .map { it?.toBoolean() ?: true } // Default to true (new design)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
     init {
         checkRecurringExpenses()
     }
@@ -660,6 +664,12 @@ class MainViewModel(
     fun updateShowAccountsOnHomepage(show: Boolean) {
         viewModelScope.launch {
             repository.setShowAccountsOnHomepage(show)
+        }
+    }
+
+    fun updateGroupIncomeByAccount(group: Boolean) {
+        viewModelScope.launch {
+            repository.setGroupIncomeByAccount(group)
         }
     }
 

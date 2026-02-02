@@ -68,7 +68,7 @@ fun CategoryDialog(
                     onValueChange = { name = it },
                     label = { Text("Category Name") },
                     singleLine = true,
-                    enabled = initialCategory == null || (!initialCategory.isSystem)
+                    enabled = initialCategory == null
                 )
                 
                 // Color Picker Trigger

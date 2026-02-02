@@ -21,11 +21,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.AttachMoney
-import androidx.compose.material.icons.filled.AccountBalanceWallet
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.CornerSize
 import com.h2.wellspend.ui.getIconByName
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -35,7 +31,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.IntOffset
 import com.h2.wellspend.data.Account
 import com.h2.wellspend.data.Expense
@@ -61,93 +56,44 @@ fun IncomeList(
     currency: String,
     onDelete: (String) -> Unit,
     onEdit: (Expense) -> Unit,
-    onTransactionClick: (Expense) -> Unit = {},
-    headerContent: @Composable () -> Unit = {},
-    useGrouping: Boolean = true
+    onTransactionClick: (Expense) -> Unit = {}
 ) {
-    // Group incomes by account
-    val groupedIncomes = remember(incomes, useGrouping) {
-        if (useGrouping) {
-            incomes.groupBy { it.accountId }
-                .mapValues { entry ->
-                    val total = entry.value.sumOf { it.amount }
-                    val items = entry.value.sortedWith(
-                        compareByDescending<Expense> { it.date.take(10) }
-                            .thenByDescending { it.timestamp }
-                    )
-                    Pair(total, items)
-                }
-                .toList()
-                .sortedByDescending { it.second.first } // Sort by total amount
-        } else {
-            emptyList()
+    if (incomes.isEmpty()) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 40.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = "No income recorded for this period.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
-    }
-
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp),
-        contentPadding = PaddingValues(bottom = 96.dp),
-        verticalArrangement = Arrangement.spacedBy(if (useGrouping) 12.dp else 0.dp)
-    ) {
-        // Header (Chart or Total)
-        item {
-            headerContent()
-        }
-
-        if (incomes.isEmpty()) {
-            item {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 40.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "No income recorded for this period.",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-        } else {
-            if (useGrouping) {
-                items(groupedIncomes) { (accountId, data) ->
-                    val (total, items) = data
-                    val account = accounts.find { it.id == accountId }
-                    
-                    IncomeAccountItem(
-                        account = account,
-                        total = total,
-                        items = items,
+    } else {
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp),
+            contentPadding = PaddingValues(bottom = 96.dp),
+            verticalArrangement = Arrangement.spacedBy(0.dp)
+        ) {
+            itemsIndexed(incomes) { index, income ->
+                val shape = getGroupedItemShape(index, incomes.size)
+                val backgroundShape = getGroupedItemBackgroundShape(index, incomes.size)
+                
+                Box(modifier = Modifier.padding(vertical = 1.dp)) {
+                    IncomeItem(
+                        income = income,
+                        accountName = accounts.find { it.id == income.accountId }?.name ?: "Deleted Account",
                         loans = loans,
                         currency = currency,
-                        onDelete = onDelete,
                         onEdit = onEdit,
-                        onTransactionClick = onTransactionClick
+                        onDelete = onDelete,
+                        onTransactionClick = onTransactionClick,
+                        shape = shape,
+                        backgroundShape = backgroundShape
                     )
-                }
-            } else {
-                // Flat List
-                 itemsIndexed(incomes) { index, income ->
-                    val shape = getGroupedItemShape(index, incomes.size)
-                    val backgroundShape = getGroupedItemBackgroundShape(index, incomes.size)
-                    val account = accounts.find { it.id == income.accountId }
-                    
-                    Box(modifier = Modifier.padding(vertical = 1.dp)) {
-                        IncomeItem(
-                            income = income,
-                            loans = loans,
-                            currency = currency,
-                            onEdit = onEdit,
-                            onDelete = onDelete,
-                            onTransactionClick = onTransactionClick,
-                            showIcon = true,
-                            account = account,
-                            shape = shape,
-                            backgroundShape = backgroundShape
-                        )
-                    }
                 }
             }
             
@@ -155,160 +101,14 @@ fun IncomeList(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 16.dp),
+                        .padding(top = 16.dp, bottom = 32.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
                         "Swipe left/right to edit or delete.",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun IncomeAccountItem(
-    account: Account?,
-    total: Double,
-    items: List<Expense>,
-    loans: List<com.h2.wellspend.data.Loan>,
-    currency: String,
-    onDelete: (String) -> Unit,
-    onEdit: (Expense) -> Unit,
-    onTransactionClick: (Expense) -> Unit
-) {
-    var isExpanded by remember { mutableStateOf(false) }
-    
-    // Generate a consistent color for the account
-    val accountColors = listOf(
-        Color(0xFF4CAF50), Color(0xFF2196F3), Color(0xFFFFC107), Color(0xFFE91E63), 
-        Color(0xFF9C27B0), Color(0xFF00BCD4), Color(0xFF8BC34A), Color(0xFFFF5722),
-        Color(0xFF795548), Color(0xFF607D8B)
-    )
-    val color = if (account != null) {
-        val colorIndex = kotlin.math.abs(account.id.hashCode()) % accountColors.size
-        accountColors[colorIndex]
-    } else {
-        Color.Gray
-    }
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(cardBackgroundColor())
-    ) {
-        // Header
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable { isExpanded = !isExpanded }
-                .padding(16.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(40.dp)
-                            .clip(CircleShape)
-                            .background(color.copy(alpha = 0.12f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.AccountBalanceWallet,
-                            contentDescription = null,
-                            tint = color,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                    Spacer(modifier = Modifier.size(12.dp))
-                    Column {
-                        Text(
-                            text = account?.name ?: "Unknown Account",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        Text(
-                            text = "${items.size} transactions",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = "+$currency${String.format("%.2f", total)}",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = Color(0xFF10b981), // Green for Income
-                        fontWeight = FontWeight.Bold
-                    )
-                    Spacer(modifier = Modifier.size(12.dp))
-                    Icon(
-                        imageVector = if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                        contentDescription = if (isExpanded) "Collapse" else "Expand",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-        }
-
-        // Expanded List
-        AnimatedVisibility(
-            visible = isExpanded,
-            enter = expandVertically() + fadeIn(),
-            exit = shrinkVertically() + fadeOut()
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.background)
-                    .padding(top = 2.dp)
-            ) {
-                items.forEachIndexed { index, income ->
-                    val standardShape = getGroupedItemShape(index, items.size)
-                    val shape = if (index == 0) {
-                        standardShape.copy(
-                            topStart = CornerSize(3.dp), 
-                            topEnd = CornerSize(3.dp)
-                        )
-                    } else {
-                        standardShape
-                    }
-                    
-                    val standardBgShape = getGroupedItemBackgroundShape(index, items.size)
-                    val backgroundShape = if (index == 0) {
-                        standardBgShape.copy(
-                            topStart = CornerSize(4.dp), 
-                            topEnd = CornerSize(4.dp)
-                        )
-                    } else {
-                        standardBgShape
-                    }
-                    
-                    key(income.id) {
-                        Box(modifier = Modifier.padding(bottom = 2.dp)) {
-                            IncomeItem(
-                                income = income,
-                                loans = loans,
-                                currency = currency,
-                                onEdit = onEdit,
-                                onDelete = onDelete,
-                                onTransactionClick = onTransactionClick,
-                                showIcon = false,
-                                shape = shape,
-                                backgroundShape = backgroundShape
-                            )
-                        }
-                    }
                 }
             }
         }
@@ -319,13 +119,12 @@ fun IncomeAccountItem(
 @Composable
 fun IncomeItem(
     income: Expense,
+    accountName: String,
     loans: List<com.h2.wellspend.data.Loan>,
     currency: String,
     onEdit: (Expense) -> Unit,
     onDelete: (String) -> Unit,
     onTransactionClick: (Expense) -> Unit,
-    showIcon: Boolean = false,
-    account: Account? = null,
     shape: Shape = RoundedCornerShape(16.dp),
     backgroundShape: Shape = shape
 ) {
@@ -338,7 +137,7 @@ fun IncomeItem(
     val loanName = if (income.loanId != null) loans.find { it.id == income.loanId }?.name else null
     val extraInfo = buildString {
         if (loanName != null) append(" • Loan: $loanName")
-        if (account != null) append(" • To: ${account.name}")
+        append(" • To: $accountName")
     }
     
     val formattedDate = date.format(DateTimeFormatter.ofPattern("EEE, MMM d")) + extraInfo
@@ -464,6 +263,8 @@ fun IncomeItem(
             }
 
             // Foreground (Content)
+            
+            // Replaced Card with Box/Row structure
             Box(
                 modifier = Modifier
                     .offset { IntOffset(offsetX.value.roundToInt(), 0) }
@@ -500,33 +301,31 @@ fun IncomeItem(
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
                          // Icon
-                        if (showIcon) {
-                             // Original Icon Logic
-                            val iconVector = if (isBalanceAdjustment || income.category == com.h2.wellspend.data.SystemCategory.Loan.name) {
-                                 getIconByName(income.category)
-                            } else {
-                                Icons.Default.AttachMoney
-                            }
-                            
-                            val iconTint = if (isBalanceAdjustment) MaterialTheme.colorScheme.onSurfaceVariant else Color(0xFF4CAF50) // Green
-                            
-                            Box(
-                                modifier = Modifier
-                                    .size(40.dp)
-                                    .clip(CircleShape)
-                                    .background(iconTint.copy(alpha = 0.15f)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = iconVector,
-                                    contentDescription = null,
-                                    tint = iconTint,
-                                    modifier = Modifier.size(24.dp)
-                                )
-                            }
-                            Spacer(modifier = Modifier.width(16.dp))
+                        val iconVector = if (isBalanceAdjustment || income.category == SystemCategory.Loan.name) {
+                             getIconByName(income.category)
+                        } else {
+                            Icons.Default.AttachMoney
                         }
-
+                        
+                        val iconTint = if (isBalanceAdjustment) MaterialTheme.colorScheme.onSurfaceVariant else Color(0xFF4CAF50) // Green
+                        
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .background(iconTint.copy(alpha = 0.15f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = iconVector,
+                                contentDescription = null,
+                                tint = iconTint,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                        
+                        Spacer(modifier = Modifier.width(16.dp))
+                        
                         Column {
                             Text(
                                 text = income.title.ifEmpty { "No title" },

@@ -80,6 +80,16 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.key
 import kotlinx.coroutines.delay
+import androidx.compose.ui.graphics.toArgb
+import java.util.Locale
+
+enum class GroupingMode {
+    CATEGORY, ACCOUNT
+}
+
+private fun String.capitalize(): String {
+    return this.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() }
+}
 
 @Composable
 fun ExpenseList(
@@ -93,19 +103,47 @@ fun ExpenseList(
     onEdit: (Expense) -> Unit,
     onTransactionClick: (Expense) -> Unit = {},
     state: LazyListState = rememberLazyListState(),
-    headerContent: @Composable () -> Unit = {}
+    headerContent: @Composable () -> Unit = {},
+    groupingMode: GroupingMode = GroupingMode.CATEGORY,
+    onGroupingChange: (GroupingMode) -> Unit = {}
 ) {
+    // State for grouping lifted to parent
+    // var groupingMode by remember { mutableStateOf(GroupingMode.CATEGORY) }
+
+    // Header Content Helper
+    fun getAccountColor(accountId: String): Color {
+        val accountColors = listOf(
+            Color(0xFF4CAF50), Color(0xFF2196F3), Color(0xFFFFC107), Color(0xFFE91E63), 
+            Color(0xFF9C27B0), Color(0xFF00BCD4), Color(0xFF8BC34A), Color(0xFFFF5722),
+            Color(0xFF795548), Color(0xFF607D8B)
+        )
+        val index = kotlin.math.abs(accountId.hashCode()) % accountColors.size
+        return accountColors[index]
+    }
+
     // Flatten expenses to include virtual fees
     val displayExpenses = remember(expenses) {
         expenses.flatMap { expense ->
-            val list = mutableListOf(expense)
+            val list = mutableListOf<Expense>()
+            // Only add base item if it is explicitly an EXPENSE
+            if (expense.transactionType == com.h2.wellspend.data.TransactionType.EXPENSE) {
+                list.add(expense)
+            }
+            // Always add fee item if present
             if (expense.feeAmount > 0) {
                 list.add(
                     expense.copy(
                         id = "fee_${expense.id}",
                         amount = expense.feeAmount,
                         category = SystemCategory.TransactionFee.name,
-                        title = "Fee for ${expense.title}",
+                        title = "Fee for ${
+                            if (expense.title.isNotBlank()) expense.title else
+                            when (expense.transactionType) {
+                                com.h2.wellspend.data.TransactionType.INCOME -> "Income"
+                                com.h2.wellspend.data.TransactionType.TRANSFER -> "Transfer"
+                                else -> "Expense"
+                            }
+                        }",
                         feeAmount = 0.0, // Virtual item has no fee on itself
                         transactionType = com.h2.wellspend.data.TransactionType.EXPENSE // Fees are always Expenses
                     )
@@ -115,21 +153,58 @@ fun ExpenseList(
         }
     }
 
-    // Group expenses by category
-    val groupedExpenses = remember(displayExpenses) {
-        displayExpenses.groupBy { it.category }
-            .mapValues { entry ->
-                // Sum only Amounts (Virtual fees are now proper Expenses with Amount)
-                val total = entry.value.filter { it.transactionType == com.h2.wellspend.data.TransactionType.EXPENSE }.sumOf { it.amount } 
-
-                val items = entry.value.sortedWith(
-                    compareByDescending<Expense> { it.date.take(10) }
-                        .thenByDescending { it.timestamp }
-                )
-                Pair(total, items)
+    // Group expenses dynamically
+    val groupedExpenses = remember(displayExpenses, groupingMode) {
+        when (groupingMode) {
+            GroupingMode.CATEGORY -> {
+                displayExpenses.groupBy { it.category }
+                    .mapValues { entry ->
+                        val total = entry.value.filter { it.transactionType == com.h2.wellspend.data.TransactionType.EXPENSE }.sumOf { it.amount }
+                        val items = entry.value.sortedWith(
+                            compareByDescending<Expense> { it.date.take(10) }
+                                .thenByDescending { it.timestamp }
+                        )
+                        Pair(total, items)
+                    }
+                    .toList()
+                    .sortedByDescending { it.second.first }
             }
-            .toList()
-            .sortedByDescending { it.second.first } // Sort by total amount
+            GroupingMode.ACCOUNT -> {
+                expenses.groupBy { it.accountId } // Use original expenses to avoid duplicate fee items
+                    .mapValues { (accountId, list) ->
+                        // Calculate total expense amount
+                        val totalExpense = list.filter { it.transactionType == com.h2.wellspend.data.TransactionType.EXPENSE }.sumOf { it.amount }
+                        val totalFees = list.sumOf { it.feeAmount }
+                        val totalGroup = totalExpense + totalFees
+
+                        // Sort regular items (Exclude non-expenses like Transfers/Incomes, they only contribute fees)
+                        val sortedItems = list.filter { it.transactionType == com.h2.wellspend.data.TransactionType.EXPENSE }
+                            .sortedWith(
+                                compareByDescending<Expense> { it.date.take(10) }
+                                    .thenByDescending { it.timestamp }
+                            ).toMutableList()
+
+                        // Add synthetic total fee item if needed
+                        if (totalFees > 0) {
+                            val feeItem = Expense(
+                                id = "total_fees_${accountId ?: "unassigned"}",
+                                amount = totalFees,
+                                category = SystemCategory.TransactionFee.name,
+                                title = "Transaction Fee",
+                                date = java.time.LocalDate.now().toString(), // Helper date for display
+                                timestamp = Long.MIN_VALUE, // Ensure it's at the end if sorted again, or just separate
+                                note = "Total transaction fees for this account",
+                                transactionType = com.h2.wellspend.data.TransactionType.EXPENSE
+                            )
+                            sortedItems.add(feeItem)
+                        }
+
+                        Pair(totalGroup, sortedItems)
+                    }
+                    .toList()
+                    .sortedByDescending { it.second.first }
+            }
+        }
     }
 
     LazyColumn(
@@ -143,6 +218,49 @@ fun ExpenseList(
         // Header (Chart)
         item {
             headerContent()
+        }
+        
+        // Grouping Toggle
+        item {
+             Row(
+                 modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                 horizontalArrangement = Arrangement.End,
+                 verticalAlignment = Alignment.CenterVertically
+             ) {
+                 Text(
+                     text = "Group by:",
+                     style = MaterialTheme.typography.labelMedium,
+                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                     modifier = Modifier.padding(end = 8.dp)
+                 )
+                 
+                 Row(
+                     modifier = Modifier
+                         .clip(RoundedCornerShape(8.dp))
+                         .background(MaterialTheme.colorScheme.surfaceVariant)
+                         .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha=0.3f), RoundedCornerShape(8.dp))
+                 ) {
+                     listOf(GroupingMode.CATEGORY, GroupingMode.ACCOUNT).forEach { mode ->
+                         val isSelected = groupingMode == mode
+                         val bgColor = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent
+                         val textColor = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                         
+                         Box(
+                             modifier = Modifier
+                                 .clickable { onGroupingChange(mode) }
+                                 .background(bgColor)
+                                 .padding(horizontal = 12.dp, vertical = 6.dp)
+                         ) {
+                             Text(
+                                 text = mode.name.lowercase().capitalize(),
+                                 style = MaterialTheme.typography.labelMedium,
+                                 color = textColor,
+                                 fontWeight = if(isSelected) FontWeight.Bold else FontWeight.Normal
+                             )
+                         }
+                     }
+                 }
+             }
         }
 
         if (groupedExpenses.isEmpty()) {
@@ -160,21 +278,50 @@ fun ExpenseList(
                 }
             }
         } else {
-            items(groupedExpenses) { (categoryName, data) ->
+            items(groupedExpenses) { (groupKey, data) ->
                 val (total, items) = data
-                // Resolve Category Object
-                val category = categories.find { it.name == categoryName } 
-                    ?: categories.find { it.name == SystemCategory.TransactionFee.name && categoryName == SystemCategory.TransactionFee.name }
-                    ?: Category(name = categoryName, iconName = "Help", color = 0xFF9ca3af, isSystem = false) // Fallback
+                
+                // DATA MAPPING
+                val displayCategory = if (groupingMode == GroupingMode.CATEGORY) {
+                    val categoryName = groupKey ?: "Uncategorized" // Should not happen for category mode usually
+                    categories.find { it.name == categoryName } 
+                        ?: categories.find { it.name == SystemCategory.TransactionFee.name && categoryName == SystemCategory.TransactionFee.name }
+                        ?: Category(name = categoryName, iconName = "Help", color = 0xFF9ca3af, isSystem = false)
+                } else {
+                    // ACCOUNT MODE
+                    val accountId = groupKey
+                    val account = accounts.find { it.id == accountId }
+                    if (account != null) {
+                        Category(
+                            name = account.name,
+                            iconName = "Bank", // Use generic bank icon
+                            color = getAccountColor(account.id).toArgb().toLong(),
+                            isSystem = false
+                        )
+                    } else {
+                        // Null Account (e.g. Cash or Unassigned)
+                        Category(
+                            name = "Unknown Account",
+                            iconName = "Money",
+                            color = 0xFF9ca3af,
+                            isSystem = false
+                        )
+                    }
+                }
+                
+                // Budgets only apply in Category Mode
+                val displayBudget = if (groupingMode == GroupingMode.CATEGORY) {
+                     budgets.find { it.category == displayCategory.name }
+                } else null
 
                 ExpenseCategoryItem(
-                    category = category,
+                    category = displayCategory,
                     total = total,
                     items = items,
                     accounts = accounts,
                     loans = loans,
                     currency = currency,
-                    budget = budgets.find { it.category == category.name },
+                    budget = displayBudget,
                     onDelete = onDelete,
                     onEdit = { expense ->
                         if (expense.id.startsWith("fee_")) {
@@ -183,6 +330,7 @@ fun ExpenseList(
                             if (realExpense != null) {
                                 onEdit(realExpense)
                             }
+                        } else {
                             onEdit(expense)
                         }
                     },
@@ -454,7 +602,7 @@ fun ExpenseItem(
     } catch (e: Exception) {
         java.time.LocalDate.now()
     }
-    val formattedDate = date.format(DateTimeFormatter.ofPattern("EEE, MMM d"))
+    val formattedDate = if (expense.id.startsWith("total_fees_")) "Monthly Total" else date.format(DateTimeFormatter.ofPattern("EEE, MMM d"))
 
     val density = androidx.compose.ui.platform.LocalDensity.current
     val actionWidth = 80.dp
@@ -477,8 +625,15 @@ fun ExpenseItem(
     // Check if this is an initial loan transaction (non-editable/deletable)
     val isInitialLoanTransaction = expense.loanId != null && expense.title.startsWith("New Loan:")
     
+    // Check if this is a virtual fee item
+    val isFee = expense.id.startsWith("fee_")
+    
+    // Check if this is a total fee summary item
+    val isTotalFee = expense.id.startsWith("total_fees_")
+    
     // Combine flags for actions that should be disabled
-    val isNonEditable = isBalanceAdjustment || isInitialLoanTransaction
+    val isNonEditable = isBalanceAdjustment || isInitialLoanTransaction || isTotalFee
+    val isNonDeletable = isInitialLoanTransaction || isFee || isTotalFee
     
     val extraInfo = buildString {
         if (expense.transactionType == com.h2.wellspend.data.TransactionType.INCOME) append(" • Income")
@@ -547,7 +702,11 @@ fun ExpenseItem(
                         .background(if (isNonEditable) Color.Gray else MaterialTheme.colorScheme.primary)
                         .clickable {
                             if (isNonEditable) {
-                                val msg = if (isInitialLoanTransaction) "Initial loan transactions cannot be edited" else "Balance adjustments cannot be edited"
+                                val msg = when {
+                                    isTotalFee -> "This is a calculated summary and cannot be edited"
+                                    isInitialLoanTransaction -> "Initial loan transactions cannot be edited"
+                                    else -> "Balance adjustments cannot be edited"
+                                }
                                 android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
                             } else {
                                 onEdit(expense)
@@ -570,10 +729,15 @@ fun ExpenseItem(
                         .align(Alignment.CenterEnd)
                         .width(actionWidth + 24.dp)
                         .fillMaxHeight()
-                        .background(if (isInitialLoanTransaction) Color.Gray else MaterialTheme.colorScheme.error)
+                        .background(if (isNonDeletable) Color.Gray else MaterialTheme.colorScheme.error)
                         .clickable {
-                            if (isInitialLoanTransaction) {
-                                android.widget.Toast.makeText(context, "Initial loan transactions cannot be deleted", android.widget.Toast.LENGTH_SHORT).show()
+                            if (isNonDeletable) {
+                                val msg = when {
+                                    isTotalFee -> "This is a calculated summary and cannot be deleted"
+                                    isFee -> "Transaction fees cannot be deleted directly"
+                                    else -> "Initial loan transactions cannot be deleted"
+                                }
+                                android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
                             } else {
                                 showDeleteDialog = true
                             }
@@ -584,7 +748,7 @@ fun ExpenseItem(
                         Icon(
                             imageVector = Icons.Default.Delete,
                             contentDescription = "Delete",
-                            tint = if (isInitialLoanTransaction) Color.DarkGray else MaterialTheme.colorScheme.onError
+                            tint = if (isNonDeletable) Color.DarkGray else MaterialTheme.colorScheme.onError
                         )
                     }
                 }
@@ -622,8 +786,16 @@ fun ExpenseItem(
                     .combinedClickable(
                         interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
                         indication = null,
-                        onClick = { onTransactionClick(expense) },
-                        onLongClick = { onTransactionClick(expense) }
+                        onClick = { 
+                            if (!isFee && !isTotalFee) {
+                                onTransactionClick(expense)
+                            }
+                        },
+                        onLongClick = { 
+                            if (!isFee && !isTotalFee) {
+                                onTransactionClick(expense) 
+                            }
+                        }
                     )
                     .padding(16.dp),
                 verticalAlignment = Alignment.Top,

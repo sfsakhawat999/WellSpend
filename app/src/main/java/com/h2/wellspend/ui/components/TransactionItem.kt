@@ -101,8 +101,11 @@ fun TransactionItem(
         isTransfer -> "Transfer: $sourceAccountName → ?"
         loanName != null -> transaction.title.ifEmpty { transaction.category }
         isBalanceAdjustment -> transaction.title.ifEmpty { transaction.category }
-        transaction.title.isNotEmpty() -> "${transaction.category}: ${transaction.title}"
-        else -> transaction.category
+        transaction.title.isNotEmpty() -> {
+            val prefix = if (isIncome) "Income" else transaction.category
+            "$prefix: ${transaction.title}"
+        }
+        else -> if (isIncome) "Income" else transaction.category
     }
     
     val dateStr = try {

@@ -41,7 +41,8 @@ fun DonutChart(
     data: List<ChartData>,
     totalAmount: Double,
     currency: String,
-    onCenterClick: () -> Unit
+    centerLabel: String = "Total Spend",
+    additionalLabel: String? = null
 ) {
     val animatedProgress = remember { Animatable(0f) }
 
@@ -62,7 +63,7 @@ fun DonutChart(
         contentAlignment = Alignment.Center
     ) {
         Canvas(modifier = Modifier.fillMaxSize()) {
-            val strokeWidth = 30.dp.toPx()
+            val strokeWidth = 20.dp.toPx()
             val center = Offset(size.width / 2, size.height / 2)
             val radius = (min(size.width, size.height) - strokeWidth) / 2
 
@@ -80,7 +81,8 @@ fun DonutChart(
                     val sweepAngle = (item.value / total * 360f).toFloat() * animatedProgress.value
                     
                     // Add a small gap if there are multiple items
-                    val gap = if (data.size > 1) 2f else 0f
+                    // val gap = if (data.size > 1) 0.5f else 0f
+                    val gap = 1f
                     
                     drawArc(
                         color = item.color,
@@ -98,10 +100,10 @@ fun DonutChart(
 
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.clickable { onCenterClick() }
+            modifier = Modifier
         ) {
             Text(
-                text = "Total Spend",
+                text = centerLabel,
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -113,11 +115,14 @@ fun DonutChart(
                 ),
                 color = MaterialTheme.colorScheme.onSurface
             )
-            Text(
-                text = "Tap for details",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            if (additionalLabel != null) {
+                Text(
+                    text = additionalLabel,
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 12.sp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                    modifier = Modifier.padding(top = 2.dp)
+                )
+            }
         }
     }
 }

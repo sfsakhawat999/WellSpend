@@ -74,9 +74,10 @@ fun MonthlyReport(
 ) {
     // 1. Filter by Date first
     val (incomeTotal, expenseTotal, transferTotal, _, expensePercentChange, categoryData, breakdownData) = remember(expenses, currentDate, comparisonDate, excludeLoanTransactions) {
-        // Refinement: Exclude untracked loan transactions (No Account)
-        // Base valid expenses (ignoring exclusion pref, but handling virtuals)
-        val validExpenses = expenses.filter { !(it.loanId != null && it.accountId == null) }
+        // Refinement: Exclude untracked loan transactions (No Account) -> REMOVED per user request
+        // Base valid expenses (ignoring exclusion pref)
+        val validExpenses = expenses
+
         
         val currentMonthTransactions = validExpenses.filter {
             val date = LocalDate.parse(it.date.substring(0, 10))
@@ -279,7 +280,8 @@ fun MonthlyReport(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    text = currentDate.format(DateTimeFormatter.ofPattern("MMMM yyyy")).uppercase(),
+                    text = currentDate.format(DateTimeFormatter.ofPattern("MMMM yyyy")).uppercase() + 
+                           if (excludeLoanTransactions) " (LOANS EXCLUDED)" else "",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     letterSpacing = 1.sp

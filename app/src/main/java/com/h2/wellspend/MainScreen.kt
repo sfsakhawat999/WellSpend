@@ -75,6 +75,8 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Text
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -107,6 +109,7 @@ import com.h2.wellspend.ui.components.DateSelector
 import com.h2.wellspend.ui.components.ChartData
 import com.h2.wellspend.ui.components.DonutChart
 import com.h2.wellspend.ui.components.ExpenseList
+import com.h2.wellspend.ui.components.GroupingMode
 import com.h2.wellspend.ui.components.MonthlyReport
 import com.h2.wellspend.ui.AccountScreen
 import com.h2.wellspend.data.Expense
@@ -214,6 +217,10 @@ fun MainScreen(viewModel: MainViewModel) {
     val searchFilter by viewModel.searchFilter.collectAsState()
     val searchResults by viewModel.searchResults.collectAsState(initial = emptyList())
     val recurringConfigs by viewModel.recurringConfigs.collectAsState(initial = emptyList())
+    val groupIncomeByAccount by viewModel.groupIncomeByAccount.collectAsState()
+    
+    // Grouping State for Expenses (Hoisted)
+    var expenseGroupingMode by remember { mutableStateOf(GroupingMode.CATEGORY) }
 
     // Hoisted States for Sub-screens
     // Budgets
@@ -284,45 +291,115 @@ fun MainScreen(viewModel: MainViewModel) {
     }.sortedWith(compareByDescending<Expense> { it.date.take(10) }.thenByDescending { it.timestamp })
 
     // Calculate Total Spend: (All Expenses Base Amount) + (All Fees from any transaction type)
-    // EXCLUDING Loan transactions with NO Account (Virtual/Cash/Untracked)
     // AND optionally excluding ALL loan transactions if setting is enabled
     val validTransactions = currentMonthTransactions.filter { transaction ->
-        val isVirtualLoan = transaction.loanId != null && transaction.accountId == null
         val isExcludedLoan = excludeLoanTransactions && transaction.loanId != null
-        !isVirtualLoan && !isExcludedLoan
+        !isExcludedLoan
     }
     
     val totalSpend = validTransactions.filter { it.transactionType == com.h2.wellspend.data.TransactionType.EXPENSE }.sumOf { it.amount } + 
                      validTransactions.sumOf { it.feeAmount }
 
     // For Chart: Only include explicitly categorized EXPENSES (exclude Income/Transfer base amounts)
-    // For Chart: Only include explicitly categorized EXPENSES (exclude Income/Transfer base amounts)
     val expensesByCat = validTransactions
         .filter { it.transactionType == com.h2.wellspend.data.TransactionType.EXPENSE }
         .groupBy { it.category }
         
-    val chartDataList = expensesByCat.map { (cat, list) ->
-        val categoryObj = allCategories.find { it.name == cat }
-        ChartData(
-            name = cat,
-            value = list.sumOf { it.amount }, // Fees are handled separately
-            color = categoryObj?.let { Color(it.color) } ?: Color.Gray
-        )
-    }.toMutableList()
+    // Calculate Data based on Grouping Mode
+    val accountColors = listOf(
+        Color(0xFF4CAF50), Color(0xFF2196F3), Color(0xFFFFC107), Color(0xFFE91E63), 
+        Color(0xFF9C27B0), Color(0xFF00BCD4), Color(0xFF8BC34A), Color(0xFFFF5722),
+        Color(0xFF795548), Color(0xFF607D8B)
+    )
+    val chartDataList = if (expenseGroupingMode == GroupingMode.ACCOUNT) {
+        val expensesByAccount = validTransactions
+             .groupBy { it.accountId } // Group ALL transactions to capture fees
+        
+        expensesByAccount.map { (accountId, list) ->
+            // Sum = Base Amount of EXPENSES + Fee Amount of ALL items
+            val expenseAmount = list.filter { it.transactionType == com.h2.wellspend.data.TransactionType.EXPENSE }.sumOf { it.amount }
+            val feeAmount = list.sumOf { it.feeAmount }
+            val totalValue = expenseAmount + feeAmount
+            
+            if (totalValue > 0) {
+                 val account = accounts.find { it.id == accountId }
+                 if (account != null) {
+                      val colorIndex = kotlin.math.abs(account.id.hashCode()) % accountColors.size
+                      ChartData(
+                         name = account.name,
+                         value = totalValue,
+                         color = accountColors[colorIndex]
+                      )
+                 } else {
+                      ChartData(
+                         name = "Unassigned",
+                         value = totalValue,
+                         color = CategoryColors[SystemCategory.Others] ?: Color.Gray
+                      )
+                 }
+            } else null
+        }.filterNotNull().toMutableList()
+    } else {
+        expensesByCat.map { (cat, list) ->
+            val categoryObj = allCategories.find { it.name == cat }
+            ChartData(
+                name = cat,
+                value = list.sumOf { it.amount }, // Fees are handled separately
+                color = categoryObj?.let { Color(it.color) } 
+                    ?: CategoryColors[SystemCategory.Others] 
+                    ?: Color.Gray
+            )
+        }.toMutableList()
+    }
 
     // Add ALL fees (from Income, Transfer, and Expense) as a single "Transaction Fee" slice
+    // ONLY if NOT in Account mode (since they are merged into accounts there)
     val totalFees = validTransactions.sumOf { it.feeAmount }
-    if (totalFees > 0) {
+    if (totalFees > 0 && expenseGroupingMode != GroupingMode.ACCOUNT) {
         val txFeeCat = allCategories.find { it.name == SystemCategory.TransactionFee.name }
         chartDataList.add(
             ChartData(
                 name = SystemCategory.TransactionFee.name,
                 value = totalFees,
-                color = txFeeCat?.let { Color(it.color) } ?: Color.Gray
+                color = txFeeCat?.let { Color(it.color) } 
+                    ?: CategoryColors[SystemCategory.TransactionFee] 
+                    ?: Color.Gray
             )
         )
     }
     val chartData = chartDataList.sortedByDescending { it.value }
+
+    // Income Chart Data (Grouped by Account)
+    val validIncomes = currentMonthTransactions.filter { 
+        it.transactionType == com.h2.wellspend.data.TransactionType.INCOME &&
+        !(excludeLoanTransactions && it.loanId != null)
+    }
+    
+    val incomesByAccount = validIncomes.groupBy { it.accountId }
+
+
+
+    val incomeChartData = incomesByAccount.mapNotNull { (accountId, list) ->
+        val account = accounts.find { it.id == accountId }
+        if (account != null) {
+             val colorIndex = kotlin.math.abs(account.id.hashCode()) % accountColors.size
+             ChartData(
+                name = account.name,
+                value = list.sumOf { it.amount },
+                color = accountColors[colorIndex]
+             )
+        } else {
+             // Handle deleted accounts or nulls if needed, for now skip or group as "Unknown"
+             ChartData(
+                name = "Unknown Account",
+                value = list.sumOf { it.amount },
+                color = Color.Gray
+             )
+        } 
+    }.sortedByDescending { it.value }
+    
+    val totalIncomeAmount = incomeChartData.sumOf { it.value }
+
 
     val context = LocalContext.current
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
@@ -958,6 +1035,7 @@ fun MainScreen(viewModel: MainViewModel) {
                                 currentDynamicColor = dynamicColor,
                                 excludeLoanTransactions = excludeLoanTransactions,
                                 showAccountsOnHomepage = showAccountsOnHomepage,
+
                                 onCurrencyChange = { newCurrency ->
                                      viewModel.updateBudgets(emptyList(), newCurrency)
                                 },
@@ -965,6 +1043,7 @@ fun MainScreen(viewModel: MainViewModel) {
                                 onDynamicColorChange = { viewModel.updateDynamicColor(it) },
                                 onExcludeLoanTransactionsChange = { viewModel.updateExcludeLoanTransactions(it) },
                                 onShowAccountsOnHomepageChange = { viewModel.updateShowAccountsOnHomepage(it) },
+
                                 onExport = { 
                                     val timestamp = java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd_HHmm"))
                                     exportLauncher.launch("wellspend_backup_$timestamp.json") 
@@ -977,16 +1056,12 @@ fun MainScreen(viewModel: MainViewModel) {
                         // Filter out virtual loan transactions (same logic as expense/income pages)
                         // AND respect value of excludeLoanTransactions for Totals/Income
                         val filteredTransactions = currentMonthTransactions.filter { transaction ->
-                            val isVirtualLoan = transaction.loanId != null && transaction.accountId == null
                             val isExcludedLoan = excludeLoanTransactions && transaction.loanId != null
-                            !isVirtualLoan && !isExcludedLoan
+                            !isExcludedLoan
                         }
 
                         // For Transaction List: Only exclude virtual loans, SHOW real loans even if excluded from totals
-                        val unfilteredTransactions = currentMonthTransactions.filter { transaction ->
-                            val isVirtualLoan = transaction.loanId != null && transaction.accountId == null
-                            !isVirtualLoan
-                        }
+                        val unfilteredTransactions = currentMonthTransactions
                         
                         // Calculate balance at end of selected month
                         // Filter all expenses up to end of current month
@@ -1034,6 +1109,7 @@ fun MainScreen(viewModel: MainViewModel) {
                             accountBalances = balances,
                             loans = loans,
                             showAccounts = showAccountsOnHomepage,
+                            showLoanExcludedLabel = excludeLoanTransactions,
                             isLoading = !isDataLoaded,
                             onEdit = { transaction ->
                                 if (transaction.loanId != null) {
@@ -1075,6 +1151,7 @@ fun MainScreen(viewModel: MainViewModel) {
                             onAddCategory = { viewModel.addCategory(it) },
                             onUpdateCategory = { viewModel.addCategory(it) }, 
                             onDeleteCategory = { viewModel.deleteCategory(it) },
+                            onReorder = { viewModel.updateCategoryOrder(it) },
                             usedCategoryNames = usedCategoryNames,
                             showAddDialog = showAddCategoryDialog,
                             onDismissAddDialog = { showAddCategoryDialog = false }
@@ -1113,7 +1190,10 @@ fun MainScreen(viewModel: MainViewModel) {
 
                             accounts = accounts,
                             balances = balances,
+                            currentMonthTransactions = currentMonthTransactions,
                             currency = currency,
+                            currentDate = currentDate,
+                            onDateChange = { currentDate = it },
                             onDeleteAccount = { viewModel.deleteAccount(it) },
                             onReorder = { viewModel.updateAccountOrder(it) },
                             onAddAccount = { 
@@ -1143,7 +1223,12 @@ fun MainScreen(viewModel: MainViewModel) {
                                     showAddExpense = true
                                 }
                             },
-                            onTransactionClick = { transactionToPreview = it }
+                            onTransactionClick = { transactionToPreview = it },
+                            chartData = incomeChartData,
+                            totalIncome = totalIncomeAmount,
+                            showLoanExcludedLabel = excludeLoanTransactions,
+                            groupIncomeByAccount = groupIncomeByAccount,
+                            onGroupToggle = { viewModel.updateGroupIncomeByAccount(it) }
                         )
                     }
                     "EXPENSES" -> {
@@ -1168,6 +1253,9 @@ fun MainScreen(viewModel: MainViewModel) {
                             state = listState,
                             chartData = chartData,
                             totalSpend = totalSpend,
+                            showLoanExcludedLabel = excludeLoanTransactions,
+                            groupingMode = expenseGroupingMode,
+                            onGroupingChange = { expenseGroupingMode = it },
                             budgets = budgets
                         )
                     }
@@ -1322,6 +1410,7 @@ fun DashboardScreen(
     accountBalances: Map<String, Double>,
     loans: List<com.h2.wellspend.data.Loan>,
     showAccounts: Boolean,
+    showLoanExcludedLabel: Boolean = false,
     isLoading: Boolean = false,
     onEdit: (com.h2.wellspend.data.Expense) -> Unit,
     onDelete: (String) -> Unit,
@@ -1458,6 +1547,15 @@ fun DashboardScreen(
                             fontWeight = FontWeight.Bold,
                             letterSpacing = 1.sp
                         )
+                        if (showLoanExcludedLabel) {
+                            Text(
+                                " (LOANS EXCLUDED)",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 1.sp
+                            )
+                        }
                     }
                     
                     // Summary Cards Row
@@ -1510,6 +1608,7 @@ fun DashboardScreen(
                                     style = MaterialTheme.typography.labelSmall,
                                     color = Color(0xFF4CAF50)
                                 )
+
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text(
                                     "+$currency${if (totalIncome % 1.0 == 0.0) String.format("%.0f", totalIncome) else String.format("%.2f", totalIncome)}",
@@ -1534,6 +1633,7 @@ fun DashboardScreen(
                                     style = MaterialTheme.typography.labelSmall,
                                     color = Color(0xFFF44336)
                                 )
+
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text(
                                     "-$currency${if (totalExpense % 1.0 == 0.0) String.format("%.0f", totalExpense) else String.format("%.2f", totalExpense)}",
@@ -1721,6 +1821,9 @@ fun ExpenseListScreen(
     state: LazyListState,
     chartData: List<ChartData>,
     totalSpend: Double,
+    showLoanExcludedLabel: Boolean = false,
+    groupingMode: GroupingMode = GroupingMode.CATEGORY,
+    onGroupingChange: (GroupingMode) -> Unit = {},
 
     budgets: List<Budget>,
     onTransactionClick: (Expense) -> Unit = {}
@@ -1732,9 +1835,9 @@ fun ExpenseListScreen(
         )
         
         // Show Expenses ONLY (Transfers -> More > Transfers, Income -> Bottom Tab)
+        // BUT include other types if they have fees (so we can show the fee)
         val expenseList = expenses.filter { 
-            it.transactionType == com.h2.wellspend.data.TransactionType.EXPENSE &&
-            !(it.loanId != null && it.accountId == null)
+            (it.transactionType == com.h2.wellspend.data.TransactionType.EXPENSE || it.feeAmount > 0)
         }
         ExpenseList(
             expenses = expenseList,
@@ -1747,13 +1850,15 @@ fun ExpenseListScreen(
             onEdit = onEdit,
             state = state,
             onTransactionClick = onTransactionClick,
+            groupingMode = groupingMode,
+            onGroupingChange = onGroupingChange,
             headerContent = {
                 // Donut Chart at the top (scrollable)
                 DonutChart(
                     data = chartData,
                     totalAmount = totalSpend,
                     currency = currency,
-                    onCenterClick = { /* Already on details page */ }
+                    additionalLabel = if (showLoanExcludedLabel) "(loans excluded)" else null
                 )
             },
 
@@ -1806,7 +1911,12 @@ fun IncomeListScreen(
     currency: String,
     onDelete: (String) -> Unit,
     onEdit: (Expense) -> Unit,
-    onTransactionClick: (Expense) -> Unit = {}
+    onTransactionClick: (Expense) -> Unit = {},
+    chartData: List<ChartData>,
+    totalIncome: Double,
+    showLoanExcludedLabel: Boolean = false,
+    groupIncomeByAccount: Boolean,
+    onGroupToggle: (Boolean) -> Unit = {}
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         DateSelector(
@@ -1815,10 +1925,8 @@ fun IncomeListScreen(
         )
         
         // Filter only Incomes
-        // Filter only Incomes
         val incomes = expenses.filter { 
-            it.transactionType == com.h2.wellspend.data.TransactionType.INCOME &&
-            !(it.loanId != null && it.accountId == null)
+            it.transactionType == com.h2.wellspend.data.TransactionType.INCOME
         }.sortedWith(compareByDescending<com.h2.wellspend.data.Expense> { it.date.take(10) }.thenByDescending { it.timestamp })
         
         com.h2.wellspend.ui.components.IncomeList(
@@ -1828,7 +1936,70 @@ fun IncomeListScreen(
             currency = currency,
             onDelete = onDelete,
             onEdit = onEdit,
-            onTransactionClick = onTransactionClick
+            onTransactionClick = onTransactionClick,
+            headerContent = {
+                if (groupIncomeByAccount) {
+                    DonutChart(
+                        data = chartData,
+                        totalAmount = totalIncome,
+                        currency = currency,
+                        centerLabel = "Total Income",
+                        additionalLabel = if (showLoanExcludedLabel) "(loans excluded)" else null
+                    )
+                } else {
+                     Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = "Total Income",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = "$currency${String.format("%.2f", totalIncome)}",
+                            style = MaterialTheme.typography.headlineLarge.copy(
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 32.sp
+                            ),
+                            color = Color(0xFF10b981) // Green
+                        )
+                        if (showLoanExcludedLabel) {
+                            Text(
+                                "(loans excluded)",
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                modifier = Modifier.padding(top = 4.dp)
+                            )
+                        }
+                    }
+                }
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 0.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Group by Account",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Switch(
+                        checked = groupIncomeByAccount,
+                        onCheckedChange = onGroupToggle,
+                         colors = SwitchDefaults.colors(
+                            checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
+                            checkedTrackColor = MaterialTheme.colorScheme.primary
+                        )
+                    )
+                }
+            },
+            useGrouping = groupIncomeByAccount
         )
     }
 }
