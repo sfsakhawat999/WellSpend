@@ -12,7 +12,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.SwapVert
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -52,37 +55,79 @@ import com.h2.wellspend.ui.getGroupedItemBackgroundShape
 import com.h2.wellspend.ui.theme.cardBackgroundColor
 import com.h2.wellspend.ui.components.CategoryDialog
 
+import androidx.compose.material.icons.filled.Edit
+
 private val SYSTEM_CATEGORY_NAMES = setOf("Others", "Loan", "TransactionFee", "BalanceAdjustment")
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun CategoryManagementScreen(
     categories: List<Category>,
     onAddCategory: (Category) -> Unit,
     onUpdateCategory: (Category) -> Unit,
     onDeleteCategory: (Category) -> Unit,
+    onReorder: (List<Category>) -> Unit, // New
     usedCategoryNames: Set<String>,
     showAddDialog: Boolean,
     onDismissAddDialog: () -> Unit
 ) {
     var categoryToEdit by remember { mutableStateOf<Category?>(null) }
     var categoryToDelete by remember { mutableStateOf<Category?>(null) }
+    var isReorderMode by remember { mutableStateOf(false) }
 
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize(),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 150.dp),
+    Column(modifier = Modifier.fillMaxSize()) {
+        // Reorder Toggle
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.End
+        ) {
+            FilterChip(
+                selected = isReorderMode,
+                onClick = { isReorderMode = !isReorderMode },
+                label = { Text(if (isReorderMode) "Done" else "Reorder") },
+                leadingIcon = if (isReorderMode) {
+                    { Icon(Icons.Default.Check, null, modifier = Modifier.size(16.dp)) }
+                } else {
+                    { Icon(Icons.Default.SwapVert, null, modifier = Modifier.size(16.dp)) }
+                }
+            )
+        }
+
+        LazyColumn(
+            modifier = Modifier.weight(1f),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 150.dp),
             verticalArrangement = Arrangement.spacedBy(0.dp)
         ) {
-            itemsIndexed(categories) { index, category ->
+            itemsIndexed(categories, key = { _, cat -> cat.name }) { index, category ->
                 val shape = getGroupedItemShape(index, categories.size)
                 val backgroundShape = getGroupedItemBackgroundShape(index, categories.size)
                 
-                Box(modifier = Modifier.padding(vertical = 1.dp)) {
+                Box(modifier = Modifier.animateItemPlacement().padding(vertical = 1.dp)) {
                     CategoryItem(
                         category = category,
                         onEdit = { categoryToEdit = category },
                         onDelete = { categoryToDelete = category },
+                        isReorderMode = isReorderMode,
+                        canMoveUp = index > 0,
+                        canMoveDown = index < categories.size - 1,
+                        onMoveUp = {
+                            if (index > 0) {
+                                val newList = categories.toMutableList()
+                                val item = newList.removeAt(index)
+                                newList.add(index - 1, item)
+                                onReorder(newList)
+                            }
+                        },
+                        onMoveDown = {
+                            if (index < categories.size - 1) {
+                                val newList = categories.toMutableList()
+                                val item = newList.removeAt(index)
+                                newList.add(index + 1, item)
+                                onReorder(newList)
+                            }
+                        },
                         shape = shape,
                         backgroundShape = backgroundShape
                     )
@@ -103,6 +148,7 @@ fun CategoryManagementScreen(
                 }
             }
         }
+    }
 
     if (showAddDialog) {
         CategoryDialog(
@@ -160,6 +206,11 @@ fun CategoryItem(
     category: Category,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
+    isReorderMode: Boolean = false,
+    canMoveUp: Boolean = false,
+    canMoveDown: Boolean = false,
+    onMoveUp: () -> Unit = {},
+    onMoveDown: () -> Unit = {},
     shape: Shape = RoundedCornerShape(12.dp),
     backgroundShape: Shape = shape
 ) {
@@ -173,117 +224,131 @@ fun CategoryItem(
     val isSystemCategory = category.isSystem || SYSTEM_CATEGORY_NAMES.contains(category.name)
     val maxSwipeLeft = if (isSystemCategory) 0f else -actionWidthPx
 
+    // Reset swipe when entering reorder mode
+    LaunchedEffect(isReorderMode) {
+        if (isReorderMode) {
+            offsetX.animateTo(0f)
+        }
+    }
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .height(IntrinsicSize.Min)
             .clip(shape)
     ) {
-        // Background Actions
-        Box(
-            modifier = Modifier
-                .matchParentSize()
-                .background(cardBackgroundColor())
-                .clip(backgroundShape)
-        ) {
-            // Left Action (Edit) - Revealed by swiping RIGHT
+        // Background Actions (Only if NOT reorder mode)
+        if (!isReorderMode) {
             Box(
                 modifier = Modifier
-                    .align(Alignment.CenterStart)
-                    .width(actionWidth + 24.dp)
-                    .fillMaxHeight()
-                    .background(MaterialTheme.colorScheme.primary)
-                    .clickable { 
-                        scope.launch { offsetX.animateTo(0f) }
-                        onEdit() 
-                    },
-                contentAlignment = Alignment.CenterStart
+                    .matchParentSize()
+                    .background(cardBackgroundColor())
+                    .clip(backgroundShape)
             ) {
-                Box(modifier = Modifier.width(actionWidth), contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = Icons.Default.Edit,
-                        contentDescription = "Edit",
-                        tint = MaterialTheme.colorScheme.onPrimary
-                    )
-                }
-            }
-
-            // Right Action (Delete) - Revealed by swiping LEFT - Only if NOT system
-            if (!isSystemCategory) {
+                // Left Action (Edit)
                 Box(
                     modifier = Modifier
-                        .align(Alignment.CenterEnd)
+                        .align(Alignment.CenterStart)
                         .width(actionWidth + 24.dp)
                         .fillMaxHeight()
-                        .background(MaterialTheme.colorScheme.error)
+                        .background(MaterialTheme.colorScheme.primary)
                         .clickable { 
                             scope.launch { offsetX.animateTo(0f) }
-                            onDelete() 
+                            onEdit() 
                         },
-                    contentAlignment = Alignment.CenterEnd
+                    contentAlignment = Alignment.CenterStart
                 ) {
                     Box(modifier = Modifier.width(actionWidth), contentAlignment = Alignment.Center) {
                         Icon(
-                            imageVector = Icons.Default.Delete,
-                            contentDescription = "Delete",
-                            tint = MaterialTheme.colorScheme.onError
+                            imageVector = Icons.Default.Edit,
+                            contentDescription = "Edit",
+                            tint = MaterialTheme.colorScheme.onPrimary
                         )
+                    }
+                }
+
+                // Right Action (Delete)
+                if (!isSystemCategory) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.CenterEnd)
+                            .width(actionWidth + 24.dp)
+                            .fillMaxHeight()
+                            .background(MaterialTheme.colorScheme.error)
+                            .clickable { 
+                                scope.launch { offsetX.animateTo(0f) }
+                                onDelete() 
+                            },
+                        contentAlignment = Alignment.CenterEnd
+                    ) {
+                        Box(modifier = Modifier.width(actionWidth), contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Default.Delete,
+                                contentDescription = "Delete",
+                                tint = MaterialTheme.colorScheme.onError
+                            )
+                        }
                     }
                 }
             }
         }
 
         // Foreground (Content)
-        // Replaced Card with Box/Row
         Box(
             modifier = Modifier
                 .offset { IntOffset(offsetX.value.roundToInt(), 0) }
-                .draggable(
-                    orientation = Orientation.Horizontal,
-                    state = rememberDraggableState { delta ->
-                        scope.launch {
-                            val newValue = (offsetX.value + delta).coerceIn(maxSwipeLeft, actionWidthPx)
-                            offsetX.snapTo(newValue)
-                        }
-                    },
-                    onDragStopped = {
-                        val targetOffset = when {
-                            offsetX.value > actionWidthPx / 2 -> actionWidthPx // Snap Open (Right/Edit)
-                            offsetX.value < -actionWidthPx / 2 && !isSystemCategory -> -actionWidthPx // Snap Open (Left/Delete)
-                            else -> 0f
-                        }
-                        scope.launch { offsetX.animateTo(targetOffset) }
-                    }
+                .then(
+                    if (!isReorderMode) {
+                         Modifier.draggable(
+                            orientation = Orientation.Horizontal,
+                            state = rememberDraggableState { delta ->
+                                scope.launch {
+                                    val newValue = (offsetX.value + delta).coerceIn(maxSwipeLeft, actionWidthPx)
+                                    offsetX.snapTo(newValue)
+                                }
+                            },
+                            onDragStopped = {
+                                val targetOffset = when {
+                                    offsetX.value > actionWidthPx / 2 -> actionWidthPx
+                                    offsetX.value < -actionWidthPx / 2 && !isSystemCategory -> -actionWidthPx
+                                    else -> 0f
+                                }
+                                scope.launch { offsetX.animateTo(targetOffset) }
+                            }
+                        ).combinedClickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = { 
+                                if (offsetX.value != 0f) {
+                                    scope.launch { offsetX.animateTo(0f) }
+                                } else {
+                                    scope.launch {
+                                        performWiggle(offsetX, actionWidthPx, context)
+                                    }
+                                }
+                            },
+                            onLongClick = {
+                                scope.launch {
+                                    performWiggle(offsetX, actionWidthPx, context)
+                                }
+                            }
+                        )
+                    } else Modifier
                 )
                 .fillMaxWidth()
                 .background(cardBackgroundColor(), shape)
-                .combinedClickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null, // Disable ripple to avoid interference
-                    onClick = { 
-                        if (offsetX.value != 0f) {
-                            scope.launch { offsetX.animateTo(0f) }
-                        } else {
-                            scope.launch {
-                                performWiggle(offsetX, actionWidthPx, context)
-                            }
-                        }
-                    },
-                    onLongClick = {
-                        scope.launch {
-                            performWiggle(offsetX, actionWidthPx, context)
-                        }
-                    }
-                )
         ) {
             Row(
                 modifier = Modifier
                     .padding(16.dp)
                     .fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                // Main Content (Icon + Name)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
+                ) {
                     Box(
                         modifier = Modifier
                             .size(40.dp)
@@ -306,7 +371,7 @@ fun CategoryItem(
                             fontWeight = FontWeight.SemiBold
                         )
                         if (category.isSystem || SYSTEM_CATEGORY_NAMES.contains(category.name)) {
-                           Spacer(modifier = Modifier.height(6.dp))
+                           Spacer(modifier = Modifier.height(4.dp))
                            Text(
                                 text = "System Default",
                                 style = MaterialTheme.typography.bodySmall,
@@ -316,7 +381,36 @@ fun CategoryItem(
                     }
                 }
                 
-                // Removed inline buttons
+                // Reorder Buttons (Right Side)
+                if (isReorderMode) {
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Row {
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clickable(enabled = canMoveUp, onClick = onMoveUp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Default.KeyboardArrowUp, 
+                                "Move Up",
+                                tint = if (canMoveUp) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
+                            )
+                        }
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clickable(enabled = canMoveDown, onClick = onMoveDown),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Default.KeyboardArrowDown, 
+                                "Move Down",
+                                tint = if (canMoveDown) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
+                            )
+                        }
+                    }
+                }
             }
         }
     }

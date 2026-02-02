@@ -1151,6 +1151,7 @@ fun MainScreen(viewModel: MainViewModel) {
                             onAddCategory = { viewModel.addCategory(it) },
                             onUpdateCategory = { viewModel.addCategory(it) }, 
                             onDeleteCategory = { viewModel.deleteCategory(it) },
+                            onReorder = { viewModel.updateCategoryOrder(it) },
                             usedCategoryNames = usedCategoryNames,
                             showAddDialog = showAddCategoryDialog,
                             onDismissAddDialog = { showAddCategoryDialog = false }
