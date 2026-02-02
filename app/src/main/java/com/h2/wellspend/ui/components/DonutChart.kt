@@ -42,6 +42,7 @@ fun DonutChart(
     totalAmount: Double,
     currency: String,
     centerLabel: String = "Total Spend",
+    additionalLabel: String? = null,
     isCenterClickable: Boolean = true,
     onCenterClick: () -> Unit
 ) {
@@ -117,6 +118,14 @@ fun DonutChart(
                 ),
                 color = MaterialTheme.colorScheme.onSurface
             )
+            if (additionalLabel != null) {
+                Text(
+                    text = additionalLabel,
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+            }
             if (isCenterClickable) {
                 Text(
                     text = "Tap for details",
