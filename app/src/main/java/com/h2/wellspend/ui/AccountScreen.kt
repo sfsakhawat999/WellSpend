@@ -71,7 +71,10 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 fun AccountScreen(
     accounts: List<Account>,
     balances: Map<String, Double>,
+    currentMonthTransactions: List<com.h2.wellspend.data.Expense>,
     currency: String,
+    currentDate: java.time.LocalDate, // New
+    onDateChange: (java.time.LocalDate) -> Unit, // New
     onDeleteAccount: (Account) -> Unit,
     onReorder: (List<Account>) -> Unit,
     onAddAccount: () -> Unit,
@@ -97,6 +100,12 @@ fun AccountScreen(
             }
         } else {
             Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+                // Date Selector
+                com.h2.wellspend.ui.components.DateSelector(
+                    currentDate = currentDate,
+                    onDateChange = onDateChange
+                )
+                
                 // Reorder mode toggle
                 Row(
                     modifier = Modifier
@@ -124,10 +133,46 @@ fun AccountScreen(
                         val shape = getGroupedItemShape(index, accounts.size)
                         val backgroundShape = getGroupedItemBackgroundShape(index, accounts.size)
                         
+                        // Calculate Monthly Stats
+                        val accountTransactions = currentMonthTransactions.filter { 
+                           it.accountId == account.id || it.transferTargetAccountId == account.id 
+                        }
+                        
+                        // Entered: Income (amount) + Transfer In (amount)
+                        val inflow = accountTransactions.sumOf { 
+                            if (it.transactionType == com.h2.wellspend.data.TransactionType.INCOME && it.accountId == account.id) {
+                                it.amount // Income base amount (Fees are Outflow)
+                            } else if (it.transactionType == com.h2.wellspend.data.TransactionType.TRANSFER && it.transferTargetAccountId == account.id) {
+                                it.amount // Transfer In base amount
+                            } else 0.0
+                        }
+
+                        // Went Out: Expense (amount + fee) + Transfer Out (amount + fee) + Income (fee)
+                        val outflow = accountTransactions.sumOf {
+                             if (it.accountId == account.id) {
+                                 // It's the source account
+                                 when (it.transactionType) {
+                                     com.h2.wellspend.data.TransactionType.EXPENSE -> it.amount + it.feeAmount
+                                     com.h2.wellspend.data.TransactionType.TRANSFER -> it.amount + it.feeAmount
+                                     com.h2.wellspend.data.TransactionType.INCOME -> it.feeAmount // Income fees are money leaving the account? Or deducted from income? Usually fees are "out".
+                                     // Actually, if I receive $100 income with $5 fee, do I get $95 net?
+                                     // Or do I get $100 and pay $5? 
+                                     // In MainScreen logic: totalIncomeNet = incomes.sumOf { it.amount - it.feeAmount }
+                                     // But for "Entered vs Went Out", I should probably split it.
+                                     // Entered: $100. Went Out: $5. Net: $95.
+                                     // This is more transparent.
+                                 }
+                             } else {
+                                 0.0
+                             }
+                        }
+
                         Box(modifier = Modifier.animateItemPlacement().padding(vertical = 1.dp)) {
                             AccountItem(
                                 account = account,
                                 balance = balances[account.id] ?: account.initialBalance,
+                                monthlyInflow = inflow,
+                                monthlyOutflow = outflow,
                                 currency = currency,
                                 isReorderMode = isReorderMode,
                                 canMoveUp = index > 0,
@@ -204,6 +249,8 @@ fun AccountScreen(
 fun AccountItem(
     account: Account,
     balance: Double,
+    monthlyInflow: Double,
+    monthlyOutflow: Double,
     currency: String,
     isReorderMode: Boolean = false,
     canMoveUp: Boolean = true,
@@ -328,10 +375,13 @@ fun AccountItem(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                // Left Side: Icon + Name + Stats
+                Row(
+                    verticalAlignment = Alignment.CenterVertically, 
+                    modifier = Modifier.weight(1f)
+                ) {
                     Box(
                         modifier = Modifier
                             .size(40.dp)
@@ -346,18 +396,49 @@ fun AccountItem(
                     }
                     Spacer(modifier = Modifier.width(16.dp))
                     Column {
-                        Text(text = account.name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Text(text = "$currency${String.format("%.2f", balance)}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(
+                            text = account.name, 
+                            style = MaterialTheme.typography.bodyLarge, 
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        
+                        // Monthly Stats (Below Name)
+                        if (monthlyInflow > 0 || monthlyOutflow > 0) {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                if (monthlyInflow > 0) {
+                                    Text(
+                                        text = "+$currency${String.format("%.0f", monthlyInflow)}",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = Color(0xFF4CAF50), // Green
+                                        fontSize = 11.sp
+                                    )
+                                    if (monthlyOutflow > 0) {
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                    }
+                                }
+                                if (monthlyOutflow > 0) {
+                                    Text(
+                                        text = "-$currency${String.format("%.0f", monthlyOutflow)}",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.error,
+                                        fontSize = 11.sp
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
                 
-                // Reorder buttons - only visible in reorder mode
+                // Right Side: Balance OR Reorder Buttons
+                Spacer(modifier = Modifier.width(8.dp))
                 if (isReorderMode) {
                     Row {
-                        IconButton(
-                            onClick = onMoveUp,
-                            enabled = canMoveUp
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clickable(enabled = canMoveUp, onClick = onMoveUp),
+                            contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 Icons.Default.KeyboardArrowUp, 
@@ -365,9 +446,11 @@ fun AccountItem(
                                 tint = if (canMoveUp) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
                             )
                         }
-                        IconButton(
-                            onClick = onMoveDown,
-                            enabled = canMoveDown
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clickable(enabled = canMoveDown, onClick = onMoveDown),
+                            contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 Icons.Default.KeyboardArrowDown, 
@@ -376,6 +459,15 @@ fun AccountItem(
                             )
                         }
                     }
+                } else {
+                    // Current Balance
+                    Text(
+                        text = "$currency${String.format("%.2f", balance)}",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontSize = 18.sp
+                    )
                 }
             }
         }

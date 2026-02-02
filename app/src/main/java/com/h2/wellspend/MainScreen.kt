@@ -1189,7 +1189,10 @@ fun MainScreen(viewModel: MainViewModel) {
 
                             accounts = accounts,
                             balances = balances,
+                            currentMonthTransactions = currentMonthTransactions,
                             currency = currency,
+                            currentDate = currentDate,
+                            onDateChange = { currentDate = it },
                             onDeleteAccount = { viewModel.deleteAccount(it) },
                             onReorder = { viewModel.updateAccountOrder(it) },
                             onAddAccount = { 
