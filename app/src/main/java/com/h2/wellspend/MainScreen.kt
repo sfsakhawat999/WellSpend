@@ -109,6 +109,7 @@ import com.h2.wellspend.ui.components.DateSelector
 import com.h2.wellspend.ui.components.ChartData
 import com.h2.wellspend.ui.components.DonutChart
 import com.h2.wellspend.ui.components.ExpenseList
+import com.h2.wellspend.ui.components.GroupingMode
 import com.h2.wellspend.ui.components.MonthlyReport
 import com.h2.wellspend.ui.AccountScreen
 import com.h2.wellspend.data.Expense
@@ -217,6 +218,9 @@ fun MainScreen(viewModel: MainViewModel) {
     val searchResults by viewModel.searchResults.collectAsState(initial = emptyList())
     val recurringConfigs by viewModel.recurringConfigs.collectAsState(initial = emptyList())
     val groupIncomeByAccount by viewModel.groupIncomeByAccount.collectAsState()
+    
+    // Grouping State for Expenses (Hoisted)
+    var expenseGroupingMode by remember { mutableStateOf(GroupingMode.CATEGORY) }
 
     // Hoisted States for Sub-screens
     // Budgets
@@ -299,29 +303,69 @@ fun MainScreen(viewModel: MainViewModel) {
                      validTransactions.sumOf { it.feeAmount }
 
     // For Chart: Only include explicitly categorized EXPENSES (exclude Income/Transfer base amounts)
-    // For Chart: Only include explicitly categorized EXPENSES (exclude Income/Transfer base amounts)
     val expensesByCat = validTransactions
         .filter { it.transactionType == com.h2.wellspend.data.TransactionType.EXPENSE }
         .groupBy { it.category }
         
-    val chartDataList = expensesByCat.map { (cat, list) ->
-        val categoryObj = allCategories.find { it.name == cat }
-        ChartData(
-            name = cat,
-            value = list.sumOf { it.amount }, // Fees are handled separately
-            color = categoryObj?.let { Color(it.color) } ?: Color.Gray
-        )
-    }.toMutableList()
+    // Calculate Data based on Grouping Mode
+    val accountColors = listOf(
+        Color(0xFF4CAF50), Color(0xFF2196F3), Color(0xFFFFC107), Color(0xFFE91E63), 
+        Color(0xFF9C27B0), Color(0xFF00BCD4), Color(0xFF8BC34A), Color(0xFFFF5722),
+        Color(0xFF795548), Color(0xFF607D8B)
+    )
+    val chartDataList = if (expenseGroupingMode == GroupingMode.ACCOUNT) {
+        val expensesByAccount = validTransactions
+             .groupBy { it.accountId } // Group ALL transactions to capture fees
+        
+        expensesByAccount.map { (accountId, list) ->
+            // Sum = Base Amount of EXPENSES + Fee Amount of ALL items
+            val expenseAmount = list.filter { it.transactionType == com.h2.wellspend.data.TransactionType.EXPENSE }.sumOf { it.amount }
+            val feeAmount = list.sumOf { it.feeAmount }
+            val totalValue = expenseAmount + feeAmount
+            
+            if (totalValue > 0) {
+                 val account = accounts.find { it.id == accountId }
+                 if (account != null) {
+                      val colorIndex = kotlin.math.abs(account.id.hashCode()) % accountColors.size
+                      ChartData(
+                         name = account.name,
+                         value = totalValue,
+                         color = accountColors[colorIndex]
+                      )
+                 } else {
+                      ChartData(
+                         name = "Unassigned",
+                         value = totalValue,
+                         color = CategoryColors[SystemCategory.Others] ?: Color.Gray
+                      )
+                 }
+            } else null
+        }.filterNotNull().toMutableList()
+    } else {
+        expensesByCat.map { (cat, list) ->
+            val categoryObj = allCategories.find { it.name == cat }
+            ChartData(
+                name = cat,
+                value = list.sumOf { it.amount }, // Fees are handled separately
+                color = categoryObj?.let { Color(it.color) } 
+                    ?: CategoryColors[SystemCategory.Others] 
+                    ?: Color.Gray
+            )
+        }.toMutableList()
+    }
 
     // Add ALL fees (from Income, Transfer, and Expense) as a single "Transaction Fee" slice
+    // ONLY if NOT in Account mode (since they are merged into accounts there)
     val totalFees = validTransactions.sumOf { it.feeAmount }
-    if (totalFees > 0) {
+    if (totalFees > 0 && expenseGroupingMode != GroupingMode.ACCOUNT) {
         val txFeeCat = allCategories.find { it.name == SystemCategory.TransactionFee.name }
         chartDataList.add(
             ChartData(
                 name = SystemCategory.TransactionFee.name,
                 value = totalFees,
-                color = txFeeCat?.let { Color(it.color) } ?: Color.Gray
+                color = txFeeCat?.let { Color(it.color) } 
+                    ?: CategoryColors[SystemCategory.TransactionFee] 
+                    ?: Color.Gray
             )
         )
     }
@@ -335,11 +379,7 @@ fun MainScreen(viewModel: MainViewModel) {
     
     val incomesByAccount = validIncomes.groupBy { it.accountId }
 
-    val accountColors = listOf(
-        Color(0xFF4CAF50), Color(0xFF2196F3), Color(0xFFFFC107), Color(0xFFE91E63), 
-        Color(0xFF9C27B0), Color(0xFF00BCD4), Color(0xFF8BC34A), Color(0xFFFF5722),
-        Color(0xFF795548), Color(0xFF607D8B)
-    )
+
 
     val incomeChartData = incomesByAccount.mapNotNull { (accountId, list) ->
         val account = accounts.find { it.id == accountId }
@@ -1213,6 +1253,8 @@ fun MainScreen(viewModel: MainViewModel) {
                             state = listState,
                             chartData = chartData,
                             totalSpend = totalSpend,
+                            groupingMode = expenseGroupingMode,
+                            onGroupingChange = { expenseGroupingMode = it },
                             budgets = budgets
                         )
                     }
@@ -1766,6 +1808,8 @@ fun ExpenseListScreen(
     state: LazyListState,
     chartData: List<ChartData>,
     totalSpend: Double,
+    groupingMode: GroupingMode,
+    onGroupingChange: (GroupingMode) -> Unit,
 
     budgets: List<Budget>,
     onTransactionClick: (Expense) -> Unit = {}
@@ -1777,8 +1821,9 @@ fun ExpenseListScreen(
         )
         
         // Show Expenses ONLY (Transfers -> More > Transfers, Income -> Bottom Tab)
+        // BUT include other types if they have fees (so we can show the fee)
         val expenseList = expenses.filter { 
-            it.transactionType == com.h2.wellspend.data.TransactionType.EXPENSE &&
+            (it.transactionType == com.h2.wellspend.data.TransactionType.EXPENSE || it.feeAmount > 0) &&
             !(it.loanId != null && it.accountId == null)
         }
         ExpenseList(
@@ -1792,6 +1837,8 @@ fun ExpenseListScreen(
             onEdit = onEdit,
             state = state,
             onTransactionClick = onTransactionClick,
+            groupingMode = groupingMode,
+            onGroupingChange = onGroupingChange,
             headerContent = {
                 // Donut Chart at the top (scrollable)
                 DonutChart(
