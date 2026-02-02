@@ -1854,9 +1854,7 @@ fun ExpenseListScreen(
                     data = chartData,
                     totalAmount = totalSpend,
                     currency = currency,
-                    additionalLabel = if (showLoanExcludedLabel) "(loans excluded)" else null,
-                    isCenterClickable = !showLoanExcludedLabel,
-                    onCenterClick = { /* Already on details page */ }
+                    additionalLabel = if (showLoanExcludedLabel) "(loans excluded)" else null
                 )
             },
 
@@ -1942,9 +1940,7 @@ fun IncomeListScreen(
                         totalAmount = totalIncome,
                         currency = currency,
                         centerLabel = "Total Income",
-                        additionalLabel = if (showLoanExcludedLabel) "(loans excluded)" else null,
-                        isCenterClickable = false,
-                        onCenterClick = { }
+                        additionalLabel = if (showLoanExcludedLabel) "(loans excluded)" else null
                     )
                 } else {
                      Column(
@@ -1980,7 +1976,7 @@ fun IncomeListScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                        .padding(horizontal = 16.dp, vertical = 0.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
