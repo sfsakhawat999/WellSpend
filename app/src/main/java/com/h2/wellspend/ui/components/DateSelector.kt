@@ -18,12 +18,20 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
-
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.padding
 @Composable
 fun DateSelector(
     currentDate: LocalDate,
     onDateChange: (LocalDate) -> Unit
 ) {
+    var showDatePicker by remember { mutableStateOf(false) }
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -34,15 +42,41 @@ fun DateSelector(
         IconButton(onClick = { onDateChange(currentDate.minusMonths(1)) }) {
             Icon(Icons.Default.ChevronLeft, contentDescription = "Prev Month", tint = MaterialTheme.colorScheme.onSurface)
         }
-        Text(
-            text = currentDate.format(DateTimeFormatter.ofPattern("MMMM yyyy")),
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(horizontal = 16.dp)
-        )
+
+        
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .clickable { showDatePicker = true }
+                .padding(horizontal = 16.dp, vertical = 4.dp)
+        ) {
+            Text(
+                text = currentDate.format(DateTimeFormatter.ofPattern("MMMM yyyy")),
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                fontWeight = FontWeight.Bold
+            )
+            Icon(
+                imageVector = Icons.Default.ArrowDropDown,
+                contentDescription = "Select Month",
+                tint = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.padding(start = 4.dp)
+            )
+        }
+        
         IconButton(onClick = { onDateChange(currentDate.plusMonths(1)) }) {
             Icon(Icons.Default.ChevronRight, contentDescription = "Next Month", tint = MaterialTheme.colorScheme.onSurface)
         }
+    }
+    
+    if (showDatePicker) {
+        MonthYearPickerDialog(
+            currentDate = currentDate,
+            onDateSelected = { 
+                onDateChange(it)
+                showDatePicker = false 
+            },
+            onDismiss = { showDatePicker = false }
+        )
     }
 }
