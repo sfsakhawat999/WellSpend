@@ -46,6 +46,7 @@ import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import com.h2.wellspend.data.Category
+import com.h2.wellspend.data.TimeRange
 
 import com.h2.wellspend.data.SystemCategory
 import androidx.compose.ui.graphics.Shape
@@ -59,11 +60,19 @@ fun IncomeList(
     accounts: List<Account>,
     loans: List<com.h2.wellspend.data.Loan>,
     currency: String,
+    currentDate: LocalDate,
+    onDateChange: (LocalDate) -> Unit,
+    timeRange: TimeRange,
+
+    onTimeRangeChange: (TimeRange) -> Unit,
+    customDateRange: Pair<LocalDate, LocalDate>? = null,
+    onCustomDateRangeChange: (Pair<LocalDate, LocalDate>) -> Unit = {},
     onDelete: (String) -> Unit,
     onEdit: (Expense) -> Unit,
     onTransactionClick: (Expense) -> Unit = {},
     headerContent: @Composable () -> Unit = {},
-    useGrouping: Boolean = true
+    useGrouping: Boolean = true,
+    startOfWeek: java.time.DayOfWeek = java.time.DayOfWeek.MONDAY
 ) {
     // Group incomes by account
     val groupedIncomes = remember(incomes, useGrouping) {
@@ -84,85 +93,97 @@ fun IncomeList(
         }
     }
 
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp),
-        contentPadding = PaddingValues(bottom = 96.dp),
-        verticalArrangement = Arrangement.spacedBy(if (useGrouping) 12.dp else 0.dp)
-    ) {
-        // Header (Chart or Total)
-        item {
-            headerContent()
-        }
+    Column(modifier = Modifier.fillMaxWidth()) {
+        DateSelector(
+            currentDate = currentDate,
+            onDateChange = onDateChange,
+            timeRange = timeRange,
+            onTimeRangeChange = onTimeRangeChange,
+            customDateRange = customDateRange,
+            onCustomDateRangeChange = onCustomDateRangeChange,
+            startOfWeek = startOfWeek
+        )
 
-        if (incomes.isEmpty()) {
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp),
+            contentPadding = PaddingValues(bottom = 96.dp),
+            verticalArrangement = Arrangement.spacedBy(if (useGrouping) 12.dp else 0.dp)
+        ) {
+            // Header (Chart or Total)
             item {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 40.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "No income recorded for this period.",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
+                headerContent()
             }
-        } else {
-            if (useGrouping) {
-                items(groupedIncomes) { (accountId, data) ->
-                    val (total, items) = data
-                    val account = accounts.find { it.id == accountId }
-                    
-                    IncomeAccountItem(
-                        account = account,
-                        total = total,
-                        items = items,
-                        loans = loans,
-                        currency = currency,
-                        onDelete = onDelete,
-                        onEdit = onEdit,
-                        onTransactionClick = onTransactionClick
-                    )
-                }
-            } else {
-                // Flat List
-                 itemsIndexed(incomes) { index, income ->
-                    val shape = getGroupedItemShape(index, incomes.size)
-                    val backgroundShape = getGroupedItemBackgroundShape(index, incomes.size)
-                    val account = accounts.find { it.id == income.accountId }
-                    
-                    Box(modifier = Modifier.padding(vertical = 1.dp)) {
-                        IncomeItem(
-                            income = income,
-                            loans = loans,
-                            currency = currency,
-                            onEdit = onEdit,
-                            onDelete = onDelete,
-                            onTransactionClick = onTransactionClick,
-                            showIcon = true,
-                            account = account,
-                            shape = shape,
-                            backgroundShape = backgroundShape
+
+            if (incomes.isEmpty()) {
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 40.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "No income recorded for this period.",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
-            }
-            
-            item {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 16.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        "Swipe left/right to edit or delete.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                    )
+            } else {
+                if (useGrouping) {
+                    items(groupedIncomes) { (accountId, data) ->
+                        val (total, items) = data
+                        val account = accounts.find { it.id == accountId }
+                        
+                        IncomeAccountItem(
+                            account = account,
+                            total = total,
+                            items = items,
+                            loans = loans,
+                            currency = currency,
+                            onDelete = onDelete,
+                            onEdit = onEdit,
+                            onTransactionClick = onTransactionClick
+                        )
+                    }
+                } else {
+                    // Flat List
+                     itemsIndexed(incomes) { index, income ->
+                        val shape = getGroupedItemShape(index, incomes.size)
+                        val backgroundShape = getGroupedItemBackgroundShape(index, incomes.size)
+                        val account = accounts.find { it.id == income.accountId }
+                        
+                        Box(modifier = Modifier.padding(vertical = 1.dp)) {
+                            IncomeItem(
+                                income = income,
+                                loans = loans,
+                                currency = currency,
+                                onEdit = onEdit,
+                                onDelete = onDelete,
+                                onTransactionClick = onTransactionClick,
+                                showIcon = true,
+                                account = account,
+                                shape = shape,
+                                backgroundShape = backgroundShape
+                            )
+                        }
+                    }
+                }
+                
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 16.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            "Swipe left/right to edit or delete.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                        )
+                    }
                 }
             }
         }
@@ -502,7 +523,7 @@ fun IncomeItem(
                          // Icon
                         if (showIcon) {
                              // Original Icon Logic
-                            val iconVector = if (isBalanceAdjustment || income.category == com.h2.wellspend.data.SystemCategory.Loan.name) {
+                            val iconVector = if (isBalanceAdjustment || income.category == SystemCategory.Loan.name) {
                                  getIconByName(income.category)
                             } else {
                                 Icons.Default.AttachMoney

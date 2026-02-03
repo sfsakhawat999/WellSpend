@@ -171,6 +171,12 @@ class WellSpendRepository(private val database: AppDatabase) {
         database.settingDao().insertSetting(Setting("group_income_by_account", group.toString()))
     }
 
+    val startOfWeek: Flow<String?> = database.settingDao().getSettingFlow("start_of_week")
+
+    suspend fun setStartOfWeek(day: String) {
+        database.settingDao().insertSetting(Setting("start_of_week", day))
+    }
+
     suspend fun getAllExpensesOneShot(): List<Expense> {
         return database.expenseDao().getAllExpensesOneShot()
     }

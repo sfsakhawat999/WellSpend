@@ -1,6 +1,5 @@
 package com.h2.wellspend.ui.components
 
-
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.foundation.layout.width
@@ -52,7 +51,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
-
 import com.h2.wellspend.ui.getGroupedItemShape
 import com.h2.wellspend.ui.getGroupedItemBackgroundShape
 import com.h2.wellspend.ui.theme.cardBackgroundColor
@@ -63,9 +61,8 @@ import com.h2.wellspend.data.Category
 import com.h2.wellspend.data.Expense
 import com.h2.wellspend.ui.getIconByName
 import com.h2.wellspend.data.SystemCategory
-import java.time.Instant
-import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.time.LocalDate
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
@@ -76,12 +73,12 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.key
 import kotlinx.coroutines.delay
 import androidx.compose.ui.graphics.toArgb
 import java.util.Locale
+import com.h2.wellspend.data.TimeRange
 
 enum class GroupingMode {
     CATEGORY, ACCOUNT
@@ -99,17 +96,22 @@ fun ExpenseList(
     loans: List<com.h2.wellspend.data.Loan>,
     budgets: List<com.h2.wellspend.data.Budget> = emptyList(),
     currency: String,
+    currentDate: LocalDate,
+    onDateChange: (LocalDate) -> Unit,
+    timeRange: TimeRange,
+
+    onTimeRangeChange: (TimeRange) -> Unit,
+    customDateRange: Pair<LocalDate, LocalDate>? = null,
+    onCustomDateRangeChange: (Pair<LocalDate, LocalDate>) -> Unit = {},
     onDelete: (String) -> Unit,
     onEdit: (Expense) -> Unit,
     onTransactionClick: (Expense) -> Unit = {},
     state: LazyListState = rememberLazyListState(),
     headerContent: @Composable () -> Unit = {},
     groupingMode: GroupingMode = GroupingMode.CATEGORY,
-    onGroupingChange: (GroupingMode) -> Unit = {}
+    onGroupingChange: (GroupingMode) -> Unit = {},
+    startOfWeek: java.time.DayOfWeek = java.time.DayOfWeek.MONDAY
 ) {
-    // State for grouping lifted to parent
-    // var groupingMode by remember { mutableStateOf(GroupingMode.CATEGORY) }
-
     // Header Content Helper
     fun getAccountColor(accountId: String): Color {
         val accountColors = listOf(
@@ -207,151 +209,203 @@ fun ExpenseList(
         }
     }
 
-    LazyColumn(
-        state = state,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp),
-        contentPadding = PaddingValues(bottom = 96.dp), // Space for FAB
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        // Header (Chart)
-        item {
-            headerContent()
-        }
-        
-        // Grouping Toggle
-        item {
-             Row(
-                 modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
-                 horizontalArrangement = Arrangement.End,
-                 verticalAlignment = Alignment.CenterVertically
-             ) {
-                 Text(
-                     text = "Group by:",
-                     style = MaterialTheme.typography.labelMedium,
-                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                     modifier = Modifier.padding(end = 8.dp)
-                 )
-                 
+    Column(modifier = Modifier.fillMaxWidth()) {
+        DateSelector(
+            currentDate = currentDate,
+            onDateChange = onDateChange,
+            timeRange = timeRange,
+            onTimeRangeChange = onTimeRangeChange,
+            customDateRange = customDateRange,
+            onCustomDateRangeChange = onCustomDateRangeChange,
+            startOfWeek = startOfWeek
+        )
+
+        LazyColumn(
+            state = state,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp),
+            contentPadding = PaddingValues(bottom = 96.dp), // Space for FAB
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            // Header (Chart)
+            item {
+                headerContent()
+            }
+            
+            // Grouping Toggle
+            item {
                  Row(
-                     modifier = Modifier
-                         .clip(RoundedCornerShape(8.dp))
-                         .background(MaterialTheme.colorScheme.surfaceVariant)
-                         .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha=0.3f), RoundedCornerShape(8.dp))
+                     modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                     horizontalArrangement = Arrangement.End,
+                     verticalAlignment = Alignment.CenterVertically
                  ) {
-                     listOf(GroupingMode.CATEGORY, GroupingMode.ACCOUNT).forEach { mode ->
-                         val isSelected = groupingMode == mode
-                         val bgColor = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent
-                         val textColor = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
-                         
-                         Box(
-                             modifier = Modifier
-                                 .clickable { onGroupingChange(mode) }
-                                 .background(bgColor)
-                                 .padding(horizontal = 12.dp, vertical = 6.dp)
-                         ) {
-                             Text(
-                                 text = mode.name.lowercase().capitalize(),
-                                 style = MaterialTheme.typography.labelMedium,
-                                 color = textColor,
-                                 fontWeight = if(isSelected) FontWeight.Bold else FontWeight.Normal
-                             )
+                     Text(
+                         text = "Group by:",
+                         style = MaterialTheme.typography.labelMedium,
+                         color = MaterialTheme.colorScheme.onSurfaceVariant,
+                         modifier = Modifier.padding(end = 8.dp)
+                     )
+                     
+                     Row(
+                         modifier = Modifier
+                             .clip(RoundedCornerShape(8.dp))
+                             .background(MaterialTheme.colorScheme.surfaceVariant)
+                             .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha=0.3f), RoundedCornerShape(8.dp))
+                     ) {
+                         listOf(GroupingMode.CATEGORY, GroupingMode.ACCOUNT).forEach { mode ->
+                             val isSelected = groupingMode == mode
+                             val bgColor = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent
+                             val textColor = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                             
+                             Box(
+                                 modifier = Modifier
+                                     .clickable { onGroupingChange(mode) }
+                                     .background(bgColor)
+                                     .padding(horizontal = 12.dp, vertical = 6.dp)
+                             ) {
+                                 Text(
+                                     text = mode.name.lowercase().capitalize(),
+                                     style = MaterialTheme.typography.labelMedium,
+                                     color = textColor,
+                                     fontWeight = if(isSelected) FontWeight.Bold else FontWeight.Normal
+                                 )
+                             }
                          }
                      }
                  }
-             }
-        }
-
-        if (groupedExpenses.isEmpty()) {
-            item {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 40.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "No expenses recorded for this period.",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
             }
-        } else {
-            items(groupedExpenses) { (groupKey, data) ->
-                val (total, items) = data
-                
-                // DATA MAPPING
-                val displayCategory = if (groupingMode == GroupingMode.CATEGORY) {
-                    val categoryName = groupKey ?: "Uncategorized" // Should not happen for category mode usually
-                    categories.find { it.name == categoryName } 
-                        ?: categories.find { it.name == SystemCategory.TransactionFee.name && categoryName == SystemCategory.TransactionFee.name }
-                        ?: Category(name = categoryName, iconName = "Help", color = 0xFF9ca3af, isSystem = false)
-                } else {
-                    // ACCOUNT MODE
-                    val accountId = groupKey
-                    val account = accounts.find { it.id == accountId }
-                    if (account != null) {
-                        Category(
-                            name = account.name,
-                            iconName = "Bank", // Use generic bank icon
-                            color = getAccountColor(account.id).toArgb().toLong(),
-                            isSystem = false
-                        )
-                    } else {
-                        // Null Account (e.g. Cash or Unassigned)
-                        Category(
-                            name = "Unknown Account",
-                            iconName = "Money",
-                            color = 0xFF9ca3af,
-                            isSystem = false
+
+            if (groupedExpenses.isEmpty()) {
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 40.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "No expenses recorded for this period.",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
-                
-                // Budgets only apply in Category Mode
-                val displayBudget = if (groupingMode == GroupingMode.CATEGORY) {
-                     budgets.find { it.category == displayCategory.name }
-                } else null
-
-                ExpenseCategoryItem(
-                    category = displayCategory,
-                    total = total,
-                    items = items,
-                    accounts = accounts,
-                    loans = loans,
-                    currency = currency,
-                    budget = displayBudget,
-                    onDelete = onDelete,
-                    onEdit = { expense ->
-                        if (expense.id.startsWith("fee_")) {
-                            val realId = expense.id.removePrefix("fee_")
-                            val realExpense = expenses.find { it.id == realId }
-                            if (realExpense != null) {
-                                onEdit(realExpense)
-                            }
+            } else {
+                items(groupedExpenses) { (groupKey, data) ->
+                    val (total, items) = data
+                    
+                    // DATA MAPPING
+                    val displayCategory = if (groupingMode == GroupingMode.CATEGORY) {
+                        val categoryName = groupKey ?: "Uncategorized" // Should not happen for category mode usually
+                        categories.find { it.name == categoryName } 
+                            ?: categories.find { it.name == SystemCategory.TransactionFee.name && categoryName == SystemCategory.TransactionFee.name }
+                            ?: Category(name = categoryName, iconName = "Help", color = 0xFF9ca3af, isSystem = false)
+                    } else {
+                        // ACCOUNT MODE
+                        val accountId = groupKey
+                        val account = accounts.find { it.id == accountId }
+                        if (account != null) {
+                            Category(
+                                name = account.name,
+                                iconName = "Bank", // Use generic bank icon
+                                color = getAccountColor(account.id).toArgb().toLong(),
+                                isSystem = false
+                            )
                         } else {
-                            onEdit(expense)
+                            // Null Account (e.g. Cash or Unassigned)
+                            Category(
+                                name = "Unknown Account",
+                                iconName = "Money",
+                                color = 0xFF9ca3af,
+                                isSystem = false
+                            )
                         }
-                    },
-                    onTransactionClick = onTransactionClick // Pass it down
-                )
-            }
-            item {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 16.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "Swipe left/right to edit or delete",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                    }
+                    
+                    // Budgets only apply in Category Mode
+                    val displayBudget = if (groupingMode == GroupingMode.CATEGORY) {
+                         budgets.find { it.category == displayCategory.name }
+                    } else null
+
+                    ExpenseCategoryItem(
+                        category = displayCategory,
+                        total = total,
+                        items = items,
+                        accounts = accounts,
+                        loans = loans,
+                        currency = currency,
+                        budget = displayBudget,
+                        onDelete = onDelete,
+                        onEdit = { expense ->
+                            if (expense.id.startsWith("fee_")) {
+                                val realId = expense.id.removePrefix("fee_")
+                                val realExpense = expenses.find { it.id == realId }
+                                if (realExpense != null) {
+                                    onEdit(realExpense)
+                                }
+                            } else {
+                                onEdit(expense)
+                            }
+                        },
+                        onTransactionClick = onTransactionClick // Pass it down
                     )
+                }
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 16.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "Swipe left/right to edit or delete",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                        )
+                    }
                 }
             }
         }
+    }
+}
+
+@Composable
+fun FeeItem(
+    expense: Expense,
+    currency: String,
+    onEdit: (Expense) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surfaceVariant) // Slightly different background
+            .clickable { onEdit(expense) } // Editing fee opens parent expense
+            .padding(start = 32.dp, end = 16.dp, top = 8.dp, bottom = 8.dp), // Indented
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                imageVector = Icons.Default.AttachMoney, // Or some other icon?
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(16.dp)
+            )
+            Spacer(modifier = Modifier.size(8.dp))
+            Column {
+                Text(
+                    text = "Transaction Fee${if (expense.feeConfigName != null) " (${expense.feeConfigName})" else ""}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+        Text(
+            text = "$currency${String.format("%.2f", expense.feeAmount)}",
+            style = MaterialTheme.typography.bodySmall,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 
@@ -541,48 +595,6 @@ fun ExpenseCategoryItem(
 
 
 }
-
-@Composable
-fun FeeItem(
-    expense: Expense,
-    currency: String,
-    onEdit: (Expense) -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surfaceVariant) // Slightly different background
-            .clickable { onEdit(expense) } // Editing fee opens parent expense
-            .padding(start = 32.dp, end = 16.dp, top = 8.dp, bottom = 8.dp), // Indented
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                imageVector = Icons.Default.AttachMoney, // Or some other icon?
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(16.dp)
-            )
-            Spacer(modifier = Modifier.size(8.dp))
-            Column {
-                Text(
-                    text = "Transaction Fee${if (expense.feeConfigName != null) " (${expense.feeConfigName})" else ""}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-        Text(
-            text = "$currency${String.format("%.2f", expense.feeAmount)}",
-            style = MaterialTheme.typography.bodySmall,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-    }
-}
-
-
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -798,31 +810,47 @@ fun ExpenseItem(
                         }
                     )
                     .padding(16.dp),
-                verticalAlignment = Alignment.Top,
+                verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = expense.title.ifEmpty { "No title" },
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Text(
-                        text = formattedDate + extraInfo,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 6.dp)
-                    )
+                // Left Side: Icon + Details
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.primaryContainer),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = getIconByName(expense.category), // Use category icon
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Column {
+                        Text(
+                            text = if (isFee) "Fee for ${expense.title.removePrefix("Fee for ")}" else expense.title.ifEmpty { "No title" },
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = formattedDate + extraInfo,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
-
-                val amountPrefix = if (expense.transactionType == com.h2.wellspend.data.TransactionType.INCOME) "+ " else ""
-                val amountColor = if (expense.transactionType == com.h2.wellspend.data.TransactionType.INCOME) Color(0xFF10b981) else MaterialTheme.colorScheme.onSurface
                 
+                // Right Side: Amount
                 Text(
-                    text = "$amountPrefix$currency${String.format("%.2f", expense.amount)}",
+                    text = "$currency${String.format("%.2f", expense.amount)}",
                     style = MaterialTheme.typography.titleSmall,
-                    color = amountColor,
+                    color = MaterialTheme.colorScheme.onSurface,
                     fontWeight = FontWeight.Bold
                 )
             }

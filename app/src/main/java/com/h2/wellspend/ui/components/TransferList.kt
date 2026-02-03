@@ -42,67 +42,87 @@ import com.h2.wellspend.ui.getGroupedItemShape
 import com.h2.wellspend.ui.getGroupedItemBackgroundShape
 import com.h2.wellspend.ui.theme.cardBackgroundColor
 import androidx.compose.ui.graphics.Color
+import com.h2.wellspend.data.TimeRange
 
 @Composable
 fun TransferList(
     transfers: List<Expense>,
     accounts: List<Account>,
     currency: String,
+    currentDate: LocalDate,
+    onDateChange: (LocalDate) -> Unit,
+    timeRange: TimeRange,
+    onTimeRangeChange: (TimeRange) -> Unit,
+    customDateRange: Pair<LocalDate, LocalDate>? = null,
+    onCustomDateRangeChange: (Pair<LocalDate, LocalDate>) -> Unit = {},
     onDelete: (String) -> Unit,
     onEdit: (Expense) -> Unit,
-    onTransactionClick: (Expense) -> Unit = {}
+    onTransactionClick: (Expense) -> Unit = {},
+    startOfWeek: java.time.DayOfWeek = java.time.DayOfWeek.MONDAY
 ) {
-    if (transfers.isEmpty()) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 40.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = "No transfers recorded for this period.",
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    } else {
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp),
-            contentPadding = PaddingValues(bottom = 96.dp),
-            verticalArrangement = Arrangement.spacedBy(0.dp)
-        ) {
-            itemsIndexed(transfers) { index, transfer ->
-                val shape = getGroupedItemShape(index, transfers.size)
-                val backgroundShape = getGroupedItemBackgroundShape(index, transfers.size)
-                
-                Box(modifier = Modifier.padding(vertical = 1.dp)) {
-                    TransferItem(
-                        transfer = transfer,
-                        fromAccountName = accounts.find { it.id == transfer.accountId }?.name ?: "Deleted Account",
-                        toAccountName = accounts.find { it.id == transfer.transferTargetAccountId }?.name ?: "Deleted Account",
-                        currency = currency,
-                        onEdit = onEdit,
-                        onDelete = onDelete,
-                        onTransactionClick = onTransactionClick,
-                        shape = shape,
-                        backgroundShape = backgroundShape
-                    )
-                }
+    Column(modifier = Modifier.fillMaxWidth()) {
+        DateSelector(
+            currentDate = currentDate,
+            onDateChange = onDateChange,
+            timeRange = timeRange,
+            onTimeRangeChange = onTimeRangeChange,
+            customDateRange = customDateRange,
+            onCustomDateRangeChange = onCustomDateRangeChange,
+            startOfWeek = startOfWeek
+        )
+
+        if (transfers.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 40.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "No transfers recorded for this period.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
-            
-            item {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 16.dp, bottom = 32.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        "Swipe left/right to edit or delete.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+        } else {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                contentPadding = PaddingValues(bottom = 96.dp),
+                verticalArrangement = Arrangement.spacedBy(0.dp)
+            ) {
+                itemsIndexed(transfers) { index, transfer ->
+                    val shape = getGroupedItemShape(index, transfers.size)
+                    val backgroundShape = getGroupedItemBackgroundShape(index, transfers.size)
+                    
+                    Box(modifier = Modifier.padding(vertical = 1.dp)) {
+                        TransferItem(
+                            transfer = transfer,
+                            fromAccountName = accounts.find { it.id == transfer.accountId }?.name ?: "Deleted Account",
+                            toAccountName = accounts.find { it.id == transfer.transferTargetAccountId }?.name ?: "Deleted Account",
+                            currency = currency,
+                            onEdit = onEdit,
+                            onDelete = onDelete,
+                            onTransactionClick = onTransactionClick,
+                            shape = shape,
+                            backgroundShape = backgroundShape
+                        )
+                    }
+                }
+                
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 16.dp, bottom = 32.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            "Swipe left/right to edit or delete.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             }
         }

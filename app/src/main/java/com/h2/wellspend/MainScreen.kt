@@ -109,10 +109,12 @@ import com.h2.wellspend.ui.components.DateSelector
 import com.h2.wellspend.ui.components.ChartData
 import com.h2.wellspend.ui.components.DonutChart
 import com.h2.wellspend.ui.components.ExpenseList
-import com.h2.wellspend.ui.components.GroupingMode
-import com.h2.wellspend.ui.components.MonthlyReport
+import com.h2.wellspend.ui.components.FinancialReport
 import com.h2.wellspend.ui.AccountScreen
+import com.h2.wellspend.ui.components.GroupingMode
 import com.h2.wellspend.data.Expense
+import com.h2.wellspend.data.TimeRange
+import com.h2.wellspend.utils.DateUtils
 import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -218,6 +220,8 @@ fun MainScreen(viewModel: MainViewModel) {
     val searchResults by viewModel.searchResults.collectAsState(initial = emptyList())
     val recurringConfigs by viewModel.recurringConfigs.collectAsState(initial = emptyList())
     val groupIncomeByAccount by viewModel.groupIncomeByAccount.collectAsState()
+    val startOfWeek by viewModel.startOfWeek.collectAsState()
+
     
     // Grouping State for Expenses (Hoisted)
     var expenseGroupingMode by remember { mutableStateOf(GroupingMode.CATEGORY) }
@@ -244,6 +248,7 @@ fun MainScreen(viewModel: MainViewModel) {
     // Monthly Report
     var showReportCompareDialog by remember { mutableStateOf(false) }
     var reportComparisonDate by remember { mutableStateOf<java.time.LocalDate?>(null) }
+    var reportComparisonCustomRange by remember { mutableStateOf<Pair<LocalDate, LocalDate>?>(null) }
 
     // Track if initial data has loaded (show skeleton until first real data arrives)
     var isDataLoaded by remember { mutableStateOf(false) }
@@ -285,14 +290,17 @@ fun MainScreen(viewModel: MainViewModel) {
         }
     }
 
-    val currentMonthTransactions = expenses.filter {
-        val date = try { LocalDate.parse(it.date.take(10)) } catch(e:Exception) { LocalDate.now() }
-        date.month == currentDate.month && date.year == currentDate.year
-    }.sortedWith(compareByDescending<Expense> { it.date.take(10) }.thenByDescending { it.timestamp })
+    var timeRange by remember { mutableStateOf(TimeRange.MONTHLY) }
+    var customDateRange by remember { mutableStateOf<Pair<LocalDate, LocalDate>?>(null) }
+
+    val filteredTransactions = remember(expenses, currentDate, timeRange, startOfWeek, customDateRange) {
+        DateUtils.filterByTimeRange(expenses, currentDate, timeRange, startOfWeek, customDateRange)
+            .sortedWith(compareByDescending<Expense> { it.date.take(10) }.thenByDescending { it.timestamp })
+    }
 
     // Calculate Total Spend: (All Expenses Base Amount) + (All Fees from any transaction type)
     // AND optionally excluding ALL loan transactions if setting is enabled
-    val validTransactions = currentMonthTransactions.filter { transaction ->
+    val validTransactions = filteredTransactions.filter { transaction ->
         val isExcludedLoan = excludeLoanTransactions && transaction.loanId != null
         !isExcludedLoan
     }
@@ -370,11 +378,10 @@ fun MainScreen(viewModel: MainViewModel) {
     val chartData = chartDataList.sortedByDescending { it.value }
 
     // Income Chart Data (Grouped by Account)
-    val validIncomes = currentMonthTransactions.filter { 
-        it.transactionType == com.h2.wellspend.data.TransactionType.INCOME &&
-        !(excludeLoanTransactions && it.loanId != null)
-    }
+
     
+    
+    val validIncomes = validTransactions.filter { it.transactionType == com.h2.wellspend.data.TransactionType.INCOME }
     val incomesByAccount = validIncomes.groupBy { it.accountId }
 
 
@@ -546,7 +553,7 @@ fun MainScreen(viewModel: MainViewModel) {
                     val title = when(state) {
                         "OVERLAY_PREVIEW" -> "Transaction Details"
                         "OVERLAY_ADD" -> if(lastExpenseToEdit != null) "Edit Expense" else "Add Expense"
-                        "OVERLAY_REPORT" -> "Monthly Report"
+                        "OVERLAY_REPORT" -> "Financial Report"
                         "OVERLAY_BUDGETS" -> "Budgets"
                         "OVERLAY_SETTINGS" -> "Settings"
                         "OVERLAY_TRANSFERS" -> "Transfers"
@@ -731,11 +738,8 @@ fun MainScreen(viewModel: MainViewModel) {
                                         IconButton(onClick = { showReportCompareDialog = true }) {
                                             Icon(Icons.AutoMirrored.Filled.CompareArrows, contentDescription = "Compare", tint = MaterialTheme.colorScheme.primary)
                                         }
-                                        val reportExpenses = remember(expenses, currentDate) {
-                                            expenses.filter {
-                                                val date = java.time.LocalDate.parse(it.date.substring(0, 10))
-                                                date.month == currentDate.month && date.year == currentDate.year
-                                            }
+                                        val reportExpenses = remember(expenses, currentDate, timeRange, startOfWeek, customDateRange) {
+                                            DateUtils.filterByTimeRange(expenses, currentDate, timeRange, startOfWeek, customDateRange)
                                         }
                                         val localContext = androidx.compose.ui.platform.LocalContext.current
                                         IconButton(onClick = {
@@ -743,7 +747,10 @@ fun MainScreen(viewModel: MainViewModel) {
                                                  val csvHeader = "Date,Category,Type,Amount,Fee,Title\n"
                                                  val csvData = reportExpenses.joinToString("\n") { "${it.date},${it.category},${it.transactionType},${it.amount},${it.feeAmount},${it.title}" }
                                                  val csvContent = csvHeader + csvData
-                                                 val fileName = "expenses_${currentDate.format(java.time.format.DateTimeFormatter.ofPattern("MMM_yyyy"))}.csv"
+                                                 
+                                                 val dateString = DateUtils.formatDateForRange(currentDate, timeRange, startOfWeek, customDateRange)
+                                                 val safeDateString = dateString.replace(" - ", "_to_").replace(", ", "_").replace(" ", "_")
+                                                 val fileName = "expenses_${safeDateString}.csv"
                                                  val file = java.io.File(localContext.cacheDir, fileName)
                                                  file.writeText(csvContent)
                                                  val uri = androidx.core.content.FileProvider.getUriForFile(localContext, "com.h2.wellspend.fileprovider", file)
@@ -775,7 +782,7 @@ fun MainScreen(viewModel: MainViewModel) {
                                                 DropdownMenuItem(text = { Text("Loans") }, onClick = { showMenu = false; showLoans = true }, leadingIcon = { Icon(Icons.Default.AttachMoney, null) })
                                                 DropdownMenuItem(text = { Text("Recurring") }, onClick = { showMenu = false; showRecurringConfigs = true }, leadingIcon = { Icon(Icons.Default.Repeat, null) })
                                                 DropdownMenuItem(text = { Text("Categories") }, onClick = { showMenu = false; showCategoryManagement = true }, leadingIcon = { Icon(Icons.AutoMirrored.Filled.Label, null) })
-                                                DropdownMenuItem(text = { Text("Monthly Report") }, onClick = { showMenu = false; showReport = true }, leadingIcon = { Icon(Icons.Default.Description, null) })
+                                                DropdownMenuItem(text = { Text("Financial Report") }, onClick = { showMenu = false; showReport = true }, leadingIcon = { Icon(Icons.Default.Description, null) })
                                                 DropdownMenuItem(text = { Text("Settings") }, onClick = { showMenu = false; showSettings = true }, leadingIcon = { Icon(Icons.Default.Settings, null) })
                                             }
                                         }
@@ -917,17 +924,24 @@ fun MainScreen(viewModel: MainViewModel) {
                          }
                     }
                     "OVERLAY_REPORT" -> {
-                        MonthlyReport(
+                        FinancialReport(
                             expenses = expenses,
                             categories = allCategories,
                             currency = currency,
                             currentDate = currentDate,
                             onDateChange = { currentDate = it }, // Connected
+                            timeRange = timeRange,
+                            onTimeRangeChange = { timeRange = it; currentDate = LocalDate.now() },
+                            customDateRange = customDateRange,
+                            onCustomDateRangeChange = { customDateRange = it; reportComparisonCustomRange = null },
+                            reportComparisonCustomRange = reportComparisonCustomRange,
+                            onReportComparisonCustomRangeChange = { reportComparisonCustomRange = it },
                             showCompareDialog = showReportCompareDialog,
                             onDismissCompareDialog = { showReportCompareDialog = false },
                             comparisonDate = reportComparisonDate,
                             onComparisonDateChange = { reportComparisonDate = it },
-                            excludeLoanTransactions = excludeLoanTransactions
+                            excludeLoanTransactions = excludeLoanTransactions,
+                            startOfWeek = startOfWeek
                         )
                     }
                     "OVERLAY_BUDGETS" -> {
@@ -942,7 +956,11 @@ fun MainScreen(viewModel: MainViewModel) {
                         TransferListScreen(
                             currentDate = currentDate,
                             onDateChange = { currentDate = it },
-                            expenses = currentMonthTransactions,
+                            timeRange = timeRange,
+                            onTimeRangeChange = { timeRange = it; currentDate = LocalDate.now() },
+                            customDateRange = customDateRange,
+                            onCustomDateRangeChange = { customDateRange = it },
+                            expenses = filteredTransactions,
                             accounts = accounts,
                             currency = currency,
 
@@ -951,7 +969,8 @@ fun MainScreen(viewModel: MainViewModel) {
                                 expenseToEdit = it
                                 showAddExpense = true
                             },
-                            onTransactionClick = { transactionToPreview = it }
+                            onTransactionClick = { transactionToPreview = it },
+                            startOfWeek = startOfWeek
                         )
 
                     }
@@ -1043,6 +1062,8 @@ fun MainScreen(viewModel: MainViewModel) {
                                 onDynamicColorChange = { viewModel.updateDynamicColor(it) },
                                 onExcludeLoanTransactionsChange = { viewModel.updateExcludeLoanTransactions(it) },
                                 onShowAccountsOnHomepageChange = { viewModel.updateShowAccountsOnHomepage(it) },
+                                onStartOfWeekChange = { viewModel.updateStartOfWeek(it) },
+                                startOfWeek = startOfWeek,
 
                                 onExport = { 
                                     val timestamp = java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd_HHmm"))
@@ -1055,25 +1076,25 @@ fun MainScreen(viewModel: MainViewModel) {
                     "HOME" -> {
                         // Filter out virtual loan transactions (same logic as expense/income pages)
                         // AND respect value of excludeLoanTransactions for Totals/Income
-                        val filteredTransactions = currentMonthTransactions.filter { transaction ->
+                        val visibleTransactions = filteredTransactions.filter { transaction ->
                             val isExcludedLoan = excludeLoanTransactions && transaction.loanId != null
                             !isExcludedLoan
                         }
 
                         // For Transaction List: Only exclude virtual loans, SHOW real loans even if excluded from totals
-                        val unfilteredTransactions = currentMonthTransactions
+                        val unfilteredVisibleTransactions = filteredTransactions
                         
-                        // Calculate balance at end of selected month
-                        // Filter all expenses up to end of current month
-                        val monthEnd = currentDate.withDayOfMonth(currentDate.lengthOfMonth())
-                        val transactionsUpToMonthEnd = expenses.filter { exp ->
+                        // Calculate balance at end of selected range
+                        // Filter all expenses up to end of current range
+                        val rangeEnd = DateUtils.getEndOfRange(currentDate, timeRange)
+                        val transactionsUpToRangeEnd = expenses.filter { exp ->
                             val expDate = try { LocalDate.parse(exp.date.take(10)) } catch(e: Exception) { LocalDate.now() }
-                            !expDate.isAfter(monthEnd)
+                            !expDate.isAfter(rangeEnd)
                         }
                         
-                        val monthEndBalance = accounts.sumOf { account ->
+                        val rangeEndBalance = accounts.sumOf { account ->
                             val initial = account.initialBalance
-                            val acctTransactions = transactionsUpToMonthEnd
+                            val acctTransactions = transactionsUpToRangeEnd
                             
                             val accountExpenses = acctTransactions.filter { it.accountId == account.id && it.transactionType == com.h2.wellspend.data.TransactionType.EXPENSE }
                             val transfersOut = acctTransactions.filter { it.accountId == account.id && it.transactionType == com.h2.wellspend.data.TransactionType.TRANSFER }
@@ -1088,23 +1109,27 @@ fun MainScreen(viewModel: MainViewModel) {
                             initial + totalIncomeNet - totalExpense - totalTransferOut + totalTransferIn
                         }
                         
-                        // Calculate income for this month (excluding virtual loan transactions)
-                        val totalIncome = filteredTransactions
+                        // Calculate income for this range (excluding virtual loan transactions)
+                        val totalIncome = visibleTransactions
                             .filter { it.transactionType == com.h2.wellspend.data.TransactionType.INCOME }
                             .sumOf { it.amount - it.feeAmount }
                         
                         // All transactions for lazy loading (sorted by date desc, then by timestamp desc)
-                        val allMonthTransactions = unfilteredTransactions
+                        val allRangeTransactions = unfilteredVisibleTransactions
                             .sortedWith(compareByDescending<Expense> { it.date.take(10) }.thenByDescending { it.timestamp })
                         
                         DashboardScreen(
                             currentDate = currentDate,
                             onDateChange = { currentDate = it },
+                            timeRange = timeRange,
+                            onTimeRangeChange = { timeRange = it; currentDate = LocalDate.now() },
+                            customDateRange = customDateRange,
+                            onCustomDateRangeChange = { customDateRange = it },
                             currency = currency,
-                            totalBalance = monthEndBalance,
+                            totalBalance = rangeEndBalance,
                             totalIncome = totalIncome,
                             totalExpense = totalSpend,
-                            recentTransactions = allMonthTransactions,
+                            recentTransactions = allRangeTransactions,
                             allAccounts = accounts,
                             accountBalances = balances,
                             loans = loans,
@@ -1125,7 +1150,8 @@ fun MainScreen(viewModel: MainViewModel) {
                             onExpenseClick = { currentScreen = Screen.EXPENSES },
                             onAccountClick = { currentScreen = Screen.ACCOUNTS },
                             categories = allCategories,
-                            onTransactionClick = { transactionToPreview = it }
+                            onTransactionClick = { transactionToPreview = it },
+                            startOfWeek = startOfWeek
                         )
                     }
                     "OVERLAY_ACCOUNT_INPUT" -> {
@@ -1190,10 +1216,15 @@ fun MainScreen(viewModel: MainViewModel) {
 
                             accounts = accounts,
                             balances = balances,
-                            currentMonthTransactions = currentMonthTransactions,
+                            filteredTransactions = filteredTransactions,
                             currency = currency,
                             currentDate = currentDate,
                             onDateChange = { currentDate = it },
+                            timeRange = timeRange,
+
+                            onTimeRangeChange = { timeRange = it; currentDate = LocalDate.now() },
+                            customDateRange = customDateRange,
+                            onCustomDateRangeChange = { customDateRange = it },
                             onDeleteAccount = { viewModel.deleteAccount(it) },
                             onReorder = { viewModel.updateAccountOrder(it) },
                             onAddAccount = { 
@@ -1210,7 +1241,11 @@ fun MainScreen(viewModel: MainViewModel) {
                         IncomeListScreen(
                             currentDate = currentDate,
                             onDateChange = { currentDate = it },
-                            expenses = currentMonthTransactions,
+                            timeRange = timeRange,
+                            onTimeRangeChange = { timeRange = it; currentDate = LocalDate.now() },
+                            customDateRange = customDateRange,
+                            onCustomDateRangeChange = { customDateRange = it },
+                            expenses = filteredTransactions,
                             accounts = accounts,
                             loans = loans,
                             currency = currency,
@@ -1228,14 +1263,20 @@ fun MainScreen(viewModel: MainViewModel) {
                             totalIncome = totalIncomeAmount,
                             showLoanExcludedLabel = excludeLoanTransactions,
                             groupIncomeByAccount = groupIncomeByAccount,
-                            onGroupToggle = { viewModel.updateGroupIncomeByAccount(it) }
+                            onGroupToggle = { viewModel.updateGroupIncomeByAccount(it) },
+                            startOfWeek = startOfWeek
                         )
                     }
                     "EXPENSES" -> {
                          ExpenseListScreen(
                             currentDate = currentDate,
                             onDateChange = { currentDate = it },
-                            expenses = currentMonthTransactions,
+                            timeRange = timeRange,
+
+                            onTimeRangeChange = { timeRange = it; currentDate = LocalDate.now() },
+                            customDateRange = customDateRange,
+                            onCustomDateRangeChange = { customDateRange = it },
+                            expenses = filteredTransactions,
                             categories = allCategories,
                             accounts = accounts,
                             loans = loans,
@@ -1256,7 +1297,8 @@ fun MainScreen(viewModel: MainViewModel) {
                             showLoanExcludedLabel = excludeLoanTransactions,
                             groupingMode = expenseGroupingMode,
                             onGroupingChange = { expenseGroupingMode = it },
-                            budgets = budgets
+                            budgets = budgets,
+                            startOfWeek = startOfWeek
                         )
                     }
                      "MORE" -> {
@@ -1401,6 +1443,11 @@ fun DashboardScreen(
 
     currentDate: LocalDate,
     onDateChange: (LocalDate) -> Unit,
+    timeRange: TimeRange,
+
+    onTimeRangeChange: (TimeRange) -> Unit,
+    customDateRange: Pair<LocalDate, LocalDate>? = null,
+    onCustomDateRangeChange: (Pair<LocalDate, LocalDate>) -> Unit = {},
     currency: String,
     totalBalance: Double,
     totalIncome: Double,
@@ -1419,12 +1466,19 @@ fun DashboardScreen(
     onExpenseClick: () -> Unit,
     onAccountClick: (String) -> Unit,
     categories: List<com.h2.wellspend.data.Category>,
-    onTransactionClick: (Expense) -> Unit = {}
+    onTransactionClick: (Expense) -> Unit = {},
+    startOfWeek: java.time.DayOfWeek = java.time.DayOfWeek.MONDAY
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         DateSelector(
             currentDate = currentDate,
-            onDateChange = onDateChange
+            onDateChange = onDateChange,
+            timeRange = timeRange,
+            onTimeRangeChange = onTimeRangeChange,
+
+            customDateRange = customDateRange,
+            onCustomDateRangeChange = onCustomDateRangeChange,
+            startOfWeek = startOfWeek
         )
 
         if (isLoading) {
@@ -1811,6 +1865,10 @@ fun DashboardScreen(
 fun ExpenseListScreen(
     currentDate: LocalDate,
     onDateChange: (LocalDate) -> Unit,
+    timeRange: TimeRange,
+    onTimeRangeChange: (TimeRange) -> Unit,
+    customDateRange: Pair<LocalDate, LocalDate>? = null,
+    onCustomDateRangeChange: (Pair<LocalDate, LocalDate>) -> Unit = {},
     expenses: List<com.h2.wellspend.data.Expense>,
     categories: List<com.h2.wellspend.data.Category>,
     accounts: List<com.h2.wellspend.data.Account>,
@@ -1826,13 +1884,11 @@ fun ExpenseListScreen(
     onGroupingChange: (GroupingMode) -> Unit = {},
 
     budgets: List<Budget>,
-    onTransactionClick: (Expense) -> Unit = {}
+    onTransactionClick: (Expense) -> Unit = {},
+    startOfWeek: java.time.DayOfWeek = java.time.DayOfWeek.MONDAY
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
-        DateSelector(
-            currentDate = currentDate,
-            onDateChange = onDateChange
-        )
+        // Selector is now inside ExpenseList component
         
         // Show Expenses ONLY (Transfers -> More > Transfers, Income -> Bottom Tab)
         // BUT include other types if they have fees (so we can show the fee)
@@ -1846,12 +1902,21 @@ fun ExpenseListScreen(
             loans = loans,
             currency = currency,
             budgets = budgets,
+            currentDate = currentDate,
+            onDateChange = onDateChange,
+            timeRange = timeRange,
+
+            onTimeRangeChange = onTimeRangeChange,
+            customDateRange = customDateRange,
+            onCustomDateRangeChange = onCustomDateRangeChange,
             onDelete = onDelete,
             onEdit = onEdit,
             state = state,
             onTransactionClick = onTransactionClick,
             groupingMode = groupingMode,
             onGroupingChange = onGroupingChange,
+
+            startOfWeek = startOfWeek,
             headerContent = {
                 // Donut Chart at the top (scrollable)
                 DonutChart(
@@ -1871,19 +1936,21 @@ fun ExpenseListScreen(
 fun TransferListScreen(
     currentDate: LocalDate,
     onDateChange: (LocalDate) -> Unit,
+    timeRange: TimeRange,
+    onTimeRangeChange: (TimeRange) -> Unit,
+    customDateRange: Pair<LocalDate, LocalDate>? = null,
+    onCustomDateRangeChange: (Pair<LocalDate, LocalDate>) -> Unit = {},
     expenses: List<com.h2.wellspend.data.Expense>,
     accounts: List<com.h2.wellspend.data.Account>,
     currency: String,
     onDelete: (String) -> Unit,
 
     onEdit: (Expense) -> Unit,
-    onTransactionClick: (Expense) -> Unit = {}
+    onTransactionClick: (Expense) -> Unit = {},
+    startOfWeek: java.time.DayOfWeek = java.time.DayOfWeek.MONDAY
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
-        DateSelector(
-            currentDate = currentDate,
-            onDateChange = onDateChange
-        )
+        // Selector is now inside TransferList component
         
         // Filter only Transfers
         val transfers = expenses.filter { it.transactionType == com.h2.wellspend.data.TransactionType.TRANSFER }
@@ -1893,10 +1960,19 @@ fun TransferListScreen(
             transfers = transfers,
             accounts = accounts,
             currency = currency,
+            currentDate = currentDate,
+            onDateChange = onDateChange,
+            timeRange = timeRange,
+
+            onTimeRangeChange = onTimeRangeChange,
+            customDateRange = customDateRange,
+            onCustomDateRangeChange = onCustomDateRangeChange,
             onDelete = onDelete,
             onEdit = onEdit,
-            onTransactionClick = onTransactionClick
+            onTransactionClick = onTransactionClick,
+            startOfWeek = startOfWeek
         )
+
     }
 }
 
@@ -1905,6 +1981,10 @@ fun TransferListScreen(
 fun IncomeListScreen(
     currentDate: LocalDate,
     onDateChange: (LocalDate) -> Unit,
+    timeRange: TimeRange,
+    onTimeRangeChange: (TimeRange) -> Unit,
+    customDateRange: Pair<LocalDate, LocalDate>? = null,
+    onCustomDateRangeChange: (Pair<LocalDate, LocalDate>) -> Unit = {},
     expenses: List<com.h2.wellspend.data.Expense>,
     accounts: List<com.h2.wellspend.data.Account>,
     loans: List<com.h2.wellspend.data.Loan>,
@@ -1916,13 +1996,11 @@ fun IncomeListScreen(
     totalIncome: Double,
     showLoanExcludedLabel: Boolean = false,
     groupIncomeByAccount: Boolean,
-    onGroupToggle: (Boolean) -> Unit = {}
+    onGroupToggle: (Boolean) -> Unit = {},
+    startOfWeek: java.time.DayOfWeek = java.time.DayOfWeek.MONDAY
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
-        DateSelector(
-            currentDate = currentDate,
-            onDateChange = onDateChange
-        )
+        // Selector is now inside IncomeList component
         
         // Filter only Incomes
         val incomes = expenses.filter { 
@@ -1934,9 +2012,16 @@ fun IncomeListScreen(
             accounts = accounts,
             loans = loans,
             currency = currency,
+            currentDate = currentDate,
+            onDateChange = onDateChange,
+            timeRange = timeRange,
+            onTimeRangeChange = onTimeRangeChange,
+            customDateRange = customDateRange,
+            onCustomDateRangeChange = onCustomDateRangeChange,
             onDelete = onDelete,
             onEdit = onEdit,
             onTransactionClick = onTransactionClick,
+            startOfWeek = startOfWeek,
             headerContent = {
                 if (groupIncomeByAccount) {
                     DonutChart(

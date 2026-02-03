@@ -71,12 +71,14 @@ fun SettingsScreen(
     currentDynamicColor: Boolean,
     excludeLoanTransactions: Boolean,
     showAccountsOnHomepage: Boolean,
+    startOfWeek: java.time.DayOfWeek,
 
     onCurrencyChange: (String) -> Unit,
     onThemeModeChange: (String) -> Unit,
     onDynamicColorChange: (Boolean) -> Unit,
     onExcludeLoanTransactionsChange: (Boolean) -> Unit,
     onShowAccountsOnHomepageChange: (Boolean) -> Unit,
+    onStartOfWeekChange: (java.time.DayOfWeek) -> Unit,
 
     onExport: () -> Unit,
     onImport: () -> Unit,
@@ -302,12 +304,78 @@ fun SettingsScreen(
 
 
 
+
+
+
+
             // Summary Configuration
-            SectionHeader("SUMMARY CONFIGURATION")
+            SectionHeader("CONFIGURATION")
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
             ) {
+                 // Start of Week
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Start of Week", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Medium)
+                        Text(
+                            "Select which day your weekly cycle begins on",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                    
+                    var sowExpanded by remember { mutableStateOf(false) }
+                    val sowOptions = listOf(
+                        java.time.DayOfWeek.SATURDAY,
+                        java.time.DayOfWeek.SUNDAY,
+                        java.time.DayOfWeek.MONDAY
+                    )
+
+                    ExposedDropdownMenuBox(
+                        expanded = sowExpanded,
+                        onExpandedChange = { sowExpanded = it }
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .menuAnchor()
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                                .clickable { sowExpanded = true }
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = startOfWeek.name.lowercase().capitalize(java.util.Locale.getDefault()),
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            ExposedDropdownMenuDefaults.TrailingIcon(expanded = sowExpanded)
+                        }
+
+                        ExposedDropdownMenu(
+                            expanded = sowExpanded,
+                            onDismissRequest = { sowExpanded = false }
+                        ) {
+                            sowOptions.forEach { day ->
+                                DropdownMenuItem(
+                                    text = { Text(day.name.lowercase().capitalize(java.util.Locale.getDefault())) },
+                                    onClick = {
+                                        onStartOfWeekChange(day)
+                                        sowExpanded = false
+                                    },
+                                    contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding
+                                )
+                            }
+                        }
+                    }
+                }
+
                 // Show Accounts on Homepage
                  Row(
                     modifier = Modifier

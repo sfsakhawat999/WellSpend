@@ -349,6 +349,16 @@ class MainViewModel(
         .map { it?.toBoolean() ?: true } // Default to true (new design)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
 
+    val startOfWeek: StateFlow<java.time.DayOfWeek> = repository.startOfWeek
+        .map { 
+            try { 
+                if (it != null) java.time.DayOfWeek.valueOf(it) else java.time.DayOfWeek.MONDAY // Default to Monday
+            } catch (e: Exception) {
+                java.time.DayOfWeek.MONDAY
+            }
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), java.time.DayOfWeek.MONDAY)
+
     init {
         checkRecurringExpenses()
     }
@@ -670,6 +680,12 @@ class MainViewModel(
     fun updateGroupIncomeByAccount(group: Boolean) {
         viewModelScope.launch {
             repository.setGroupIncomeByAccount(group)
+        }
+    }
+
+    fun updateStartOfWeek(day: java.time.DayOfWeek) {
+        viewModelScope.launch {
+            repository.setStartOfWeek(day.name)
         }
     }
 

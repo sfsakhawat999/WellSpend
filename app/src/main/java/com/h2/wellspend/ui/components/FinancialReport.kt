@@ -31,6 +31,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.foundation.clickable
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -52,55 +53,72 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import kotlin.math.abs
 import com.h2.wellspend.ui.theme.cardBackgroundColor
+import com.h2.wellspend.data.TimeRange
+import com.h2.wellspend.utils.DateUtils
 
 import androidx.compose.material.icons.filled.CompareArrows
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.ui.window.Dialog
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MonthlyReport(
+fun FinancialReport(
     expenses: List<Expense>,
     categories: List<Category>,
     currency: String,
     currentDate: LocalDate,
     onDateChange: (LocalDate) -> Unit,
+    timeRange: TimeRange,
+    onTimeRangeChange: (TimeRange) -> Unit,
     showCompareDialog: Boolean,
     onDismissCompareDialog: () -> Unit,
     comparisonDate: LocalDate?,
     onComparisonDateChange: (LocalDate) -> Unit,
-    excludeLoanTransactions: Boolean
+    excludeLoanTransactions: Boolean,
+    startOfWeek: java.time.DayOfWeek = java.time.DayOfWeek.MONDAY,
+    customDateRange: Pair<LocalDate, LocalDate>? = null,
+    onCustomDateRangeChange: (Pair<LocalDate, LocalDate>) -> Unit = {},
+    reportComparisonCustomRange: Pair<LocalDate, LocalDate>? = null,
+    onReportComparisonCustomRangeChange: (Pair<LocalDate, LocalDate>) -> Unit = {}
 ) {
     // 1. Filter by Date first
-    val (incomeTotal, expenseTotal, transferTotal, _, expensePercentChange, categoryData, breakdownData) = remember(expenses, currentDate, comparisonDate, excludeLoanTransactions) {
-        // Refinement: Exclude untracked loan transactions (No Account) -> REMOVED per user request
-        // Base valid expenses (ignoring exclusion pref)
+    val (incomeTotal, expenseTotal, transferTotal, _, expensePercentChange, categoryData, breakdownData) = remember(expenses, currentDate, comparisonDate, excludeLoanTransactions, timeRange, customDateRange, reportComparisonCustomRange) {
         val validExpenses = expenses
+        
 
+        val currentTransactions = DateUtils.filterByTimeRange(validExpenses, currentDate, timeRange, startOfWeek, customDateRange)
         
-        val currentMonthTransactions = validExpenses.filter {
-            val date = LocalDate.parse(it.date.substring(0, 10))
-            date.month == currentDate.month && date.year == currentDate.year
-        }
-        
-        // Use comparisonDate if set, otherwise default to previous month
-        val prevDate = comparisonDate ?: currentDate.minusMonths(1)
-        val prevMonthTransactions = validExpenses.filter {
-            val date = LocalDate.parse(it.date.substring(0, 10))
-            date.month == prevDate.month && date.year == prevDate.year
+        // Calculate Comparison Range
+        val prevTransactions = if (timeRange == TimeRange.CUSTOM) {
+             val effectivePrevRange = reportComparisonCustomRange ?: run {
+                 if (customDateRange != null) {
+                     val duration = java.time.Period.between(customDateRange.first, customDateRange.second).days + 1
+                     val prevEnd = customDateRange.first.minusDays(1)
+                     val prevStart = prevEnd.minusDays(duration.toLong() - 1)
+                     prevStart to prevEnd
+                 } else null
+             }
+             DateUtils.filterByTimeRange(validExpenses, currentDate, timeRange, startOfWeek, effectivePrevRange)
+        } else {
+             // Use comparisonDate if set, otherwise default to previous period
+             val prevDate = comparisonDate ?: DateUtils.adjustDate(currentDate, timeRange, false, customDateRange)
+             DateUtils.filterByTimeRange(validExpenses, prevDate, timeRange, startOfWeek)
         }
 
         // Apply Exclusion Pref for SUMMARIES and CHARTS
         val filteredCurrentTransactions = if (excludeLoanTransactions) {
-            currentMonthTransactions.filter { it.loanId == null }
-        } else currentMonthTransactions
+            currentTransactions.filter { it.loanId == null }
+        } else currentTransactions
         
         val filteredPrevTransactions = if (excludeLoanTransactions) {
-            prevMonthTransactions.filter { it.loanId == null }
-        } else prevMonthTransactions
+            prevTransactions.filter { it.loanId == null }
+        } else prevTransactions
 
-        // 2. Separate by Type for Current Month (Filtered)
+        // 2. Separate by Type for Current Period (Filtered)
         val currentIncomes = filteredCurrentTransactions.filter { it.transactionType == com.h2.wellspend.data.TransactionType.INCOME }
         val currentExpenses = filteredCurrentTransactions.filter { it.transactionType == com.h2.wellspend.data.TransactionType.EXPENSE }
         val currentTransfers = filteredCurrentTransactions.filter { it.transactionType == com.h2.wellspend.data.TransactionType.TRANSFER }
@@ -134,14 +152,14 @@ fun MonthlyReport(
         val prevCatMap = prevExpenses.groupBy { it.category }
             .mapValues { it.value.sumOf { exp -> exp.amount } }
             .toMutableMap()
-        
+
         if (prevAllFees > 0) {
             val feeCat = com.h2.wellspend.data.SystemCategory.TransactionFee.name
             prevCatMap[feeCat] = (prevCatMap[feeCat] ?: 0.0) + prevAllFees
         }
 
         val catData = currentCatMap.map { (catName, amount) ->
-            val prevAmount = prevCatMap[catName] ?: 0.0
+             val prevAmount = prevCatMap[catName] ?: 0.0
              val category = categories.find { it.name == catName } ?: Category(
                 name = catName,
                 iconName = catName,
@@ -155,14 +173,14 @@ fun MonthlyReport(
         
         // 5. Category Data for BREAKDOWN (Unfiltered - Show Loans)
         // We calculate this separately so the list shows everything
-        val breakdownCurrentExpenses = currentMonthTransactions.filter { it.transactionType == com.h2.wellspend.data.TransactionType.EXPENSE }
-        val breakdownPrevExpenses = prevMonthTransactions.filter { it.transactionType == com.h2.wellspend.data.TransactionType.EXPENSE }
+        val breakdownCurrentExpenses = currentTransactions.filter { it.transactionType == com.h2.wellspend.data.TransactionType.EXPENSE }
+        val breakdownPrevExpenses = prevTransactions.filter { it.transactionType == com.h2.wellspend.data.TransactionType.EXPENSE }
         
         val breakdownCatMap = breakdownCurrentExpenses.groupBy { it.category }
             .mapValues { it.value.sumOf { exp -> exp.amount } }
             .toMutableMap()
             
-        val breakdownAllFees = currentMonthTransactions.sumOf { it.feeAmount }
+        val breakdownAllFees = currentTransactions.sumOf { it.feeAmount }
         if (breakdownAllFees > 0) {
             val feeCat = com.h2.wellspend.data.SystemCategory.TransactionFee.name
             breakdownCatMap[feeCat] = (breakdownCatMap[feeCat] ?: 0.0) + breakdownAllFees
@@ -172,9 +190,9 @@ fun MonthlyReport(
             .mapValues { it.value.sumOf { exp -> exp.amount } }
             .toMutableMap()
             
-        if (prevMonthTransactions.sumOf { it.feeAmount } > 0) {
+        if (prevTransactions.sumOf { it.feeAmount } > 0) {
              val feeCat = com.h2.wellspend.data.SystemCategory.TransactionFee.name
-             breakdownPrevCatMap[feeCat] = (breakdownPrevCatMap[feeCat] ?: 0.0) + prevMonthTransactions.sumOf { it.feeAmount }
+             breakdownPrevCatMap[feeCat] = (breakdownPrevCatMap[feeCat] ?: 0.0) + prevTransactions.sumOf { it.feeAmount }
         }
         
         val breakdownData = breakdownCatMap.map { (catName, amount) ->
@@ -193,62 +211,88 @@ fun MonthlyReport(
         ReportData(incTotal, expTotal, trTotal, prevExpTotal, expChange, catData, breakdownData)
     }
 
-    // Available months for comparison
-    val availableMonths = remember(expenses) {
-        expenses.map { LocalDate.parse(it.date.substring(0, 10)).withDayOfMonth(1) }
-            .distinct()
-            .sortedDescending()
-            .filter { !(it.month == currentDate.month && it.year == currentDate.year) }
-    }
+
 
     if (showCompareDialog) {
-        Dialog(onDismissRequest = onDismissCompareDialog) {
-            Column(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(cardBackgroundColor())
-                    .padding(16.dp)
-            ) {
-                Text(
-                    text = "Compare with...",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.padding(bottom = 16.dp)
+        when (timeRange) {
+            TimeRange.CUSTOM -> {
+                // Calculate default previous period (same as shown in summary)
+                val defaultPrevRange = reportComparisonCustomRange ?: customDateRange?.let { 
+                    val duration = java.time.Period.between(it.first, it.second).days + 1
+                    val prevEnd = it.first.minusDays(1)
+                    val prevStart = prevEnd.minusDays(duration.toLong() - 1)
+                    prevStart to prevEnd
+                }
+                CustomRangePickerDialog(
+                    initialDate = defaultPrevRange?.first ?: currentDate,
+                    initialRange = defaultPrevRange,
+                    onRangeSelected = { 
+                        onReportComparisonCustomRangeChange(it)
+                        onDismissCompareDialog()
+                    },
+                    onDismiss = onDismissCompareDialog
                 )
-                
-                Column(
-                    modifier = Modifier
-                        .height(300.dp)
-                        .verticalScroll(rememberScrollState())
-                ) {
-                    availableMonths.forEach { date ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    onComparisonDateChange(date)
-                                    onDismissCompareDialog()
-                                }
-                                .padding(vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = date.format(DateTimeFormatter.ofPattern("MMMM yyyy")),
-                                color = if (comparisonDate == date) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                style = MaterialTheme.typography.bodyLarge
-                            )
+            }
+            TimeRange.DAILY -> {
+                val datePickerState = rememberDatePickerState(
+                    initialSelectedDateMillis = (comparisonDate ?: currentDate).atStartOfDay(java.time.ZoneOffset.UTC).toInstant().toEpochMilli()
+                )
+                DatePickerDialog(
+                    onDismissRequest = onDismissCompareDialog,
+                    confirmButton = {
+                        val selectedMillis = datePickerState.selectedDateMillis
+                        val selectedDate = selectedMillis?.let { 
+                            java.time.Instant.ofEpochMilli(it).atZone(java.time.ZoneOffset.UTC).toLocalDate() 
                         }
+                        val isDisabled = selectedDate != null && selectedDate.isEqual(currentDate)
+                        TextButton(
+                            onClick = {
+                                selectedDate?.let { onComparisonDateChange(it) }
+                                onDismissCompareDialog()
+                            },
+                            enabled = !isDisabled
+                        ) { Text("OK") }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = onDismissCompareDialog) { Text("Cancel") }
                     }
-                }
-                
-                Spacer(modifier = Modifier.height(16.dp))
-                
-                TextButton(
-                    onClick = onDismissCompareDialog,
-                    modifier = Modifier.align(Alignment.End)
                 ) {
-                    Text("Cancel", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    DatePicker(state = datePickerState)
                 }
+            }
+            TimeRange.WEEKLY -> {
+                WeekPickerDialog(
+                    currentDate = comparisonDate ?: DateUtils.adjustDate(currentDate, timeRange, false),
+                    onDateSelected = { 
+                        onComparisonDateChange(it)
+                        onDismissCompareDialog() 
+                    },
+                    onDismiss = onDismissCompareDialog,
+                    startOfWeek = startOfWeek,
+                    disabledDate = currentDate
+                )
+            }
+            TimeRange.MONTHLY -> {
+                MonthPickerDialog(
+                    currentDate = comparisonDate ?: DateUtils.adjustDate(currentDate, timeRange, false),
+                    onDateSelected = { 
+                        onComparisonDateChange(it)
+                        onDismissCompareDialog() 
+                    },
+                    onDismiss = onDismissCompareDialog,
+                    disabledDate = currentDate
+                )
+            }
+            TimeRange.YEARLY -> {
+                YearPickerDialog(
+                    currentDate = comparisonDate ?: DateUtils.adjustDate(currentDate, timeRange, false),
+                    onDateSelected = { 
+                        onComparisonDateChange(it)
+                        onDismissCompareDialog() 
+                    },
+                    onDismiss = onDismissCompareDialog,
+                    disabledDate = currentDate
+                )
             }
         }
     }
@@ -259,9 +303,15 @@ fun MonthlyReport(
             .background(MaterialTheme.colorScheme.background)
     ) {
         // Date Switcher
+
         DateSelector(
             currentDate = currentDate,
-            onDateChange = onDateChange
+            onDateChange = onDateChange,
+            timeRange = timeRange,
+            onTimeRangeChange = onTimeRangeChange,
+            customDateRange = customDateRange,
+            onCustomDateRangeChange = onCustomDateRangeChange,
+            startOfWeek = startOfWeek
         )
 
         Column(
@@ -279,8 +329,9 @@ fun MonthlyReport(
                     .padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
+
                 Text(
-                    text = currentDate.format(DateTimeFormatter.ofPattern("MMMM yyyy")).uppercase() + 
+                    text = DateUtils.formatDateForRange(currentDate, timeRange, startOfWeek, customDateRange).uppercase() + 
                            if (excludeLoanTransactions) " (LOANS EXCLUDED)" else "",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -318,7 +369,16 @@ fun MonthlyReport(
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
                         text = "${String.format("%.1f", abs(expensePercentChange))}% vs ${
-                            (comparisonDate ?: currentDate.minusMonths(1)).format(DateTimeFormatter.ofPattern("MMM"))
+                            if (timeRange == TimeRange.CUSTOM) {
+                                DateUtils.formatDateForRange(currentDate, timeRange, startOfWeek, reportComparisonCustomRange ?: customDateRange?.let { 
+                                    val duration = java.time.Period.between(it.first, it.second).days + 1
+                                    val prevEnd = it.first.minusDays(1)
+                                    val prevStart = prevEnd.minusDays(duration.toLong() - 1)
+                                    prevStart to prevEnd
+                                })
+                            } else {
+                                DateUtils.formatDateForRange((comparisonDate ?: DateUtils.adjustDate(currentDate, timeRange, false)), timeRange, startOfWeek)
+                            }
                         }",
                         style = MaterialTheme.typography.bodySmall,
                         color = if (expensePercentChange > 0) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onPrimaryContainer,
@@ -364,7 +424,7 @@ fun MonthlyReport(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Chart (Simple horizontal bars for now)
+            // Donut Chart of Spending by Category
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -382,36 +442,19 @@ fun MonthlyReport(
                 if (categoryData.isEmpty()) {
                      Text("No data", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 } else {
-                    val maxVal = categoryData.first().amount
-                    categoryData.forEach { data ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 9.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = getIconByName(data.category.iconName),
-                                contentDescription = data.category.name,
-                                tint = Color(data.category.color),
-                                modifier = Modifier.width(24.dp).size(16.dp)
-                            )
-                            Box(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(14.dp)
-                                    .clip(RoundedCornerShape(4.dp))
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxHeight()
-                                        .fillMaxWidth((data.amount / maxVal).toFloat())
-                                        .clip(RoundedCornerShape(4.dp))
-                                        .background(Color(data.category.color))
-                                )
-                            }
-                        }
+                    val chartData = categoryData.map { data ->
+                        ChartData(
+                            name = data.category.name,
+                            value = data.amount,
+                            color = Color(data.category.color)
+                        )
                     }
+                    DonutChart(
+                        data = chartData,
+                        totalAmount = expenseTotal,
+                        currency = currency,
+                        centerLabel = "Total Spending"
+                    )
                 }
             }
 
@@ -474,6 +517,7 @@ fun MonthlyReport(
         }
     }
 }
+
 
 data class ReportData(
     val income: Double,

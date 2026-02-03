@@ -74,7 +74,7 @@ fun MoreScreen(
 
                 MoreMenuItem(
                     icon = Icons.Default.Description,
-                    title = "Monthly Report",
+                    title = "Financial Report",
                     subtitle = "View detailed expense analysis",
                     onClick = onReportClick,
                     color = Color(0xFF3b82f6) // Blue

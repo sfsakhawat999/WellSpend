@@ -4,13 +4,11 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.AccountBalanceWallet
@@ -32,49 +30,43 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.window.Dialog
 import androidx.compose.material.icons.filled.Close
-import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.rememberScrollState
 import com.h2.wellspend.data.Account
 import com.h2.wellspend.data.FeeConfig
 import com.h2.wellspend.ui.theme.cardBackgroundColor
 import java.util.UUID
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandVertically
 import androidx.compose.ui.text.TextStyle
 
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
-import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.animation.core.Animatable
 import androidx.compose.ui.unit.IntOffset
 import kotlin.math.roundToInt
 import androidx.compose.foundation.layout.offset
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.delay
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import com.h2.wellspend.data.TimeRange
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun AccountScreen(
     accounts: List<Account>,
     balances: Map<String, Double>,
-    currentMonthTransactions: List<com.h2.wellspend.data.Expense>,
+    filteredTransactions: List<com.h2.wellspend.data.Expense>,
     currency: String,
-    currentDate: java.time.LocalDate, // New
-    onDateChange: (java.time.LocalDate) -> Unit, // New
+    currentDate: java.time.LocalDate,
+    onDateChange: (java.time.LocalDate) -> Unit,
+    timeRange: TimeRange,
+
+    onTimeRangeChange: (TimeRange) -> Unit,
+    customDateRange: Pair<java.time.LocalDate, java.time.LocalDate>? = null,
+    onCustomDateRangeChange: (Pair<java.time.LocalDate, java.time.LocalDate>) -> Unit = {},
     onDeleteAccount: (Account) -> Unit,
     onReorder: (List<Account>) -> Unit,
     onAddAccount: () -> Unit,
@@ -84,8 +76,6 @@ fun AccountScreen(
     
     // Reorder mode state
     var isReorderMode by remember { mutableStateOf(false) }
-    
-    // Internal dialog state removed - hoisted to MainScreen
 
     Scaffold(
         floatingActionButton = {
@@ -103,7 +93,11 @@ fun AccountScreen(
                 // Date Selector
                 com.h2.wellspend.ui.components.DateSelector(
                     currentDate = currentDate,
-                    onDateChange = onDateChange
+                    onDateChange = onDateChange,
+                    timeRange = timeRange,
+                    onTimeRangeChange = onTimeRangeChange,
+                    customDateRange = customDateRange,
+                    onCustomDateRangeChange = onCustomDateRangeChange
                 )
                 
                 // Reorder mode toggle
@@ -133,8 +127,8 @@ fun AccountScreen(
                         val shape = getGroupedItemShape(index, accounts.size)
                         val backgroundShape = getGroupedItemBackgroundShape(index, accounts.size)
                         
-                        // Calculate Monthly Stats
-                        val accountTransactions = currentMonthTransactions.filter { 
+                        // Calculate Period Stats
+                        val accountTransactions = filteredTransactions.filter { 
                            it.accountId == account.id || it.transferTargetAccountId == account.id 
                         }
                         
@@ -154,13 +148,7 @@ fun AccountScreen(
                                  when (it.transactionType) {
                                      com.h2.wellspend.data.TransactionType.EXPENSE -> it.amount + it.feeAmount
                                      com.h2.wellspend.data.TransactionType.TRANSFER -> it.amount + it.feeAmount
-                                     com.h2.wellspend.data.TransactionType.INCOME -> it.feeAmount // Income fees are money leaving the account? Or deducted from income? Usually fees are "out".
-                                     // Actually, if I receive $100 income with $5 fee, do I get $95 net?
-                                     // Or do I get $100 and pay $5? 
-                                     // In MainScreen logic: totalIncomeNet = incomes.sumOf { it.amount - it.feeAmount }
-                                     // But for "Entered vs Went Out", I should probably split it.
-                                     // Entered: $100. Went Out: $5. Net: $95.
-                                     // This is more transparent.
+                                     com.h2.wellspend.data.TransactionType.INCOME -> it.feeAmount 
                                  }
                              } else {
                                  0.0
@@ -482,13 +470,7 @@ fun AccountInputScreen(
     currency: String,
     onSave: (Account, Double?) -> Unit
 ) {
-    // BackHandler(onBack = onDismiss) // Handled by MainScreen
     var name by remember { mutableStateOf(account?.name ?: "") }
-    // If account exists (Edit), use currentBalance. If new, use initialBalance (empty).
-    // but we only track 'displayBalance' for editing.
-    // For saving:
-    // New Account: initialBalance = displayBalance, adjustment = null
-    // Edit Account: initialBalance = account.initialBalance (unchanged), adjustment = displayBalance - currentBalance
     
     var displayBalance by remember { 
         mutableStateOf(
@@ -506,15 +488,12 @@ fun AccountInputScreen(
     var newFeeValue by remember { mutableStateOf("") }
     var newFeeIsPercent by remember { mutableStateOf(true) }
 
-    // Layout similar to AddExpenseForm
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
-        // Header Removed - Handled by MainScreen
 
-        // Content
         Column(
             modifier = Modifier
                 .weight(1f)
@@ -544,7 +523,6 @@ fun AccountInputScreen(
                         androidx.compose.foundation.text.BasicTextField(
                             value = displayBalance,
                             onValueChange = { newValue ->
-                                // Allow only valid decimal input with max 2 decimal places
                                 val filtered = newValue.filter { it.isDigit() || it == '.' || it == '-' }
                                 val parts = filtered.removePrefix("-").split(".")
                                 val prefix = if (filtered.startsWith("-")) "-" else ""
@@ -709,4 +687,3 @@ fun AccountInputScreen(
         }
     }
 }
-
