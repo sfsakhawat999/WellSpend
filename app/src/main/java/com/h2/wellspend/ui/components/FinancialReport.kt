@@ -325,7 +325,6 @@ fun FinancialReport(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(cardBackgroundColor(), RoundedCornerShape(16.dp))
-                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(16.dp))
                     .padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
@@ -420,24 +419,9 @@ fun FinancialReport(
                         )
                     }
                 }
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // Donut Chart of Spending by Category
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(cardBackgroundColor(), RoundedCornerShape(16.dp))
-                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(16.dp))
-                    .padding(16.dp)
-            ) {
-                Text(
-                    text = "Spending by Category",
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(bottom = 16.dp)
-                )
+                
+                // Donut Chart (integrated into summary card)
+                Spacer(modifier = Modifier.height(16.dp))
                 
                 if (categoryData.isEmpty()) {
                      Text("No data", color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -468,34 +452,43 @@ fun FinancialReport(
                 modifier = Modifier.padding(bottom = 12.dp, start = 4.dp)
             )
 
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 breakdownData.forEach { data ->
                     val diff = data.amount - data.prevAmount
                     val isIncrease = diff > 0
+                    val iconColor = Color(data.category.color)
                     
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .background(cardBackgroundColor(), RoundedCornerShape(12.dp))
-                            .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
                             .padding(12.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                             Icon(
+                        // Circular icon background (matching TransactionItem)
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(androidx.compose.foundation.shape.CircleShape)
+                                .background(iconColor.copy(alpha = 0.15f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
                                 imageVector = getIconByName(data.category.iconName),
                                 contentDescription = null,
-                                tint = Color(data.category.color),
-                                modifier = Modifier.size(24.dp).padding(end = 8.dp)
+                                tint = iconColor,
+                                modifier = Modifier.size(24.dp)
                             )
-                            Text(data.category.name, color = MaterialTheme.colorScheme.onSurface)
                         }
-                        Column(horizontalAlignment = Alignment.End) {
+                        
+                        // Category name and comparison text
+                        Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "$currency${String.format("%.2f", data.amount)}",
-                                color = MaterialTheme.colorScheme.onSurface,
-                                fontWeight = FontWeight.Medium
+                                text = data.category.name, 
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface
                             )
                             if (data.prevAmount > 0) {
                                 Text(
@@ -511,6 +504,14 @@ fun FinancialReport(
                                 )
                             }
                         }
+                        
+                        // Amount
+                        Text(
+                            text = "$currency${String.format("%.2f", data.amount)}",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
                     }
                 }
             }
