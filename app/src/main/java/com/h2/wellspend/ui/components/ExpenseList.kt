@@ -110,7 +110,9 @@ fun ExpenseList(
     headerContent: @Composable () -> Unit = {},
     groupingMode: GroupingMode = GroupingMode.CATEGORY,
     onGroupingChange: (GroupingMode) -> Unit = {},
-    startOfWeek: java.time.DayOfWeek = java.time.DayOfWeek.MONDAY
+    startOfWeek: java.time.DayOfWeek = java.time.DayOfWeek.MONDAY,
+    expandedIds: List<String> = emptyList(),
+    onToggleExpand: (String) -> Unit = {}
 ) {
     // Header Content Helper
     fun getAccountColor(accountId: String): Color {
@@ -355,7 +357,9 @@ fun ExpenseList(
                                         onEdit(expense)
                                     }
                                 },
-                                onTransactionClick = onTransactionClick // Pass it down
+                                onTransactionClick = onTransactionClick, // Pass it down
+                                isExpanded = expandedIds.contains(groupKey ?: ""),
+                                onToggleExpand = { onToggleExpand(groupKey ?: "") }
                             )
                         }
                 }
@@ -429,9 +433,10 @@ fun ExpenseCategoryItem(
     budget: com.h2.wellspend.data.Budget? = null,
     onDelete: (String) -> Unit,
     onEdit: (Expense) -> Unit,
-    onTransactionClick: (Expense) -> Unit
+    onTransactionClick: (Expense) -> Unit,
+    isExpanded: Boolean = false,
+    onToggleExpand: () -> Unit = {}
 ) {
-    var isExpanded by remember { mutableStateOf(false) }
     val color = Color(category.color)
 
     Column(
@@ -444,9 +449,10 @@ fun ExpenseCategoryItem(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable { isExpanded = !isExpanded }
+                .clickable { onToggleExpand() }
                 .padding(16.dp)
         ) {
+
             // Top Row (Icon, Name, Amount)
             Row(
                 modifier = Modifier.fillMaxWidth(),

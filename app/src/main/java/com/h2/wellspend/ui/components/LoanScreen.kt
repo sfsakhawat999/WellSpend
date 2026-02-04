@@ -15,6 +15,8 @@ import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState // implicitly needed for horizontalScroll? Yes or just scrollState
 import androidx.compose.foundation.lazy.items
@@ -66,14 +68,18 @@ fun LoanScreen(
 
     onDeleteTransaction: (String) -> Unit,
     onTransactionItemClick: (Expense) -> Unit = {},
-    @Suppress("UNUSED_PARAMETER") onAddLoanStart: () -> Unit
+    @Suppress("UNUSED_PARAMETER") onAddLoanStart: () -> Unit,
+    state: LazyListState = rememberLazyListState(),
+    expandedIds: List<String> = emptyList(),
+    onToggleExpand: (String) -> Unit = {},
+    selectedTab: Int = 0,
+    onTabChange: (Int) -> Unit = {}
 ) {
-    var selectedTab by remember { mutableIntStateOf(0) }
     
     Column(modifier = Modifier.fillMaxSize()) {
         TabRow(selectedTabIndex = selectedTab) {
-            Tab(selected = selectedTab == 0, onClick = { selectedTab = 0 }, text = { Text("Lent (Assets)") })
-            Tab(selected = selectedTab == 1, onClick = { selectedTab = 1 }, text = { Text("Borrowed (Debts)") })
+            Tab(selected = selectedTab == 0, onClick = { onTabChange(0) }, text = { Text("Lent (Assets)") })
+            Tab(selected = selectedTab == 1, onClick = { onTabChange(1) }, text = { Text("Borrowed (Debts)") })
         }
 
         val filteredLoans = loans.filter { 
@@ -100,6 +106,7 @@ fun LoanScreen(
             }
         } else {
             LazyColumn(
+                state = state,
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
@@ -116,8 +123,11 @@ fun LoanScreen(
                         onEditTransaction = onEditTransaction,
                         onDeleteTransaction = onDeleteTransaction,
                         onTransactionItemClick = onTransactionItemClick,
+
                         shape = RoundedCornerShape(16.dp),
-                        backgroundShape = RoundedCornerShape(17.dp)
+                        backgroundShape = RoundedCornerShape(17.dp),
+                        isExpanded = expandedIds.contains(loan.id),
+                        onToggleExpand = { onToggleExpand(loan.id) }
                     )
                 }
                 
@@ -155,10 +165,12 @@ fun LoanCard(
     onEditTransaction: (Expense) -> Unit,
     onDeleteTransaction: (String) -> Unit,
     onTransactionItemClick: (Expense) -> Unit,
+
     shape: Shape,
-    backgroundShape: Shape
+    backgroundShape: Shape,
+    isExpanded: Boolean = false,
+    onToggleExpand: () -> Unit = {}
 ) {
-    var isExpanded by remember { mutableStateOf(false) }
     val context = androidx.compose.ui.platform.LocalContext.current
     
     val initialTransaction = remember(transactions) {
@@ -375,7 +387,7 @@ fun LoanCard(
                                .clickable(
                                    interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
                                    indication = androidx.compose.material.ripple.rememberRipple(bounded = true)
-                               ) { isExpanded = !isExpanded },
+                               ) { onToggleExpand() },
                            contentAlignment = Alignment.Center
                        ) {
                            Icon(

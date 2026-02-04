@@ -83,7 +83,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.listSaver
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -187,6 +191,30 @@ fun MainScreen(
     var expenseToEdit by remember { mutableStateOf<Expense?>(null) }
     var defaultTransactionType by remember { mutableStateOf<com.h2.wellspend.data.TransactionType?>(null) }
     val listState = rememberLazyListState()
+    val homeListState = rememberLazyListState()
+    val incomeListState = rememberLazyListState()
+    val transferListState = rememberLazyListState()
+    val loanListState = rememberLazyListState()
+
+    // Expanded States
+    val expandedExpenseIds = rememberSaveable(saver = listSaver(
+        save = { it.toList() },
+        restore = { mutableStateListOf(*it.toTypedArray()) }
+    )) { mutableStateListOf<String>() }
+    
+    val expandedIncomeIds = rememberSaveable(saver = listSaver(
+        save = { it.toList() },
+        restore = { mutableStateListOf(*it.toTypedArray()) }
+    )) { mutableStateListOf<String>() }
+    
+    val expandedLoanIds = rememberSaveable(saver = listSaver(
+        save = { it.toList() },
+        restore = { mutableStateListOf(*it.toTypedArray()) }
+    )) { mutableStateListOf<String>() }
+
+    // Tab States
+    var loanSelectedTab by rememberSaveable { mutableIntStateOf(0) }
+
     
     // Navigation State
     var currentScreen by remember { mutableStateOf(Screen.HOME) }
@@ -1023,7 +1051,8 @@ fun MainScreen(
                                 showAddExpense = true
                             },
                             onTransactionClick = { transactionToPreview = it },
-                            startOfWeek = startOfWeek
+                            startOfWeek = startOfWeek,
+                            state = transferListState
                         )
 
                     }
@@ -1087,7 +1116,15 @@ fun MainScreen(
                                 newLoanType = com.h2.wellspend.data.LoanType.LEND
                             },
 
-                            onTransactionItemClick = { transactionToPreview = it }
+                            onTransactionItemClick = { transactionToPreview = it },
+                            state = loanListState,
+                            expandedIds = expandedLoanIds,
+                            onToggleExpand = { id -> 
+                                if (expandedLoanIds.contains(id)) expandedLoanIds.remove(id) 
+                                else expandedLoanIds.add(id) 
+                            },
+                            selectedTab = loanSelectedTab,
+                            onTabChange = { loanSelectedTab = it }
                         )
                     }
                     "OVERLAY_RECURRING_CONFIGS" -> {
@@ -1204,7 +1241,9 @@ fun MainScreen(
                             onAccountClick = { currentScreen = Screen.ACCOUNTS },
                             categories = allCategories,
                             onTransactionClick = { transactionToPreview = it },
-                            startOfWeek = startOfWeek
+                            startOfWeek = startOfWeek,
+                            state = homeListState
+
                         )
                     }
                     "OVERLAY_ACCOUNT_INPUT" -> {
@@ -1292,6 +1331,7 @@ fun MainScreen(
                     }
                     "INCOME" -> {
                         IncomeListScreen(
+                            state = incomeListState,
                             currentDate = currentDate,
                             onDateChange = { currentDate = it },
                             timeRange = timeRange,
@@ -1317,7 +1357,12 @@ fun MainScreen(
                             showLoanExcludedLabel = excludeLoanTransactions,
                             groupIncomeByAccount = groupIncomeByAccount,
                             onGroupToggle = { viewModel.updateGroupIncomeByAccount(it) },
-                            startOfWeek = startOfWeek
+                            startOfWeek = startOfWeek,
+                            expandedIds = expandedIncomeIds,
+                            onToggleExpand = { id -> 
+                                if (expandedIncomeIds.contains(id)) expandedIncomeIds.remove(id) 
+                                else expandedIncomeIds.add(id) 
+                            }
                         )
                     }
                     "EXPENSES" -> {
@@ -1351,7 +1396,12 @@ fun MainScreen(
                             groupingMode = expenseGroupingMode,
                             onGroupingChange = { expenseGroupingMode = it },
                             budgets = budgets,
-                            startOfWeek = startOfWeek
+                            startOfWeek = startOfWeek,
+                            expandedIds = expandedExpenseIds,
+                            onToggleExpand = { id -> 
+                                if (expandedExpenseIds.contains(id)) expandedExpenseIds.remove(id) 
+                                else expandedExpenseIds.add(id) 
+                            }
                         )
                     }
                     "OVERLAY_UPDATE" -> {
@@ -1523,7 +1573,8 @@ fun DashboardScreen(
     onAccountClick: (String) -> Unit,
     categories: List<com.h2.wellspend.data.Category>,
     onTransactionClick: (Expense) -> Unit = {},
-    startOfWeek: java.time.DayOfWeek = java.time.DayOfWeek.MONDAY
+    startOfWeek: java.time.DayOfWeek = java.time.DayOfWeek.MONDAY,
+    state: LazyListState = rememberLazyListState()
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
 
@@ -1644,6 +1695,7 @@ fun DashboardScreen(
         } else {
             androidx.compose.foundation.lazy.LazyColumn(
                 modifier = Modifier.fillMaxSize(),
+                state = state,
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 96.dp)
             ) {
                 item {
@@ -1956,7 +2008,9 @@ fun ExpenseListScreen(
 
     budgets: List<Budget>,
     onTransactionClick: (Expense) -> Unit = {},
-    startOfWeek: java.time.DayOfWeek = java.time.DayOfWeek.MONDAY
+    startOfWeek: java.time.DayOfWeek = java.time.DayOfWeek.MONDAY,
+    expandedIds: List<String> = emptyList(),
+    onToggleExpand: (String) -> Unit = {}
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         // Selector is now inside ExpenseList component
@@ -1997,6 +2051,8 @@ fun ExpenseListScreen(
                     additionalLabel = if (showLoanExcludedLabel) "(loans excluded)" else null
                 )
             },
+            expandedIds = expandedIds,
+            onToggleExpand = onToggleExpand
 
         )
     }
@@ -2018,7 +2074,8 @@ fun TransferListScreen(
 
     onEdit: (Expense) -> Unit,
     onTransactionClick: (Expense) -> Unit = {},
-    startOfWeek: java.time.DayOfWeek = java.time.DayOfWeek.MONDAY
+    startOfWeek: java.time.DayOfWeek = java.time.DayOfWeek.MONDAY,
+    state: LazyListState = rememberLazyListState()
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         // Selector is now inside TransferList component
@@ -2041,7 +2098,8 @@ fun TransferListScreen(
             onDelete = onDelete,
             onEdit = onEdit,
             onTransactionClick = onTransactionClick,
-            startOfWeek = startOfWeek
+            startOfWeek = startOfWeek,
+            state = state
         )
 
     }
@@ -2068,7 +2126,10 @@ fun IncomeListScreen(
     showLoanExcludedLabel: Boolean = false,
     groupIncomeByAccount: Boolean,
     onGroupToggle: (Boolean) -> Unit = {},
-    startOfWeek: java.time.DayOfWeek = java.time.DayOfWeek.MONDAY
+    startOfWeek: java.time.DayOfWeek = java.time.DayOfWeek.MONDAY,
+    state: LazyListState = rememberLazyListState(),
+    expandedIds: List<String> = emptyList(),
+    onToggleExpand: (String) -> Unit = {}
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         // Selector is now inside IncomeList component
@@ -2155,7 +2216,10 @@ fun IncomeListScreen(
                     )
                 }
             },
-            useGrouping = groupIncomeByAccount
+            useGrouping = groupIncomeByAccount,
+            state = state,
+            expandedIds = expandedIds,
+            onToggleExpand = onToggleExpand
         )
     }
 }

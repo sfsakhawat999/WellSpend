@@ -13,6 +13,8 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -72,10 +74,14 @@ fun IncomeList(
     onTransactionClick: (Expense) -> Unit = {},
     headerContent: @Composable () -> Unit = {},
     useGrouping: Boolean = true,
-    startOfWeek: java.time.DayOfWeek = java.time.DayOfWeek.MONDAY
+    startOfWeek: java.time.DayOfWeek = java.time.DayOfWeek.MONDAY,
+    state: LazyListState = rememberLazyListState(),
+    expandedIds: List<String> = emptyList(),
+    onToggleExpand: (String) -> Unit = {}
 ) {
     // Group incomes by account
     val groupedIncomes = remember(incomes, useGrouping) {
+
         if (useGrouping) {
             incomes.groupBy { it.accountId }
                 .mapValues { entry ->
@@ -97,6 +103,7 @@ fun IncomeList(
 
 
         LazyColumn(
+            state = state,
             modifier = Modifier
                 .fillMaxWidth(),
             contentPadding = PaddingValues(bottom = 96.dp),
@@ -151,7 +158,9 @@ fun IncomeList(
                                 currency = currency,
                                 onDelete = onDelete,
                                 onEdit = onEdit,
-                                onTransactionClick = onTransactionClick
+                                onTransactionClick = onTransactionClick,
+                                isExpanded = expandedIds.contains(account?.id ?: ""),
+                                onToggleExpand = { account?.let { onToggleExpand(it.id) } }
                             )
                         }
                     }
@@ -167,9 +176,9 @@ fun IncomeList(
                                 income = income,
                                 loans = loans,
                                 currency = currency,
-                                onEdit = onEdit,
-                                onDelete = onDelete,
-                                onTransactionClick = onTransactionClick,
+                                onEditTransaction = onEdit,
+                                onDeleteTransaction = onDelete,
+                                onTransactionItemClick = onTransactionClick,
                                 showIcon = true,
                                 account = account,
                                 shape = shape,
@@ -207,9 +216,11 @@ fun IncomeAccountItem(
     currency: String,
     onDelete: (String) -> Unit,
     onEdit: (Expense) -> Unit,
-    onTransactionClick: (Expense) -> Unit
+    onTransactionClick: (Expense) -> Unit,
+    isExpanded: Boolean = false,
+    onToggleExpand: () -> Unit = {}
 ) {
-    var isExpanded by remember { mutableStateOf(false) }
+
     
     // Generate a consistent color for the account
     val accountColors = listOf(
@@ -234,7 +245,7 @@ fun IncomeAccountItem(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable { isExpanded = !isExpanded }
+                .clickable { onToggleExpand() }
                 .padding(16.dp)
         ) {
             Row(
@@ -329,9 +340,9 @@ fun IncomeAccountItem(
                                 income = income,
                                 loans = loans,
                                 currency = currency,
-                                onEdit = onEdit,
-                                onDelete = onDelete,
-                                onTransactionClick = onTransactionClick,
+                                onEditTransaction = onEdit,
+                                onDeleteTransaction = onDelete,
+                                onTransactionItemClick = onTransactionClick,
                                 showIcon = false,
                                 shape = shape,
                                 backgroundShape = backgroundShape
@@ -350,9 +361,9 @@ fun IncomeItem(
     income: Expense,
     loans: List<com.h2.wellspend.data.Loan>,
     currency: String,
-    onEdit: (Expense) -> Unit,
-    onDelete: (String) -> Unit,
-    onTransactionClick: (Expense) -> Unit,
+    onEditTransaction: (Expense) -> Unit,
+    onDeleteTransaction: (String) -> Unit,
+    onTransactionItemClick: (Expense) -> Unit,
     showIcon: Boolean = false,
     account: Account? = null,
     shape: Shape = RoundedCornerShape(16.dp),
@@ -414,7 +425,7 @@ fun IncomeItem(
     LaunchedEffect(isVisible) {
         if (!isVisible && deleteConfirmed) {
             delay(300) 
-            onDelete(income.id)
+            onDeleteTransaction(income.id)
         }
     }
 
@@ -452,7 +463,7 @@ fun IncomeItem(
                                 val msg = if (isInitialLoanTransaction) "Initial loan transactions cannot be edited" else "Balance adjustments cannot be edited"
                                 android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
                             } else {
-                                onEdit(income)
+                                onEditTransaction(income)
                             }
                         },
                     contentAlignment = Alignment.CenterStart
@@ -517,8 +528,8 @@ fun IncomeItem(
                     .combinedClickable(
                         interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
                         indication = null,
-                        onClick = { onTransactionClick(income) },
-                        onLongClick = { onTransactionClick(income) }
+                        onClick = { onTransactionItemClick(income) },
+                        onLongClick = { onTransactionItemClick(income) }
                     )
                     .padding(16.dp)
             ) {

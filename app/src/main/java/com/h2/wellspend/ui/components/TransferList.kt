@@ -13,6 +13,8 @@ import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -58,12 +60,14 @@ fun TransferList(
     onDelete: (String) -> Unit,
     onEdit: (Expense) -> Unit,
     onTransactionClick: (Expense) -> Unit = {},
-    startOfWeek: java.time.DayOfWeek = java.time.DayOfWeek.MONDAY
+    startOfWeek: java.time.DayOfWeek = java.time.DayOfWeek.MONDAY,
+    state: LazyListState = rememberLazyListState()
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
 
 
         LazyColumn(
+            state = state,
             modifier = Modifier
                 .fillMaxWidth(),
             contentPadding = PaddingValues(bottom = 96.dp),
