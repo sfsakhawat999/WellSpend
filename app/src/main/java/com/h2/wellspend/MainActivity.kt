@@ -5,12 +5,19 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.h2.wellspend.data.AppDatabase
 import com.h2.wellspend.data.WellSpendRepository
+
 import com.h2.wellspend.ui.theme.WellSpendTheme
+import com.h2.wellspend.ui.viewmodel.UpdateState
+import com.h2.wellspend.ui.viewmodel.UpdateViewModel
+import androidx.navigation.compose.rememberNavController
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -69,7 +76,16 @@ class MainActivity : ComponentActivity() {
                     color = MaterialTheme.colorScheme.background
                 ) {
                     if (onboardingCompleted) {
-                        MainScreen(viewModel = viewModel)
+                        val updateViewModel: UpdateViewModel = viewModel(
+                            factory = UpdateViewModel.Factory(applicationContext)
+                        )
+                        val updateState = updateViewModel.updateState.collectAsState().value
+
+                        LaunchedEffect(Unit) {
+                            updateViewModel.checkForUpdates()
+                        }
+
+                        MainScreen(viewModel = viewModel, updateViewModel = updateViewModel)
                     } else {
                         com.h2.wellspend.ui.components.OnboardingScreen(
                             onComplete = { viewModel.completeOnboarding() },

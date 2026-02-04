@@ -53,4 +53,36 @@
 # Ensure annotations are kept
 -keepattributes *Annotation*
 -keepattributes EnclosingMethod
--keepattributes InnerClasses
+
+# Retrofit 2
+-keepattributes Signature
+-keepattributes Exceptions
+-dontwarn okio.**
+-dontwarn javax.annotation.**
+-keepclasseswithmembers class * {
+    @retrofit2.http.* <methods>;
+}
+
+# Keep Kotlin Metadata to ensure reflection works (sometimes needed for Gson/Retrofit)
+-keep class kotlin.Metadata { *; }
+
+# Explicitly keep network service to be safe
+-keep public interface com.h2.wellspend.data.network.GitHubApiService {
+    <methods>;
+}
+
+# Fix for Retrofit suspend functions (keep Continuation signature)
+-keep interface kotlin.coroutines.Continuation { *; }
+
+# Ensure generic types in List<GitHubAsset> are preserved
+-keepattributes Signature
+-keepattributes *Annotation*
+-keep class com.h2.wellspend.data.model.** { *; }
+
+# Aggressively keep Gson to prevent any issues with reflection/types
+-keep class com.google.gson.** { *; }
+-keep interface com.google.gson.** { *; }
+-keep class com.google.gson.reflect.TypeToken { *; }
+-keep class * extends com.google.gson.reflect.TypeToken
+
+

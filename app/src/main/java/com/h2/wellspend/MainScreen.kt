@@ -144,6 +144,12 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import com.h2.wellspend.ui.components.UpdateScreen
+import com.h2.wellspend.ui.viewmodel.UpdateViewModel
+import com.h2.wellspend.ui.viewmodel.UpdateState
+import androidx.compose.material3.LocalContentColor
+import androidx.compose.material.icons.filled.CloudDownload
+import androidx.compose.material.icons.filled.Update
 
 
 import com.h2.wellspend.ui.components.LoanScreen
@@ -173,7 +179,10 @@ enum class Screen {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MainScreen(viewModel: MainViewModel) {
+fun MainScreen(
+    viewModel: MainViewModel,
+    updateViewModel: UpdateViewModel = viewModel()
+) {
     var currentDate by remember { mutableStateOf(LocalDate.now()) }
     var expenseToEdit by remember { mutableStateOf<Expense?>(null) }
     var defaultTransactionType by remember { mutableStateOf<com.h2.wellspend.data.TransactionType?>(null) }
@@ -193,6 +202,7 @@ fun MainScreen(viewModel: MainViewModel) {
     var showAddCategoryDialog by remember { mutableStateOf(false) }
     var showSearch by remember { mutableStateOf(false) }
     var showSearchFilterDialog by remember { mutableStateOf(false) }
+    var showUpdateScreen by remember { mutableStateOf(false) }
 
     var loanTransactionToEdit by remember { mutableStateOf<Expense?>(null) }
     var transactionToPreview by remember { mutableStateOf<Expense?>(null) }
@@ -221,6 +231,10 @@ fun MainScreen(viewModel: MainViewModel) {
     val recurringConfigs by viewModel.recurringConfigs.collectAsState(initial = emptyList())
     val groupIncomeByAccount by viewModel.groupIncomeByAccount.collectAsState()
     val startOfWeek by viewModel.startOfWeek.collectAsState()
+    
+    // Update State
+    val updateState by updateViewModel.updateState.collectAsState()
+    val isUpdateAvailable = updateState is UpdateState.Available
 
     
     // Grouping State for Expenses (Hoisted)
@@ -263,7 +277,7 @@ fun MainScreen(viewModel: MainViewModel) {
         isDataLoaded = true
     }
 
-    val canNavigateBack = showAddExpense || showReport || showBudgets || showSettings || showTransfers || showLoans || showRecurringConfigs || showCategoryManagement || showAccountInput || loanTransactionToEdit != null || transactionToPreview != null || currentScreen != Screen.HOME || (showLoans && (isCreatingLoan || editingLoan != null || loanForTransaction != null)) || showSearch
+    val canNavigateBack = showAddExpense || showReport || showBudgets || showSettings || showTransfers || showLoans || showRecurringConfigs || showCategoryManagement || showAccountInput || loanTransactionToEdit != null || transactionToPreview != null || currentScreen != Screen.HOME || (showLoans && (isCreatingLoan || editingLoan != null || loanForTransaction != null)) || showSearch || showUpdateScreen
     androidx.activity.compose.BackHandler(enabled = canNavigateBack) {
         when {
             loanTransactionToEdit != null -> loanTransactionToEdit = null
@@ -286,6 +300,7 @@ fun MainScreen(viewModel: MainViewModel) {
                  viewModel.updateSearchQuery("") // Clear query on exit
                  viewModel.updateSearchFilter(MainViewModel.SearchFilter()) // Clear filters on exit
             }
+            showUpdateScreen -> showUpdateScreen = false
             currentScreen != Screen.HOME -> currentScreen = Screen.HOME
         }
     }
@@ -424,7 +439,7 @@ fun MainScreen(viewModel: MainViewModel) {
         }
     }
 
-    val isBottomBarVisible = !showAddExpense && !showReport && !showBudgets && !showSettings && !showTransfers && !showLoans && !showAccountInput && !showCategoryManagement && loanTransactionToEdit == null && !showSearch && !showRecurringConfigs && transactionToPreview == null
+    val isBottomBarVisible = !showAddExpense && !showReport && !showBudgets && !showSettings && !showTransfers && !showLoans && !showAccountInput && !showCategoryManagement && loanTransactionToEdit == null && !showSearch && !showRecurringConfigs && transactionToPreview == null && !showUpdateScreen
 
     val view = LocalView.current
     if (!view.isInEditMode) {
@@ -490,6 +505,7 @@ fun MainScreen(viewModel: MainViewModel) {
                 showTransfers -> "OVERLAY_TRANSFERS"
                 showCategoryManagement -> "OVERLAY_CATEGORIES"
                 showSearch -> "OVERLAY_SEARCH"
+                showUpdateScreen -> "OVERLAY_UPDATE"
                 else -> currentScreen.name
             }
 
@@ -562,6 +578,7 @@ fun MainScreen(viewModel: MainViewModel) {
                         "OVERLAY_LOANS_TRANSACTION" -> "${lastLoanForTransaction?.name ?: ""} Transaction"
                         "OVERLAY_LOANS_LIST" -> "Loans"
                         "OVERLAY_CATEGORIES" -> "Categories"
+                        "OVERLAY_UPDATE" -> "Update"
                         "OVERLAY_ACCOUNT_INPUT" -> if(lastAccountToEdit != null) "Edit Account" else "Add Account"
                         "OVERLAY_EDIT_LOAN_TRANSACTION" -> "Edit Loan Transaction"
                         "HOME" -> "Dashboard"
@@ -713,6 +730,7 @@ fun MainScreen(viewModel: MainViewModel) {
                                     "OVERLAY_LOANS_LIST" -> showLoans = false
                                     "OVERLAY_RECURRING_CONFIGS" -> showRecurringConfigs = false
                                     "OVERLAY_CATEGORIES" -> showCategoryManagement = false
+                                    "OVERLAY_UPDATE" -> showUpdateScreen = false
                                     "OVERLAY_SEARCH" -> { /* Handled above */ }
                                 }
                             },
@@ -771,7 +789,22 @@ fun MainScreen(viewModel: MainViewModel) {
                                             IconButton(onClick = { showSearch = true }) {
                                                 Icon(Icons.Default.Search, contentDescription = "Search")
                                             }
-                                            IconButton(onClick = { showMenu = true }) { Icon(Icons.Default.MoreVert, "Menu") }
+                                            IconButton(onClick = { showMenu = true }) { 
+                                                if (isUpdateAvailable) {
+                                                    Box {
+                                                        Icon(Icons.Default.MoreVert, "Menu")
+                                                        Box(
+                                                            modifier = Modifier
+                                                                .size(8.dp)
+                                                                .clip(CircleShape)
+                                                                .background(Color.Red)
+                                                                .align(Alignment.TopEnd)
+                                                        )
+                                                    }
+                                                } else {
+                                                    Icon(Icons.Default.MoreVert, "Menu") 
+                                                }
+                                            }
                                             DropdownMenu(
                                                 expanded = showMenu, 
                                                 onDismissRequest = { showMenu = false },
@@ -783,6 +816,26 @@ fun MainScreen(viewModel: MainViewModel) {
                                                 DropdownMenuItem(text = { Text("Recurring") }, onClick = { showMenu = false; showRecurringConfigs = true }, leadingIcon = { Icon(Icons.Default.Repeat, null) })
                                                 DropdownMenuItem(text = { Text("Categories") }, onClick = { showMenu = false; showCategoryManagement = true }, leadingIcon = { Icon(Icons.AutoMirrored.Filled.Label, null) })
                                                 DropdownMenuItem(text = { Text("Financial Report") }, onClick = { showMenu = false; showReport = true }, leadingIcon = { Icon(Icons.Default.Description, null) })
+                                                DropdownMenuItem(
+                                                    text = { 
+                                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                                            Text(if (isUpdateAvailable) "Update Available" else "Check for Updates")
+                                                            if (isUpdateAvailable) {
+                                                                Spacer(modifier = Modifier.width(8.dp))
+                                                                Box(
+                                                                    modifier = Modifier
+                                                                        .size(8.dp)
+                                                                        .clip(CircleShape)
+                                                                        .background(Color.Red)
+                                                                )
+                                                            }
+                                                        }
+                                                    }, 
+                                                    onClick = { showMenu = false; showUpdateScreen = true }, 
+                                                    leadingIcon = { 
+                                                        Icon(if (isUpdateAvailable) Icons.Default.CloudDownload else Icons.Default.Update, null, tint = if(isUpdateAvailable) Color.Red else LocalContentColor.current) 
+                                                    }
+                                                )
                                                 DropdownMenuItem(text = { Text("Settings") }, onClick = { showMenu = false; showSettings = true }, leadingIcon = { Icon(Icons.Default.Settings, null) })
                                             }
                                         }
@@ -1301,6 +1354,9 @@ fun MainScreen(viewModel: MainViewModel) {
                             startOfWeek = startOfWeek
                         )
                     }
+                    "OVERLAY_UPDATE" -> {
+                        com.h2.wellspend.ui.components.UpdateScreen(viewModel = updateViewModel)
+                    }
                      "MORE" -> {
                           // Deprecated
                           Box(modifier = Modifier.fillMaxSize())
@@ -1357,7 +1413,7 @@ fun MainScreen(viewModel: MainViewModel) {
                 .padding(bottom = if (isBottomBarVisible) 90.dp else 24.dp, end = 24.dp)
             ) {
                 if ((currentScreen == Screen.HOME || currentScreen == Screen.EXPENSES || currentScreen == Screen.INCOME || currentScreen == Screen.ACCOUNTS || currentScreen == Screen.ACCOUNTS || showTransfers || showLoans) && 
-                    !showAddExpense && !showReport && !showBudgets && !showSettings && !showAccountInput && loanTransactionToEdit == null && !showCategoryManagement && !showSearch && !showRecurringConfigs && transactionToPreview == null) {
+                    !showAddExpense && !showReport && !showBudgets && !showSettings && !showAccountInput && loanTransactionToEdit == null && !showCategoryManagement && !showSearch && !showRecurringConfigs && !showUpdateScreen && transactionToPreview == null) {
                         // Logic for deciding which FAB to show
                         // If standard add expense/transaction
                         if (!showLoans || (showLoans && !isCreatingLoan && editingLoan == null && loanForTransaction == null)) {
