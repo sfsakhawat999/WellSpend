@@ -1526,16 +1526,7 @@ fun DashboardScreen(
     startOfWeek: java.time.DayOfWeek = java.time.DayOfWeek.MONDAY
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
-        DateSelector(
-            currentDate = currentDate,
-            onDateChange = onDateChange,
-            timeRange = timeRange,
-            onTimeRangeChange = onTimeRangeChange,
 
-            customDateRange = customDateRange,
-            onCustomDateRangeChange = onCustomDateRangeChange,
-            startOfWeek = startOfWeek
-        )
 
         if (isLoading) {
             // Skeleton Loading UI with shimmer effect
@@ -1553,11 +1544,22 @@ fun DashboardScreen(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(16.dp)
             ) {
-                // Summary skeleton
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
+                DateSelector(
+                    currentDate = currentDate,
+                    onDateChange = onDateChange,
+                    timeRange = timeRange,
+                    onTimeRangeChange = onTimeRangeChange,
+                    customDateRange = customDateRange,
+                    onCustomDateRangeChange = onCustomDateRangeChange,
+                    startOfWeek = startOfWeek
+                )
+
+                // Skeleton Content Wrapper
+                Column(modifier = Modifier.padding(16.dp)) {
+                    // Summary skeleton
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
                 ) {
                     Box(
                         modifier = Modifier
@@ -1636,13 +1638,26 @@ fun DashboardScreen(
                             .padding(vertical = 1.dp)
                             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = shimmerAlpha), shape)
                     )
-                }
+                    }
+            }
             }
         } else {
             androidx.compose.foundation.lazy.LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 96.dp)
             ) {
+                item {
+                    DateSelector(
+                        currentDate = currentDate,
+                        onDateChange = onDateChange,
+                        timeRange = timeRange,
+                        onTimeRangeChange = onTimeRangeChange,
+                        customDateRange = customDateRange,
+                        onCustomDateRangeChange = onCustomDateRangeChange,
+                        startOfWeek = startOfWeek
+                    )
+                }
+
             // Summary Cards Section
             item {
                 Column(modifier = Modifier.padding(16.dp)) {

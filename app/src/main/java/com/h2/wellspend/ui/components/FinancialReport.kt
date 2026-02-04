@@ -301,6 +301,7 @@ fun FinancialReport(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
+            .verticalScroll(rememberScrollState())
     ) {
         // Date Switcher
 
@@ -316,8 +317,6 @@ fun FinancialReport(
 
         Column(
             modifier = Modifier
-                .weight(1f)
-                .verticalScroll(rememberScrollState())
                 .padding(16.dp)
         ) {
             // Summary Card

@@ -91,38 +91,44 @@ fun AccountScreen(
         } else {
             Column(modifier = Modifier.fillMaxSize().padding(padding)) {
                 // Date Selector
-                com.h2.wellspend.ui.components.DateSelector(
-                    currentDate = currentDate,
-                    onDateChange = onDateChange,
-                    timeRange = timeRange,
-                    onTimeRangeChange = onTimeRangeChange,
-                    customDateRange = customDateRange,
-                    onCustomDateRangeChange = onCustomDateRangeChange
-                )
+
                 
-                // Reorder mode toggle
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.End
-                ) {
-                    FilterChip(
-                        selected = isReorderMode,
-                        onClick = { isReorderMode = !isReorderMode },
-                        label = { Text(if (isReorderMode) "Done" else "Reorder") },
-                        leadingIcon = if (isReorderMode) {
-                            { Icon(Icons.Default.Check, null, modifier = Modifier.size(16.dp)) }
-                        } else {
-                            { Icon(Icons.Default.SwapVert, null, modifier = Modifier.size(16.dp)) }
-                        }
-                    )
-                }
+
 
                 LazyColumn(
-                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 150.dp),
+                    contentPadding = PaddingValues(bottom = 150.dp),
                     verticalArrangement = Arrangement.spacedBy(0.dp)
                 ) {
+                    item {
+                        com.h2.wellspend.ui.components.DateSelector(
+                            currentDate = currentDate,
+                            onDateChange = onDateChange,
+                            timeRange = timeRange,
+                            onTimeRangeChange = onTimeRangeChange,
+                            customDateRange = customDateRange,
+                            onCustomDateRangeChange = onCustomDateRangeChange
+                        )
+                    }
+                    item {
+                        // Reorder mode toggle
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 8.dp),
+                            horizontalArrangement = Arrangement.End
+                        ) {
+                            FilterChip(
+                                selected = isReorderMode,
+                                onClick = { isReorderMode = !isReorderMode },
+                                label = { Text(if (isReorderMode) "Done" else "Reorder") },
+                                leadingIcon = if (isReorderMode) {
+                                    { Icon(Icons.Default.Check, null, modifier = Modifier.size(16.dp)) }
+                                } else {
+                                    { Icon(Icons.Default.SwapVert, null, modifier = Modifier.size(16.dp)) }
+                                }
+                            )
+                        }
+                    }
                     itemsIndexed(accounts, key = { _, account -> account.id }) { index, account ->
                         val shape = getGroupedItemShape(index, accounts.size)
                         val backgroundShape = getGroupedItemBackgroundShape(index, accounts.size)
@@ -155,7 +161,7 @@ fun AccountScreen(
                              }
                         }
 
-                        Box(modifier = Modifier.animateItemPlacement().padding(vertical = 1.dp)) {
+                        Box(modifier = Modifier.animateItemPlacement().padding(vertical = 1.dp).padding(horizontal = 16.dp)) {
                             AccountItem(
                                 account = account,
                                 balance = balances[account.id] ?: account.initialBalance,

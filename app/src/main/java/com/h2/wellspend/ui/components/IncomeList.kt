@@ -94,26 +94,31 @@ fun IncomeList(
     }
 
     Column(modifier = Modifier.fillMaxWidth()) {
-        DateSelector(
-            currentDate = currentDate,
-            onDateChange = onDateChange,
-            timeRange = timeRange,
-            onTimeRangeChange = onTimeRangeChange,
-            customDateRange = customDateRange,
-            onCustomDateRangeChange = onCustomDateRangeChange,
-            startOfWeek = startOfWeek
-        )
+
 
         LazyColumn(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp),
+                .fillMaxWidth(),
             contentPadding = PaddingValues(bottom = 96.dp),
             verticalArrangement = Arrangement.spacedBy(if (useGrouping) 12.dp else 0.dp)
         ) {
+            item {
+                DateSelector(
+                    currentDate = currentDate,
+                    onDateChange = onDateChange,
+                    timeRange = timeRange,
+                    onTimeRangeChange = onTimeRangeChange,
+                    customDateRange = customDateRange,
+                    onCustomDateRangeChange = onCustomDateRangeChange,
+                    startOfWeek = startOfWeek
+                )
+            }
+
             // Header (Chart or Total)
             item {
-                headerContent()
+                Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+                    headerContent()
+                }
             }
 
             if (incomes.isEmpty()) {
@@ -121,7 +126,8 @@ fun IncomeList(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(vertical = 40.dp),
+                            .padding(vertical = 40.dp)
+                            .padding(horizontal = 16.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
@@ -136,16 +142,18 @@ fun IncomeList(
                         val (total, items) = data
                         val account = accounts.find { it.id == accountId }
                         
-                        IncomeAccountItem(
-                            account = account,
-                            total = total,
-                            items = items,
-                            loans = loans,
-                            currency = currency,
-                            onDelete = onDelete,
-                            onEdit = onEdit,
-                            onTransactionClick = onTransactionClick
-                        )
+                        Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+                            IncomeAccountItem(
+                                account = account,
+                                total = total,
+                                items = items,
+                                loans = loans,
+                                currency = currency,
+                                onDelete = onDelete,
+                                onEdit = onEdit,
+                                onTransactionClick = onTransactionClick
+                            )
+                        }
                     }
                 } else {
                     // Flat List
@@ -154,7 +162,7 @@ fun IncomeList(
                         val backgroundShape = getGroupedItemBackgroundShape(index, incomes.size)
                         val account = accounts.find { it.id == income.accountId }
                         
-                        Box(modifier = Modifier.padding(vertical = 1.dp)) {
+                        Box(modifier = Modifier.padding(vertical = 1.dp).padding(horizontal = 16.dp)) {
                             IncomeItem(
                                 income = income,
                                 loans = loans,

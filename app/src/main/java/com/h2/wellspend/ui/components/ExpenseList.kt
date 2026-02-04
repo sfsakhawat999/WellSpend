@@ -210,33 +210,39 @@ fun ExpenseList(
     }
 
     Column(modifier = Modifier.fillMaxWidth()) {
-        DateSelector(
-            currentDate = currentDate,
-            onDateChange = onDateChange,
-            timeRange = timeRange,
-            onTimeRangeChange = onTimeRangeChange,
-            customDateRange = customDateRange,
-            onCustomDateRangeChange = onCustomDateRangeChange,
-            startOfWeek = startOfWeek
-        )
+
 
         LazyColumn(
             state = state,
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp),
+                .fillMaxWidth(),
             contentPadding = PaddingValues(bottom = 96.dp), // Space for FAB
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            // Date Selector
+            item {
+                DateSelector(
+                    currentDate = currentDate,
+                    onDateChange = onDateChange,
+                    timeRange = timeRange,
+                    onTimeRangeChange = onTimeRangeChange,
+                    customDateRange = customDateRange,
+                    onCustomDateRangeChange = onCustomDateRangeChange,
+                    startOfWeek = startOfWeek
+                )
+            }
+
             // Header (Chart)
             item {
-                headerContent()
+                Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+                    headerContent()
+                }
             }
             
             // Grouping Toggle
             item {
                  Row(
-                     modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                     modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp).padding(horizontal = 16.dp),
                      horizontalArrangement = Arrangement.End,
                      verticalAlignment = Alignment.CenterVertically
                  ) {
@@ -281,7 +287,8 @@ fun ExpenseList(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(vertical = 40.dp),
+                            .padding(vertical = 40.dp)
+                            .padding(horizontal = 16.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
@@ -327,28 +334,30 @@ fun ExpenseList(
                          budgets.find { it.category == displayCategory.name }
                     } else null
 
-                    ExpenseCategoryItem(
-                        category = displayCategory,
-                        total = total,
-                        items = items,
-                        accounts = accounts,
-                        loans = loans,
-                        currency = currency,
-                        budget = displayBudget,
-                        onDelete = onDelete,
-                        onEdit = { expense ->
-                            if (expense.id.startsWith("fee_")) {
-                                val realId = expense.id.removePrefix("fee_")
-                                val realExpense = expenses.find { it.id == realId }
-                                if (realExpense != null) {
-                                    onEdit(realExpense)
-                                }
-                            } else {
-                                onEdit(expense)
-                            }
-                        },
-                        onTransactionClick = onTransactionClick // Pass it down
-                    )
+                        Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+                            ExpenseCategoryItem(
+                                category = displayCategory,
+                                total = total,
+                                items = items,
+                                accounts = accounts,
+                                loans = loans,
+                                currency = currency,
+                                budget = displayBudget,
+                                onDelete = onDelete,
+                                onEdit = { expense ->
+                                    if (expense.id.startsWith("fee_")) {
+                                        val realId = expense.id.removePrefix("fee_")
+                                        val realExpense = expenses.find { it.id == realId }
+                                        if (realExpense != null) {
+                                            onEdit(realExpense)
+                                        }
+                                    } else {
+                                        onEdit(expense)
+                                    }
+                                },
+                                onTransactionClick = onTransactionClick // Pass it down
+                            )
+                        }
                 }
                 item {
                     Box(

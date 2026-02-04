@@ -61,41 +61,48 @@ fun TransferList(
     startOfWeek: java.time.DayOfWeek = java.time.DayOfWeek.MONDAY
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
-        DateSelector(
-            currentDate = currentDate,
-            onDateChange = onDateChange,
-            timeRange = timeRange,
-            onTimeRangeChange = onTimeRangeChange,
-            customDateRange = customDateRange,
-            onCustomDateRangeChange = onCustomDateRangeChange,
-            startOfWeek = startOfWeek
-        )
 
-        if (transfers.isEmpty()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 40.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "No transfers recorded for this period.",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxWidth(),
+            contentPadding = PaddingValues(bottom = 96.dp),
+            verticalArrangement = Arrangement.spacedBy(0.dp)
+        ) {
+            item {
+                DateSelector(
+                    currentDate = currentDate,
+                    onDateChange = onDateChange,
+                    timeRange = timeRange,
+                    onTimeRangeChange = onTimeRangeChange,
+                    customDateRange = customDateRange,
+                    onCustomDateRangeChange = onCustomDateRangeChange,
+                    startOfWeek = startOfWeek
                 )
             }
-        } else {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                contentPadding = PaddingValues(bottom = 96.dp),
-                verticalArrangement = Arrangement.spacedBy(0.dp)
-            ) {
+
+            if (transfers.isEmpty()) {
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 40.dp)
+                            .padding(horizontal = 16.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "No transfers recorded for this period.",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            } else {
+
                 itemsIndexed(transfers) { index, transfer ->
                     val shape = getGroupedItemShape(index, transfers.size)
                     val backgroundShape = getGroupedItemBackgroundShape(index, transfers.size)
                     
-                    Box(modifier = Modifier.padding(vertical = 1.dp)) {
+                    Box(modifier = Modifier.padding(vertical = 1.dp).padding(horizontal = 16.dp)) {
                         TransferItem(
                             transfer = transfer,
                             fromAccountName = accounts.find { it.id == transfer.accountId }?.name ?: "Deleted Account",

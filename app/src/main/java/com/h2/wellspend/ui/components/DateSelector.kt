@@ -115,16 +115,20 @@ fun DateSelector(
         Row(
             verticalAlignment = Alignment.CenterVertically
         ) {
-            if (timeRange != TimeRange.CUSTOM) {
-                IconButton(onClick = { 
-                    if (timeRange == TimeRange.CUSTOM) {
-                         onDateChange(DateUtils.adjustDate(currentDate, timeRange, false, customDateRange)) 
-                    } else {
-                         onDateChange(DateUtils.adjustDate(currentDate, timeRange, false))
-                    }
-                }) {
-                    Icon(Icons.Default.ChevronLeft, contentDescription = "Prev", tint = MaterialTheme.colorScheme.onSurface)
+            IconButton(onClick = { 
+                if (timeRange == TimeRange.CUSTOM) {
+                     if (customDateRange != null) {
+                        val days = java.time.temporal.ChronoUnit.DAYS.between(customDateRange.first, customDateRange.second) + 1
+                        val newStart = customDateRange.first.minusDays(days)
+                        val newEnd = customDateRange.second.minusDays(days)
+                        onCustomDateRangeChange(newStart to newEnd)
+                        onDateChange(newStart)
+                     }
+                } else {
+                     onDateChange(DateUtils.adjustDate(currentDate, timeRange, false))
                 }
+            }) {
+                Icon(Icons.Default.ChevronLeft, contentDescription = "Prev", tint = MaterialTheme.colorScheme.onSurface)
             }
 
             Row(
@@ -141,16 +145,20 @@ fun DateSelector(
                 )
             }
 
-            if (timeRange != TimeRange.CUSTOM) {
-                IconButton(onClick = { 
-                    if (timeRange == TimeRange.CUSTOM) {
-                         onDateChange(DateUtils.adjustDate(currentDate, timeRange, true, customDateRange)) 
-                    } else {
-                         onDateChange(DateUtils.adjustDate(currentDate, timeRange, true))
-                    }
-                }) {
-                    Icon(Icons.Default.ChevronRight, contentDescription = "Next", tint = MaterialTheme.colorScheme.onSurface)
+            IconButton(onClick = { 
+                if (timeRange == TimeRange.CUSTOM) {
+                     if (customDateRange != null) {
+                        val days = java.time.temporal.ChronoUnit.DAYS.between(customDateRange.first, customDateRange.second) + 1
+                        val newStart = customDateRange.first.plusDays(days)
+                        val newEnd = customDateRange.second.plusDays(days)
+                        onCustomDateRangeChange(newStart to newEnd)
+                        onDateChange(newStart)
+                     } 
+                } else {
+                     onDateChange(DateUtils.adjustDate(currentDate, timeRange, true))
                 }
+            }) {
+                Icon(Icons.Default.ChevronRight, contentDescription = "Next", tint = MaterialTheme.colorScheme.onSurface)
             }
         }
     }
