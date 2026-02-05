@@ -348,8 +348,9 @@ fun MainScreen(
         !isExcludedLoan
     }
     
+    //Valid Transaction Amount + All Fees
     val totalSpend = validTransactions.filter { it.transactionType == com.h2.wellspend.data.TransactionType.EXPENSE }.sumOf { it.amount } + 
-                     validTransactions.sumOf { it.feeAmount }
+                     filteredTransactions.sumOf { it.feeAmount }
 
     // For Chart: Only include explicitly categorized EXPENSES (exclude Income/Transfer base amounts)
     val expensesByCat = validTransactions
@@ -362,7 +363,7 @@ fun MainScreen(
         Color(0xFF9C27B0), Color(0xFF00BCD4), Color(0xFF8BC34A), Color(0xFFFF5722),
         Color(0xFF795548), Color(0xFF607D8B)
     )
-    val chartDataList = if (expenseGroupingMode == GroupingMode.ACCOUNT) {
+    val expenseChartDataList = if (expenseGroupingMode == GroupingMode.ACCOUNT) {
         val expensesByAccount = validTransactions
              .groupBy { it.accountId } // Group ALL transactions to capture fees
         
@@ -405,12 +406,12 @@ fun MainScreen(
 
     // Add ALL fees (from Income, Transfer, and Expense) as a single "Transaction Fee" slice
     // ONLY if NOT in Account mode (since they are merged into accounts there)
-    val totalFees = validTransactions.sumOf { it.feeAmount }
+    val totalFees = filteredTransactions.sumOf { it.feeAmount }
     if (totalFees > 0 && expenseGroupingMode != GroupingMode.ACCOUNT) {
         val txFeeCat = allCategories.find { it.name == SystemCategory.TransactionFee.name }
-        chartDataList.add(
+        expenseChartDataList.add(
             ChartData(
-                name = SystemCategory.TransactionFee.name,
+                name = "TrxFee",
                 value = totalFees,
                 color = txFeeCat?.let { Color(it.color) } 
                     ?: CategoryColors[SystemCategory.TransactionFee] 
@@ -418,7 +419,7 @@ fun MainScreen(
             )
         )
     }
-    val chartData = chartDataList.sortedByDescending { it.value }
+    val expenseChartData = expenseChartDataList.sortedByDescending { it.value }
 
     // Income Chart Data (Grouped by Account)
 
@@ -1390,7 +1391,7 @@ fun MainScreen(
                             },
                             onTransactionClick = { transactionToPreview = it },
                             state = listState,
-                            chartData = chartData,
+                            chartData = expenseChartData,
                             totalSpend = totalSpend,
                             showLoanExcludedLabel = excludeLoanTransactions,
                             groupingMode = expenseGroupingMode,
