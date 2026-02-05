@@ -2156,65 +2156,67 @@ fun IncomeListScreen(
             onTransactionClick = onTransactionClick,
             startOfWeek = startOfWeek,
             headerContent = {
-                if (groupIncomeByAccount) {
-                    DonutChart(
-                        data = chartData,
-                        totalAmount = totalIncome,
-                        currency = currency,
-                        centerLabel = "Total Income",
-                        additionalLabel = if (showLoanExcludedLabel) "(loans excluded)" else null
-                    )
-                } else {
-                     Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 24.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text(
-                            text = "Total Income",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    if (groupIncomeByAccount) {
+                        DonutChart(
+                            data = chartData,
+                            totalAmount = totalIncome,
+                            currency = currency,
+                            centerLabel = "Total Income",
+                            additionalLabel = if (showLoanExcludedLabel) "(loans excluded)" else null
                         )
-                        Text(
-                            text = "$currency${String.format("%.2f", totalIncome)}",
-                            style = MaterialTheme.typography.headlineLarge.copy(
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 32.sp
-                            ),
-                            color = Color(0xFF10b981) // Green
-                        )
-                        if (showLoanExcludedLabel) {
+                    } else {
+                         Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 24.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
                             Text(
-                                "(loans excluded)",
-                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                                modifier = Modifier.padding(top = 4.dp)
+                                text = "Total Income",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
+                            Text(
+                                text = "$currency${String.format("%.2f", totalIncome)}",
+                                style = MaterialTheme.typography.headlineLarge.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 32.sp
+                                ),
+                                color = Color(0xFF10b981) // Green
+                            )
+                            if (showLoanExcludedLabel) {
+                                Text(
+                                    "(loans excluded)",
+                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                    modifier = Modifier.padding(top = 4.dp)
+                                )
+                            }
                         }
                     }
-                }
 
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 0.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "Group by Account",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Switch(
-                        checked = groupIncomeByAccount,
-                        onCheckedChange = onGroupToggle,
-                         colors = SwitchDefaults.colors(
-                            checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
-                            checkedTrackColor = MaterialTheme.colorScheme.primary
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 0.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Group by Account",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface
                         )
-                    )
+                        Switch(
+                            checked = groupIncomeByAccount,
+                            onCheckedChange = onGroupToggle,
+                             colors = SwitchDefaults.colors(
+                                checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
+                                checkedTrackColor = MaterialTheme.colorScheme.primary
+                            )
+                        )
+                    }
                 }
             },
             useGrouping = groupIncomeByAccount,
