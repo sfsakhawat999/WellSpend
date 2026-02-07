@@ -15,6 +15,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -73,8 +76,7 @@ fun AddLoanTransactionScreen(
     accounts: List<Account>,
     accountBalances: Map<String, Double>,
     currency: String,
-    onDismiss: () -> Unit,
-    onConfirm: (Double, Boolean, String?, Double, String?, LocalDate, String?) -> Unit // feeConfigName added
+    onSave: (Double, Boolean, String?, Double, String?, LocalDate, String) -> Unit // amount, isPayment, accountId, fee, feeConfigName, date, note
 ) {
     // BackHandler(onBack = onDismiss) // Handled by MainScreen
     var amount by remember { mutableStateOf("") }
@@ -311,6 +313,7 @@ fun AddLoanTransactionScreen(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
+                .windowInsetsPadding(WindowInsets.navigationBars)
                 .padding(16.dp)
         ) {
             // Helper function to perform the save
@@ -319,7 +322,7 @@ fun AddLoanTransactionScreen(
                 if (amt != null) {
                     val fee = if (selectedAccountId != null) feeAmount.toDoubleOrNull() ?: 0.0 else 0.0
                     val finalFeeConfigName = if (selectedAccountId != null) selectedFeeConfigName else null
-                    onConfirm(amt, isPayment, selectedAccountId, fee, finalFeeConfigName, date, note)
+                    onSave(amt, isPayment, selectedAccountId, fee, finalFeeConfigName, date, note)
                 }
             }
             

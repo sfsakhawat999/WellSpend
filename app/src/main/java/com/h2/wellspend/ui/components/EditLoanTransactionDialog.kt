@@ -15,6 +15,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -68,49 +71,39 @@ import java.time.ZoneId
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun EditLoanTransactionScreen(
-    transaction: Expense,
+fun EditLoanTransactionDialog(
+    initialTransaction: Expense,
     loan: Loan,
     accounts: List<Account>,
-    accountBalances: Map<String, Double>, // Added
+    accountBalances: Map<String, Double>,
     currency: String,
-    onDismiss: () -> Unit,
-    onConfirm: (Double, String, String?, Double, String?, String, String?) -> Unit // amount, desc, accId, fee, feeConfigName, date, note
+    onSave: (Double, String, String?, Double, String?, String, String) -> Unit, // amount, description, accountId, fee, feeConfigName, date, note
 ) {
     // BackHandler(onBack = onDismiss) // Handled by MainScreen
-    var amount by remember { mutableStateOf(String.format("%.2f", transaction.amount).trimEnd('0').trimEnd('.')) }
-    var textDescription by remember { mutableStateOf(transaction.title) }
-    var note by remember { mutableStateOf(transaction.note ?: "") }
-    var selectedAccountId by remember { mutableStateOf(transaction.accountId) }
+    var amount by remember { mutableStateOf(String.format("%.2f", initialTransaction.amount).trimEnd('0').trimEnd('.')) }
+    var textDescription by remember { mutableStateOf(initialTransaction.title) }
+    var note by remember { mutableStateOf(initialTransaction.note ?: "") }
+    var selectedAccountId by remember { mutableStateOf(initialTransaction.accountId) }
     
     // Fee State
-    var selectedFeeConfigName by remember { mutableStateOf<String?>(transaction.feeConfigName) }
-    var feeAmount by remember { mutableStateOf(transaction.feeAmount.toString()) }
-    var isCustomFee by remember { mutableStateOf(transaction.feeConfigName == "Custom") }
-
-    var doNotTrack by remember { mutableStateOf(false) } // Removed/Ignored
+    var selectedFeeConfigName by remember { mutableStateOf<String?>(initialTransaction.feeConfigName) }
+    var feeAmount by remember { mutableStateOf(initialTransaction.feeAmount.toString()) }
+    var isCustomFee by remember { mutableStateOf(initialTransaction.feeConfigName == "Custom") }
 
     
     // Date State
     // Format YYYY-MM-DD from transaction.date
-    var date by remember { mutableStateOf(transaction.date.substring(0, 10)) }
+    var date by remember { mutableStateOf(initialTransaction.date.substring(0, 10)) }
     var showDatePicker by remember { mutableStateOf(false) }
+    var selectedDateMillis by remember { mutableStateOf(initialTransaction.timestamp) }
     val datePickerState = rememberDatePickerState()
 
     // Determine context for UI textual feedback
-    val isLendMore = loan.type == LoanType.LEND && transaction.transactionType == com.h2.wellspend.data.TransactionType.EXPENSE
-    val isReceivePay = loan.type == LoanType.LEND && transaction.transactionType == com.h2.wellspend.data.TransactionType.INCOME
-    val isBorrowMore = loan.type == LoanType.BORROW && transaction.transactionType == com.h2.wellspend.data.TransactionType.INCOME
-    val isRepay = loan.type == LoanType.BORROW && transaction.transactionType == com.h2.wellspend.data.TransactionType.EXPENSE
+    val isLendMore = loan.type == LoanType.LEND && initialTransaction.transactionType == com.h2.wellspend.data.TransactionType.EXPENSE
+    val isReceivePay = loan.type == LoanType.LEND && initialTransaction.transactionType == com.h2.wellspend.data.TransactionType.INCOME
+    val isBorrowMore = loan.type == LoanType.BORROW && initialTransaction.transactionType == com.h2.wellspend.data.TransactionType.INCOME
+    val isRepay = loan.type == LoanType.BORROW && initialTransaction.transactionType == com.h2.wellspend.data.TransactionType.EXPENSE
     
-    val title = when {
-        isLendMore -> "Edit Lending"
-        isReceivePay -> "Edit Received Payment"
-        isBorrowMore -> "Edit Borrowing"
-        isRepay -> "Edit Repayment"
-        else -> "Edit Transaction"
-    }
-
     val showFee = (isLendMore || isRepay) && selectedAccountId != null
     
     // Confirmation dialog state for saving without account
@@ -311,6 +304,7 @@ fun EditLoanTransactionScreen(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
+                .windowInsetsPadding(WindowInsets.navigationBars)
                 .padding(16.dp)
         ) {
             // Helper function to perform the save
@@ -321,7 +315,7 @@ fun EditLoanTransactionScreen(
                     val config = if (selectedAccountId != null) {
                         if(isCustomFee) "Custom" else selectedFeeConfigName
                     } else null
-                    onConfirm(amt, textDescription, selectedAccountId, fee, config, date, note)
+                    onSave(amt, textDescription, selectedAccountId, fee, config, date, note)
                 }
             }
             

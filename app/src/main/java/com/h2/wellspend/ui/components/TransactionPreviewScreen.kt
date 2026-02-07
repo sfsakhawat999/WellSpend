@@ -176,7 +176,9 @@ fun TransactionPreviewScreen(
         }
 
         // Bottom Actions Area
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(modifier = Modifier
+            .windowInsetsPadding(WindowInsets.navigationBars)
+            .padding(16.dp)) {
             if (isNonEditable) {
                 if (isInitialLoanTransaction) {
                     Text(

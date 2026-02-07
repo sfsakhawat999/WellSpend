@@ -1,6 +1,9 @@
 package com.h2.wellspend.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.animation.expandVertically
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.height
@@ -218,7 +221,7 @@ fun ExpenseList(
             state = state,
             modifier = Modifier
                 .fillMaxWidth(),
-            contentPadding = PaddingValues(bottom = 96.dp), // Space for FAB
+            contentPadding = PaddingValues(bottom = 96.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()), // Space for FAB + NavBar
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             // Date Selector

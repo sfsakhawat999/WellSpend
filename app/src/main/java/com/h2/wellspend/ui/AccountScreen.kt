@@ -82,7 +82,8 @@ fun AccountScreen(
             FloatingActionButton(onClick = onAddAccount) {
                 Icon(Icons.Default.Add, contentDescription = "Add Account")
             }
-        }
+        },
+        contentWindowInsets = WindowInsets.navigationBars
     ) { padding ->
         if (accounts.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {

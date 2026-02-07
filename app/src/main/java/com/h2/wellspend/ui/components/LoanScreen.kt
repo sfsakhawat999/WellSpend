@@ -1,6 +1,9 @@
 package com.h2.wellspend.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.material.icons.filled.KeyboardArrowDown
@@ -107,7 +110,7 @@ fun LoanScreen(
         } else {
             LazyColumn(
                 state = state,
-                contentPadding = PaddingValues(16.dp),
+                contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 16.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 items(sortedLoansWithBalance) { (loan, balance, transactions) ->
