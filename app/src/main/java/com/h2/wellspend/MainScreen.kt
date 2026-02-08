@@ -111,7 +111,7 @@ import com.h2.wellspend.data.Account
 import com.h2.wellspend.data.Category
 import com.h2.wellspend.data.SystemCategory
 import com.h2.wellspend.ui.CategoryColors
-import com.h2.wellspend.ui.components.AddExpenseForm
+import com.h2.wellspend.ui.components.TransactionForm
 import com.h2.wellspend.ui.components.DateSelector
 import com.h2.wellspend.ui.components.ChartData
 import com.h2.wellspend.ui.components.DonutChart
@@ -234,8 +234,10 @@ fun MainScreen(
     var showSearch by remember { mutableStateOf(false) }
     var showSearchFilterDialog by remember { mutableStateOf(false) }
     var showUpdateScreen by remember { mutableStateOf(false) }
+    var isRecurringConfigMode by remember { mutableStateOf(false) }
 
     var loanTransactionToEdit by remember { mutableStateOf<Expense?>(null) }
+    var recurringFrequencyToEdit by remember { mutableStateOf<com.h2.wellspend.data.RecurringFrequency?>(null) }
     var transactionToPreview by remember { mutableStateOf<Expense?>(null) }
     
     // Account Input State: Wrapper to handle "Add" (null content) vs "Edit" (account content)
@@ -597,6 +599,7 @@ fun MainScreen(
                         "OVERLAY_UPDATE" -> "Update"
                         "OVERLAY_ACCOUNT_INPUT" -> if(lastAccountToEdit != null) "Edit Account" else "Add Account"
                         "OVERLAY_EDIT_LOAN_TRANSACTION" -> "Edit Loan Transaction"
+                        "OVERLAY_RECURRING_CONFIGS" -> "Recurring Transactions"
                         "HOME" -> "Dashboard"
                         "ACCOUNTS" -> "Accounts"
                         "INCOME" -> "Income"
@@ -744,7 +747,14 @@ fun MainScreen(
                                         newLoanType = com.h2.wellspend.data.LoanType.LEND
                                     }
                                     "OVERLAY_LOANS_LIST" -> showLoans = false
-                                    "OVERLAY_RECURRING_CONFIGS" -> showRecurringConfigs = false
+                                    "OVERLAY_RECURRING_CONFIGS" -> {
+                                         if (showAddExpense) {
+                                             showAddExpense = false
+                                             isRecurringConfigMode = false
+                                         } else {
+                                             showRecurringConfigs = false
+                                         }
+                                    }
                                     "OVERLAY_CATEGORIES" -> showCategoryManagement = false
                                     "OVERLAY_UPDATE" -> showUpdateScreen = false
                                     "OVERLAY_SEARCH" -> { /* Handled above */ }
@@ -878,6 +888,7 @@ fun MainScreen(
                                     } else {
                                         expenseToEdit = it
                                         showAddExpense = true
+                                        isRecurringConfigMode = false
                                     }
                                 },
                                 onDelete = { id -> viewModel.deleteExpense(id); transactionToPreview = null }
@@ -886,15 +897,36 @@ fun MainScreen(
                     }
                     "OVERLAY_ADD" -> {
                         val categoryOrder by viewModel.categoryOrder.collectAsState()
-                        AddExpenseForm(
+                        TransactionForm(
                             currency = currency,
                             accounts = accounts,
                             accountBalances = balances,
                             categories = categoryOrder,
                             initialExpense = lastExpenseToEdit, // Use cached
                             initialTransactionType = defaultTransactionType,
+                            initialFrequency = recurringFrequencyToEdit,
+                            isRecurringConfigMode = isRecurringConfigMode,
                             onAdd = { amount, desc, cat, date, isRecurring, freq, type, accId, targetAccId, fee, feeName, note ->
-                                if (lastExpenseToEdit != null) {
+                                if (isRecurringConfigMode) {
+                                    val startDate = LocalDate.parse(date.substring(0, 10))
+                                    val config = com.h2.wellspend.data.RecurringConfig(
+                                        id = lastExpenseToEdit?.id ?: java.util.UUID.randomUUID().toString(),
+                                        amount = amount,
+                                        category = cat?.name ?: com.h2.wellspend.data.SystemCategory.Others.name,
+                                        title = desc,
+                                        note = note,
+                                        frequency = freq,
+                                        nextDueDate = date.take(10), // Use selected date as next due date 
+                                        transactionType = type,
+                                        accountId = accId,
+                                        transferTargetAccountId = targetAccId,
+                                        feeAmount = fee,
+                                        feeConfigName = feeName
+                                    )
+                                    viewModel.updateRecurringConfig(config)
+                                    showAddExpense = false
+                                    isRecurringConfigMode = false
+                                } else if (lastExpenseToEdit != null) {
                                     viewModel.updateExpense(
                                         id = lastExpenseToEdit!!.id, 
                                         amount = amount, 
@@ -939,9 +971,16 @@ fun MainScreen(
                                     )
                                 }
                                 showAddExpense = false
+                                isRecurringConfigMode = false
                                 defaultTransactionType = null
+                                recurringFrequencyToEdit = null
                             },
-                            onCancel = { showAddExpense = false; defaultTransactionType = null },
+                            onCancel = { 
+                                showAddExpense = false; 
+                                isRecurringConfigMode = false; 
+                                defaultTransactionType = null;
+                                recurringFrequencyToEdit = null 
+                            },
                             onReorder = { viewModel.updateCategoryOrder(it) },
                             onAddCategory = { viewModel.addCategory(it) }
                         )
@@ -1115,9 +1154,36 @@ fun MainScreen(
                         RecurringConfigScreen(
                             configs = recurringConfigs,
                             accounts = accounts,
+                            categories = allCategories,
                             currency = currency,
-                            onUpdate = { viewModel.updateRecurringConfig(it) },
+                            onEdit = { config ->
+                                // Map config to pseudo-expense for editing
+                                val expense = com.h2.wellspend.data.Expense(
+                                    id = config.id,
+                                    amount = config.amount,
+                                    title = config.title,
+                                    category = config.category,
+                                    date = config.nextDueDate,
+                                    timestamp = System.currentTimeMillis(),
+                                    transactionType = config.transactionType,
+                                    accountId = config.accountId,
+                                    transferTargetAccountId = config.transferTargetAccountId,
+                                    feeAmount = config.feeAmount,
+                                    feeConfigName = config.feeConfigName,
+                                    note = config.note
+                                )
+                                expenseToEdit = expense
+                                isRecurringConfigMode = true
+                                recurringFrequencyToEdit = config.frequency
+                                showAddExpense = true
+                            },
                             onDelete = { viewModel.deleteRecurringConfig(it) },
+                            onAdd = {
+                                expenseToEdit = null
+                                isRecurringConfigMode = true
+                                recurringFrequencyToEdit = null
+                                showAddExpense = true
+                            },
                             onBack = { showRecurringConfigs = false }
                         )
                     }
@@ -1272,6 +1338,7 @@ fun MainScreen(
                                 } else {
                                     expenseToEdit = expense
                                     showAddExpense = true
+                                    isRecurringConfigMode = false
                                 }
                             },
 
@@ -1461,6 +1528,7 @@ fun MainScreen(
                                          expenseToEdit = null
                                          defaultTransactionType = com.h2.wellspend.data.TransactionType.TRANSFER
                                          showAddExpense = true
+                                         isRecurringConfigMode = false
                                     } else if (currentScreen == Screen.ACCOUNTS) {
                                          accountToEdit = null
                                          showAccountInput = true
@@ -1468,10 +1536,12 @@ fun MainScreen(
                                          expenseToEdit = null
                                          defaultTransactionType = com.h2.wellspend.data.TransactionType.INCOME
                                          showAddExpense = true
+                                         isRecurringConfigMode = false
                                     } else {
                                         expenseToEdit = null
                                         defaultTransactionType = com.h2.wellspend.data.TransactionType.EXPENSE
                                         showAddExpense = true
+                                        isRecurringConfigMode = false
                                     }
                                 },
                                 containerColor = MaterialTheme.colorScheme.primary,

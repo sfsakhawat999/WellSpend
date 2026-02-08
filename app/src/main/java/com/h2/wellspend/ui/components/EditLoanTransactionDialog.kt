@@ -150,7 +150,7 @@ fun EditLoanTransactionDialog(
         }
     }
 
-    // Layout similar to AddExpenseForm
+    // Layout similar to TransactionForm
     Column(
         modifier = Modifier
             .fillMaxSize()
