@@ -30,9 +30,12 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
@@ -51,6 +54,14 @@ fun FeeSelector(
     onFeeChanged: (String?, String, Boolean) -> Unit, // configName, amount, isCustom
     modifier: Modifier = Modifier
 ) {
+    val focusRequester = remember { FocusRequester() }
+
+    LaunchedEffect(isCustomFee) {
+        if (isCustomFee) {
+            focusRequester.requestFocus()
+        }
+    }
+
     Column(modifier = modifier) {
         Text(
             text = "Transaction Fees",
@@ -106,13 +117,16 @@ fun FeeSelector(
                 subLabel = customSubLabel,
                 icon = Icons.Default.Tune,
                 isSelected = isCustomFee,
-                onClick = { onFeeChanged("Custom", currentFeeAmount, true) }
+                onClick = {
+                    if (!isCustomFee) {
+                        onFeeChanged("Custom", "", true)
+                    } else {
+                        focusRequester.requestFocus()
+                    }
+                }
             )
         }
-
-        // Custom Fee Input (Shown if Custom is selected OR if there is a calculated fee > 0)
-        // This keeps the behavior where you can see/edit the calculated fee even if it's not "Custom" mode initially,
-        // but editing it switches to Custom mode (handled by caller usually, but we can enforce it here via callback).
+        
         if (isCustomFee || (currentFeeAmount.toDoubleOrNull() ?: 0.0) > 0) {
             Spacer(modifier = Modifier.height(12.dp))
             OutlinedTextField(
@@ -122,7 +136,9 @@ fun FeeSelector(
                     onFeeChanged("Custom", it, true) 
                 },
                 label = { Text("Fee Amount") },
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .focusRequester(focusRequester),
                 shape = RoundedCornerShape(12.dp),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 prefix = { Text(currency) }
@@ -186,12 +202,6 @@ fun FeeOptionItem(
                     fontWeight = FontWeight.Medium,
                     color = contentColor
                 )
-                
-                // Reserve space for sublabel even if null to keep height consistent
-                // or just use a spacer height if null? 
-                // Better: ensure the text composable is there but empty if needed, or use a min height logic.
-                // Simplest consistent fix: Render the sublabel text but invisible if null/empty? No, that takes space. 
-                // User wants SAME HEIGHT. If some have 2 lines, all should have space for 2 lines.
                 
                 Text(
                     text = subLabel ?: " ", // Space ensures it takes up line height
