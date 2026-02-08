@@ -24,9 +24,12 @@ import androidx.compose.runtime.getValue
 
 import kotlinx.coroutines.runBlocking
 
+import androidx.activity.enableEdgeToEdge
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
         
         val database = AppDatabase.getDatabase(this)
         val repository = WellSpendRepository(database)

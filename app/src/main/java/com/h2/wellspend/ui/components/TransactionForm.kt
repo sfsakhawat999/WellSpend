@@ -8,13 +8,18 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -104,7 +109,7 @@ import java.time.ZoneOffset
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AddExpenseForm(
+fun TransactionForm(
     currency: String,
     accounts: List<com.h2.wellspend.data.Account>,
     accountBalances: Map<String, Double>,
@@ -114,7 +119,9 @@ fun AddExpenseForm(
     onReorder: (List<Category>) -> Unit,
     onAddCategory: (Category) -> Unit,
     initialExpense: Expense? = null,
-    initialTransactionType: com.h2.wellspend.data.TransactionType? = null
+    initialTransactionType: com.h2.wellspend.data.TransactionType? = null,
+    initialFrequency: RecurringFrequency? = null,
+    isRecurringConfigMode: Boolean = false
 ) {
     var amount by remember { mutableStateOf(initialExpense?.amount?.let { String.format("%.2f", it).trimEnd('0').trimEnd('.') } ?: "") }
     var title by remember { mutableStateOf(initialExpense?.title ?: "") }
@@ -126,13 +133,13 @@ fun AddExpenseForm(
     }
     var date by remember { mutableStateOf(initialExpense?.date?.substring(0, 10) ?: LocalDate.now().toString()) } // YYYY-MM-DD
 
-    var frequency by remember { mutableStateOf(RecurringFrequency.MONTHLY) }
-    var isRecurring by remember { mutableStateOf(false) }
+    var frequency by remember { mutableStateOf(initialFrequency) } // Default null
+    var isRecurring by remember { mutableStateOf(isRecurringConfigMode || (initialExpense != null)) } // Default true if config mode
     var showDatePicker by remember { mutableStateOf(false) }
     var expanded by remember { mutableStateOf(false) }
     var showAddCategoryDialog by remember { mutableStateOf(false) }
     var showTypeDropdown by remember { mutableStateOf(false) }
-    var showAdvancedOptions by remember { mutableStateOf(initialExpense != null) } // Expand if editing
+    var showAdvancedOptions by remember { mutableStateOf(initialExpense != null || isRecurringConfigMode) } // Expand if editing or config mode
     val datePickerState = rememberDatePickerState()
 
     // New State
@@ -225,6 +232,7 @@ fun AddExpenseForm(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .windowInsetsPadding(WindowInsets.statusBars)
                 .padding(horizontal = 8.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -233,16 +241,18 @@ fun AddExpenseForm(
             }
             
             if (initialExpense != null) {
+                val titlePrefix = if (isRecurringConfigMode) "Recurring " else "Edit "
                 Text(
-                    text = "Edit ${transactionType.name.lowercase().replaceFirstChar { it.uppercase() }}",
+                    text = "$titlePrefix${transactionType.name.lowercase().replaceFirstChar { it.uppercase() }}",
                     style = MaterialTheme.typography.titleLarge.copy(fontSize = 20.sp),
                     color = MaterialTheme.colorScheme.onSurface,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(start = 8.dp)
                 )
             } else {
+                val titlePrefix = if (isRecurringConfigMode) "Recurring " else "New "
                 Text(
-                    text = "New",
+                    text = titlePrefix,
                     style = MaterialTheme.typography.titleLarge.copy(fontSize = 20.sp),
                     color = MaterialTheme.colorScheme.onSurface,
                     fontWeight = FontWeight.Bold,
@@ -326,22 +336,22 @@ fun AddExpenseForm(
                          verticalAlignment = Alignment.CenterVertically,
                          horizontalArrangement = Arrangement.SpaceBetween,
                          modifier = Modifier.fillMaxWidth()
-                     ) {
-                         Text(
-                             text = try {
-                                 LocalDate.parse(date).format(DateTimeFormatter.ofPattern("MMM dd, yyyy", Locale.US))
-                             } catch (e: Exception) {
-                                 date
-                             },
-                             style = MaterialTheme.typography.titleMedium,
-                             fontWeight = FontWeight.Bold
-                         )
-                         Icon(
-                             Icons.Default.ArrowDropDown, 
-                             contentDescription = "Select Date",
-                             tint = MaterialTheme.colorScheme.onSurfaceVariant
-                         )
-                     }
+                      ) {
+                          Text(
+                              text = try {
+                                  LocalDate.parse(date).format(DateTimeFormatter.ofPattern("MMM dd, yyyy", Locale.US))
+                              } catch (e: Exception) {
+                                  date
+                              },
+                              style = MaterialTheme.typography.titleMedium,
+                              fontWeight = FontWeight.Bold
+                          )
+                          Icon(
+                              Icons.Default.ArrowDropDown, 
+                              contentDescription = "Select Date",
+                              tint = MaterialTheme.colorScheme.onSurfaceVariant
+                          )
+                      }
                  }
 
                  IconButton(
@@ -464,25 +474,27 @@ fun AddExpenseForm(
 
 
             // Advanced Options Toggle
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { showAdvancedOptions = !showAdvancedOptions }
-                    .padding(vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(
-                    text = "Advanced Options",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.primary
-                )
-                Icon(
-                    imageVector = if (showAdvancedOptions) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
-                    contentDescription = if (showAdvancedOptions) "Collapse" else "Expand",
-                    tint = MaterialTheme.colorScheme.primary
-                )
+            if (!isRecurringConfigMode && initialExpense == null) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { showAdvancedOptions = !showAdvancedOptions }
+                        .padding(vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = "Advanced Options",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Icon(
+                        imageVector = if (showAdvancedOptions) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
+                        contentDescription = if (showAdvancedOptions) "Collapse" else "Expand",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
             }
 
             androidx.compose.animation.AnimatedVisibility(
@@ -540,7 +552,30 @@ fun AddExpenseForm(
                     Spacer(modifier = Modifier.height(24.dp))
 
                     // Recurring Transaction Toggle
-                    if (initialExpense == null) {
+                    if (isRecurringConfigMode) {
+                         Text(
+                            text = "This will save the configuration but will not create a transaction immediately.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(bottom = 8.dp)
+                         )
+                         
+                         // Always show frequency selector
+                         Spacer(modifier = Modifier.height(12.dp))
+                         Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                         ) {
+                            RecurringFrequency.entries.forEach { freq ->
+                                FilterChip(
+                                    selected = frequency == freq,
+                                    onClick = { frequency = freq },
+                                    label = { Text(freq.name.lowercase().replaceFirstChar { it.uppercase() }) }
+                                )
+                            }
+                         }
+                         Spacer(modifier = Modifier.height(24.dp))
+                    } else if (initialExpense == null) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically,
@@ -582,6 +617,7 @@ fun AddExpenseForm(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
+                .windowInsetsPadding(WindowInsets.navigationBars)
                 .padding(16.dp)
         ) {
             // Helper function to perform the save
@@ -596,7 +632,7 @@ fun AddExpenseForm(
                     
                     onAdd(amountVal, title,
                         finalCategory,
-                        date, isRecurring, frequency,
+                        date, isRecurring, frequency ?: RecurringFrequency.MONTHLY,
                         transactionType, accountId, targetAccountId, feeVal, finalFeeConfigName, note)
                 }
             }
@@ -605,17 +641,19 @@ fun AddExpenseForm(
                 onClick = {
                     if (accountId == null && transactionType != com.h2.wellspend.data.TransactionType.TRANSFER) {
                         showNoAccountConfirmation = true
+                    } else if (isRecurring && frequency == null) {
+                         // Should not happen due to button disabled, but safety check
                     } else {
                         performSave()
                     }
                 },
-                enabled = amount.isNotEmpty() && (transactionType != com.h2.wellspend.data.TransactionType.TRANSFER || (accountId != null && targetAccountId != null)),
+                enabled = amount.isNotEmpty() && (transactionType != com.h2.wellspend.data.TransactionType.TRANSFER || (accountId != null && targetAccountId != null)) && (!isRecurring || frequency != null),
                 shape = RoundedCornerShape(16.dp),
                 modifier = Modifier.fillMaxWidth().height(56.dp)
             ) {
                 Icon(Icons.Default.Check, contentDescription = null)
                 Spacer(modifier = Modifier.size(8.dp))
-                Text("Save Transaction", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text(if (isRecurringConfigMode) "Save Config" else "Save Transaction", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             }
             
             // Confirmation dialog for no account

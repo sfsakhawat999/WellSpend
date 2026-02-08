@@ -15,6 +15,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.DropdownMenu
@@ -53,64 +54,14 @@ fun DateSelector(
     onCustomDateRangeChange: (Pair<LocalDate, LocalDate>) -> Unit = {}
 ) {
     var showDatePicker by remember { mutableStateOf(false) }
-    var showRangeMenu by remember { mutableStateOf(false) }
-    val datePickerState = rememberDatePickerState(
-        initialSelectedDateMillis = currentDate.atStartOfDay(java.time.ZoneOffset.UTC).toInstant().toEpochMilli()
-    )
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
+            .padding(horizontal = 0.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.Center, // Center the content
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Time Range Selector
-        Box {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
-                    .clickable { showRangeMenu = true }
-                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                    .padding(horizontal = 12.dp, vertical = 6.dp)
-            ) {
-                 Icon(
-                    imageVector = Icons.Default.DateRange,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(16.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = timeRange.name.lowercase().replaceFirstChar { it.uppercase() },
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-            DropdownMenu(
-                expanded = showRangeMenu,
-                onDismissRequest = { showRangeMenu = false }
-            ) {
-                TimeRange.values().forEach { range ->
-                    DropdownMenuItem(
-                        text = { Text(range.name.lowercase().replaceFirstChar { it.uppercase() }) },
-                        onClick = {
-                            if (range == TimeRange.CUSTOM && customDateRange == null) {
-                                // Default to current month if selecting custom for the first time
-                                val start = currentDate.withDayOfMonth(1)
-                                val end = currentDate.withDayOfMonth(currentDate.lengthOfMonth())
-                                onCustomDateRangeChange(start to end)
-                            }
-                            onTimeRangeChange(range)
-                            showRangeMenu = false
-                        }
-                    )
-                }
-            }
-        }
-
         // Date Navigator
         Row(
             verticalAlignment = Alignment.CenterVertically
@@ -132,16 +83,24 @@ fun DateSelector(
             }
 
             Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
+                 modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
                     .clickable { showDatePicker = true }
-                    .padding(horizontal = 4.dp, vertical = 4.dp)
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
                     text = DateUtils.formatDateForRange(currentDate, timeRange, startOfWeek, customDateRange),
-                    style = MaterialTheme.typography.titleMedium,
+                    style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurface,
                     fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Icon(
+                    imageVector = Icons.Default.KeyboardArrowDown,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.size(20.dp)
                 )
             }
 
@@ -164,69 +123,20 @@ fun DateSelector(
     }
     
     if (showDatePicker) {
-        when (timeRange) {
-            TimeRange.DAILY -> {
-                DatePickerDialog(
-                    onDismissRequest = { showDatePicker = false },
-                    confirmButton = {
-                        TextButton(onClick = {
-                            datePickerState.selectedDateMillis?.let { millis ->
-                                val date = java.time.Instant.ofEpochMilli(millis).atZone(java.time.ZoneOffset.UTC).toLocalDate()
-                                onDateChange(date)
-                            }
-                            showDatePicker = false
-                        }) { Text("OK") }
-                    },
-                    dismissButton = {
-                        TextButton(onClick = { showDatePicker = false }) { Text("Cancel") }
-                    }
-                ) {
-                    DatePicker(state = datePickerState)
+        UnifiedDatePickerDialog(
+            initialDate = currentDate,
+            initialRangeType = timeRange,
+            initialCustomRange = customDateRange,
+            onDateSelected = { date, range, customRange ->
+                if (range == TimeRange.CUSTOM && customRange != null) {
+                    onCustomDateRangeChange(customRange)
                 }
-            }
-            TimeRange.WEEKLY -> {
-                WeekPickerDialog(
-                    currentDate = currentDate,
-                    onDateSelected = { 
-                        onDateChange(it)
-                        showDatePicker = false 
-                    },
-                    onDismiss = { showDatePicker = false },
-                    startOfWeek = startOfWeek
-                )
-            }
-            TimeRange.MONTHLY -> {
-                MonthPickerDialog(
-                    currentDate = currentDate,
-                    onDateSelected = { 
-                        onDateChange(it)
-                        showDatePicker = false 
-                    },
-                    onDismiss = { showDatePicker = false }
-                )
-            }
-            TimeRange.YEARLY -> {
-                YearPickerDialog(
-                    currentDate = currentDate,
-                    onDateSelected = { 
-                        onDateChange(it)
-                        showDatePicker = false 
-                    },
-                    onDismiss = { showDatePicker = false }
-                )
-            }
-            TimeRange.CUSTOM -> {
-                CustomRangePickerDialog(
-                    initialDate = currentDate,
-                    initialRange = customDateRange,
-                    onRangeSelected = { 
-                        onCustomDateRangeChange(it)
-                        onDateChange(it.first) // Update anchor date too?
-                        showDatePicker = false
-                    },
-                    onDismiss = { showDatePicker = false }
-                )
-            }
-        }
+                onTimeRangeChange(range)
+                onDateChange(date)
+                showDatePicker = false
+            },
+            onDismiss = { showDatePicker = false },
+            startOfWeek = startOfWeek
+        )
     }
 }

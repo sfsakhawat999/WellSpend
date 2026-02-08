@@ -3,6 +3,9 @@ package com.h2.wellspend.ui.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -42,9 +45,7 @@ fun LoanInputScreen(
     accountBalances: Map<String, Double>,
     currency: String,
     selectedType: LoanType = LoanType.LEND, // Hoisted defaults
-    onTypeChange: (LoanType) -> Unit = {}, 
-    onSave: (String, Double, LoanType, String?, String?, Double, String?, LocalDate) -> Unit, // name, amount, type, desc, accId, fee, feeConfigName, date
-    onCancel: () -> Unit
+    onSave: (String, Double, LoanType, String?, String?, Double, String?, LocalDate) -> Unit // name, amount, type, desc, accId, fee, feeConfigName, date
 ) {
     // BackHandler(onBack = onCancel) // Handled by MainScreen now
     
@@ -255,7 +256,12 @@ fun LoanInputScreen(
         }
         
         // Save Button
-        Box(modifier = Modifier.padding(16.dp)) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .windowInsetsPadding(WindowInsets.navigationBars)
+                .padding(16.dp)
+        ) {
             // Helper function to perform the save
             val performSave = {
                 val amt = amount.toDoubleOrNull()
