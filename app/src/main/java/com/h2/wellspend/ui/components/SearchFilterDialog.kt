@@ -41,7 +41,8 @@ fun SearchFilterDialog(
     
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        sheetState = sheetState
+        sheetState = sheetState,
+        windowInsets = WindowInsets(0.dp) // Allow drawing behind nav bar
     ) {
         Column(
             modifier = Modifier

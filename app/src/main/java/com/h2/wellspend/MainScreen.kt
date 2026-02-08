@@ -1,6 +1,9 @@
 package com.h2.wellspend
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.animation.AnimatedVisibility
 import com.h2.wellspend.data.Loan
 import androidx.compose.animation.ExperimentalAnimationApi
@@ -322,6 +325,7 @@ fun MainScreen(
                 isCreatingLoan = false; editingLoan = null; newLoanType = com.h2.wellspend.data.LoanType.LEND 
             }
             showLoans -> showLoans = false
+            showRecurringConfigs -> showRecurringConfigs = false
             showCategoryManagement -> showCategoryManagement = false
             showSearch -> {
                  showSearch = false
@@ -470,23 +474,6 @@ fun MainScreen(
 
     val isBottomBarVisible = !showAddExpense && !showReport && !showBudgets && !showSettings && !showTransfers && !showLoans && !showAccountInput && !showCategoryManagement && loanTransactionToEdit == null && !showSearch && !showRecurringConfigs && transactionToPreview == null && !showUpdateScreen
 
-    val view = LocalView.current
-    if (!view.isInEditMode) {
-        val window = (view.context as Activity).window
-        val surfaceVariantColor = MaterialTheme.colorScheme.surfaceVariant.toArgb()
-        val backgroundColor = MaterialTheme.colorScheme.background.toArgb()
-        
-        LaunchedEffect(isBottomBarVisible) {
-            if (!isBottomBarVisible) {
-                // Delay to match the exit animation duration so it doesn't flash white while sliding down
-                delay(300)
-                window.navigationBarColor = backgroundColor
-            } else {
-                // Immediate update when showing
-                window.navigationBarColor = surfaceVariantColor
-            }
-        }
-    }
 
     // Cache states for exit animations to prevent layout shifts
     var lastExpenseToEdit by remember { mutableStateOf<Expense?>(null) }
@@ -510,7 +497,7 @@ fun MainScreen(
 
 
     ) { paddingValues ->
-        Box(modifier = Modifier.padding(paddingValues).fillMaxSize()) {
+        Box(modifier = Modifier.fillMaxSize()) {
     val targetState = when {
 
 
@@ -960,36 +947,39 @@ fun MainScreen(
                         )
                     }
                     "OVERLAY_EDIT_LOAN_TRANSACTION" -> {
-                         val transaction = lastLoanTransactionToEdit // Use cached
-                         if (transaction != null) {
-                             val relatedLoan = loans.find { it.id == transaction.loanId }
-                             if (relatedLoan != null) {
-                                 com.h2.wellspend.ui.components.EditLoanTransactionScreen(
-                                    transaction = transaction,
-                                    loan = relatedLoan,
+                        // Edit Loan Transaction Screen
+                        if (loanTransactionToEdit != null) {
+                             // We need the LOAN associated with this transaction
+                             // This might be tricky if we don't have it easily. 
+                             // For now, let's find it from the loans list using loanId in transaction
+                             val associatedLoan = loans.find { it.id == loanTransactionToEdit!!.loanId }
+                             
+                             if (associatedLoan != null) {
+                                 com.h2.wellspend.ui.components.EditLoanTransactionDialog(
+                                    initialTransaction = loanTransactionToEdit!!,
+                                    loan = associatedLoan,
                                     accounts = accounts,
                                     accountBalances = balances,
                                     currency = currency,
-                                    onDismiss = { loanTransactionToEdit = null },
-                                    onConfirm = { amt, desc, accId, fee, feeName, date, note ->
+                                    onSave = { amt, desc, accId, fee, feeName, date, note ->
                                         viewModel.updateExpense(
-                                            id = transaction.id,
+                                            id = loanTransactionToEdit!!.id,
                                             amount = amt,
                                             title = desc,
-                                            category = allCategories.find { it.name == transaction.category },
+                                            category = null, // Loan transactions don't have categories
                                             date = date,
                                             isRecurring = false,
-                                            frequency = com.h2.wellspend.data.RecurringFrequency.WEEKLY, // Dummy
-                                            transactionType = transaction.transactionType,
+                                            frequency = com.h2.wellspend.data.RecurringFrequency.WEEKLY, // Dummy value when not recurring
+                                            transactionType = loanTransactionToEdit!!.transactionType,
                                             accountId = accId,
-                                            targetAccountId = transaction.transferTargetAccountId,
+                                            targetAccountId = null,
                                             feeAmount = fee,
                                             feeConfigName = feeName,
-                                            loanId = transaction.loanId,
+                                            loanId = loanTransactionToEdit!!.loanId,
                                             note = note
                                         )
                                         // Update preview if active
-                                        if (transactionToPreview != null && transactionToPreview!!.id == transaction.id) {
+                                        if (transactionToPreview != null && transactionToPreview!!.id == loanTransactionToEdit!!.id) {
                                              transactionToPreview = transactionToPreview!!.copy(
                                                 amount = amt,
                                                 title = desc,
@@ -1065,8 +1055,7 @@ fun MainScreen(
                                 accounts = accounts,
                                 accountBalances = balances,
                                 currency = currency,
-                                onDismiss = { loanForTransaction = null },
-                                onConfirm = { amount, isPayment, accId, fee, feeName, date, note ->
+                                onSave = { amount, isPayment, accId, fee, feeName, date, note ->
                                     viewModel.addLoanTransaction(loan.id, loan.name, amount, isPayment, accId, loan.type, fee, feeName, date, note)
                                     loanForTransaction = null
                                 }
@@ -1080,7 +1069,6 @@ fun MainScreen(
                             accountBalances = balances,
                             currency = currency,
                             selectedType = lastEditingLoan?.type ?: newLoanType,
-                            onTypeChange = { newLoanType = it },
                             onSave = { name, amount, type, desc, accId, fee, feeName, date ->
                                 if (lastEditingLoan != null) {
                                     viewModel.updateLoan(lastEditingLoan!!.copy(name = name, amount = amount, description = desc, type = type))
@@ -1090,11 +1078,6 @@ fun MainScreen(
                                     isCreatingLoan = false
                                     newLoanType = com.h2.wellspend.data.LoanType.LEND // Reset
                                 }
-                            },
-                            onCancel = {
-                                isCreatingLoan = false
-                                editingLoan = null
-                                newLoanType = com.h2.wellspend.data.LoanType.LEND
                             }
                         )
                     }
@@ -1461,7 +1444,7 @@ fun MainScreen(
             // Floating Action Buttons (Custom Positioning)
             Box(modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .padding(bottom = if (isBottomBarVisible) 90.dp else 24.dp, end = 24.dp)
+                .padding(bottom = (if (isBottomBarVisible) 90.dp else 24.dp) + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding(), end = 24.dp)
             ) {
                 if ((currentScreen == Screen.HOME || currentScreen == Screen.EXPENSES || currentScreen == Screen.INCOME || currentScreen == Screen.ACCOUNTS || currentScreen == Screen.ACCOUNTS || showTransfers || showLoans) && 
                     !showAddExpense && !showReport && !showBudgets && !showSettings && !showAccountInput && loanTransactionToEdit == null && !showCategoryManagement && !showSearch && !showRecurringConfigs && !showUpdateScreen && transactionToPreview == null) {
@@ -1697,7 +1680,7 @@ fun DashboardScreen(
             androidx.compose.foundation.lazy.LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 state = state,
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 96.dp)
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 96.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())
             ) {
                 item {
                     DateSelector(

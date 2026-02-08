@@ -1,6 +1,9 @@
 package com.h2.wellspend.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -106,7 +109,7 @@ fun IncomeList(
             state = state,
             modifier = Modifier
                 .fillMaxWidth(),
-            contentPadding = PaddingValues(bottom = 96.dp),
+            contentPadding = PaddingValues(bottom = 96.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()),
             verticalArrangement = Arrangement.spacedBy(if (useGrouping) 12.dp else 0.dp)
         ) {
             item {
