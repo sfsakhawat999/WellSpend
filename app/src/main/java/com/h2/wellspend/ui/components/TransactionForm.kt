@@ -135,7 +135,7 @@ fun TransactionForm(
     var date by remember { mutableStateOf(initialExpense?.date?.substring(0, 10) ?: LocalDate.now().toString()) } // YYYY-MM-DD
 
     var frequency by remember { mutableStateOf(initialFrequency) } // Default null
-    var isRecurring by remember { mutableStateOf(isRecurringConfigMode || (initialExpense != null)) } // Default true if config mode
+    var isRecurring by remember { mutableStateOf(isRecurringConfigMode || (initialFrequency != null)) } // Default true if config mode or editing a recurring transaction
     var showDatePicker by remember { mutableStateOf(false) }
     var expanded by remember { mutableStateOf(false) }
     var showAddCategoryDialog by remember { mutableStateOf(false) }
