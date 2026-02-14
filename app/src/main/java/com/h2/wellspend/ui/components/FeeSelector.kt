@@ -62,6 +62,17 @@ fun FeeSelector(
         }
     }
 
+    LaunchedEffect(transactionAmount, selectedConfigName, account) {
+        if (!isCustomFee && selectedConfigName != null && selectedConfigName != "None") {
+            val config = account?.feeConfigs?.find { it.name == selectedConfigName }
+            if (config != null && config.isPercentage) {
+                val updatedFee = transactionAmount * config.value / 100
+                onFeeChanged(selectedConfigName, String.format("%.2f", updatedFee), false)
+            }
+        }
+    }
+
+
     Column(modifier = modifier) {
         Text(
             text = "Transaction Fees",

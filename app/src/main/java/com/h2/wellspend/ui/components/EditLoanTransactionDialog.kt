@@ -112,19 +112,6 @@ fun EditLoanTransactionDialog(
     // Helper to calculate fee based on account rule
     val currentAccount = accounts.find { it.id == selectedAccountId }
     
-    // Auto-update fee when account or amount changes, unless custom
-    LaunchedEffect(amount, selectedAccountId, selectedFeeConfigName) {
-        if (!isCustomFee && selectedFeeConfigName != null && selectedFeeConfigName != "None" && selectedFeeConfigName != "Custom") {
-            val config = currentAccount?.feeConfigs?.find { it.name == selectedFeeConfigName }
-            if (config != null) {
-                val amt = amount.toDoubleOrNull() ?: 0.0
-                val calculated = if (config.isPercentage) (amt * config.value / 100) else config.value
-                feeAmount = String.format("%.2f", calculated)
-            }
-        } else if (selectedFeeConfigName == "None") {
-            feeAmount = "0.0"
-        }
-    }
 
     // Date Picker Logic
     if (showDatePicker) {
