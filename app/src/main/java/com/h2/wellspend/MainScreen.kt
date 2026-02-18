@@ -1005,7 +1005,7 @@ fun MainScreen(
                                             id = loanTransactionToEdit!!.id,
                                             amount = amt,
                                             title = desc,
-                                            category = null, // Loan transactions don't have categories
+                                            category = allCategories.find { it.name == com.h2.wellspend.data.SystemCategory.Loan.name }, // Preserve Loan category
                                             date = date,
                                             isRecurring = false,
                                             frequency = com.h2.wellspend.data.RecurringFrequency.WEEKLY, // Dummy value when not recurring
