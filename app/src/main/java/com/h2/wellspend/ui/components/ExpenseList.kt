@@ -168,7 +168,7 @@ fun ExpenseList(
                     .mapValues { entry ->
                         val total = entry.value.filter { it.transactionType == com.h2.wellspend.data.TransactionType.EXPENSE }.sumOf { it.amount }
                         val items = entry.value.sortedWith(
-                            compareByDescending<Expense> { it.date.take(10) }
+                            compareByDescending<Expense> { it.date }
                                 .thenByDescending { it.timestamp }
                         )
                         Pair(total, items)
@@ -187,7 +187,7 @@ fun ExpenseList(
                         // Sort regular items (Exclude non-expenses like Transfers/Incomes, they only contribute fees)
                         val sortedItems = list.filter { it.transactionType == com.h2.wellspend.data.TransactionType.EXPENSE }
                             .sortedWith(
-                                compareByDescending<Expense> { it.date.take(10) }
+                                compareByDescending<Expense> { it.date }
                                     .thenByDescending { it.timestamp }
                             ).toMutableList()
 

@@ -344,7 +344,7 @@ fun MainScreen(
 
     val filteredTransactions = remember(expenses, currentDate, timeRange, startOfWeek, customDateRange) {
         DateUtils.filterByTimeRange(expenses, currentDate, timeRange, startOfWeek, customDateRange)
-            .sortedWith(compareByDescending<Expense> { it.date.take(10) }.thenByDescending { it.timestamp })
+            .sortedWith(compareByDescending<Expense> { it.date }.thenByDescending { it.timestamp })
     }
 
     // Calculate Total Spend: (All Expenses Base Amount) + (All Fees from any transaction type)
@@ -1256,7 +1256,7 @@ fun MainScreen(
                         
                         // All transactions for lazy loading (sorted by date desc, then by timestamp desc)
                         val allRangeTransactions = unfilteredVisibleTransactions
-                            .sortedWith(compareByDescending<Expense> { it.date.take(10) }.thenByDescending { it.timestamp })
+                            .sortedWith(compareByDescending<Expense> { it.date }.thenByDescending { it.timestamp })
                         
                         DashboardScreen(
                             currentDate = currentDate,
@@ -2136,7 +2136,7 @@ fun TransferListScreen(
         
         // Filter only Transfers
         val transfers = expenses.filter { it.transactionType == com.h2.wellspend.data.TransactionType.TRANSFER }
-            .sortedWith(compareByDescending<com.h2.wellspend.data.Expense> { it.date.take(10) }.thenByDescending { it.timestamp })
+            .sortedWith(compareByDescending<com.h2.wellspend.data.Expense> { it.date }.thenByDescending { it.timestamp })
         
         com.h2.wellspend.ui.components.TransferList(
             transfers = transfers,
@@ -2191,7 +2191,7 @@ fun IncomeListScreen(
         // Filter only Incomes
         val incomes = expenses.filter { 
             it.transactionType == com.h2.wellspend.data.TransactionType.INCOME
-        }.sortedWith(compareByDescending<com.h2.wellspend.data.Expense> { it.date.take(10) }.thenByDescending { it.timestamp })
+        }.sortedWith(compareByDescending<com.h2.wellspend.data.Expense> { it.date }.thenByDescending { it.timestamp })
         
         com.h2.wellspend.ui.components.IncomeList(
             incomes = incomes,

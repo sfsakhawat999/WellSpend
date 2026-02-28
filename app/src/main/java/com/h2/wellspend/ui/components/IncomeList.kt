@@ -90,7 +90,7 @@ fun IncomeList(
                 .mapValues { entry ->
                     val total = entry.value.sumOf { it.amount }
                     val items = entry.value.sortedWith(
-                        compareByDescending<Expense> { it.date.take(10) }
+                        compareByDescending<Expense> { it.date }
                             .thenByDescending { it.timestamp }
                     )
                     Pair(total, items)
