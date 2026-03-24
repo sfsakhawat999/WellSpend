@@ -185,7 +185,7 @@ fun LoanCard(
     // The Initial Amount is already shown in the header row
     val displayTransactions = remember(transactions) {
         transactions.filter { !it.title.trim().startsWith("New Loan:", ignoreCase = true) }
-            .sortedWith(compareByDescending<Expense> { it.date.take(10) }.thenByDescending { it.timestamp })
+            .sortedWith(compareByDescending<Expense> { it.date }.thenByDescending { it.timestamp })
     }
     
     // Calculate Progress
