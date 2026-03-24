@@ -7,12 +7,12 @@ plugins {
 android {
     signingConfigs {
         create("release") {
-           if (project.hasProperty("releaseKeyStore")) {
-               storeFile = file(project.property("releaseKeyStore") as String)
-               storePassword = project.property("releaseKeyStorePassword") as String
-               keyAlias = project.property("releaseKeyAlias") as String
-               keyPassword = project.property("releaseKeyPassword") as String
-           }
+            if (project.hasProperty("releaseKeyStore")) {
+                storeFile = file(project.property("releaseKeyStore") as String)
+                storePassword = project.property("releaseKeyStorePassword") as String
+                keyAlias = project.property("releaseKeyAlias") as String
+                keyPassword = project.property("releaseKeyPassword") as String
+            }
         }
     }
     namespace = "com.h2.wellspend"
@@ -26,19 +26,13 @@ android {
         versionName = "1.2.4"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        vectorDrawables {
-            useSupportLibrary = true
-        }
+        vectorDrawables { useSupportLibrary = true }
 
-        ksp {
-            arg("room.schemaLocation", "$projectDir/schemas")
-        }
+        ksp { arg("room.schemaLocation", "$projectDir/schemas") }
     }
 
     buildTypes {
-        debug {
-            applicationIdSuffix = ".debug"
-        }
+        debug { applicationIdSuffix = ".debug" }
         release {
             if (project.hasProperty("releaseKeyStore")) {
                 signingConfig = signingConfigs.getByName("release")
@@ -51,25 +45,16 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    kotlinOptions {
-        jvmTarget = "17"
-    }
+    kotlinOptions { jvmTarget = "17" }
     buildFeatures {
         compose = true
         buildConfig = true
     }
-    composeOptions {
-        kotlinCompilerExtensionVersion = "1.5.8"
-    }
-    packaging {
-        resources {
-            excludes += "/META-INF/{AL2.0,LGPL2.1}"
-        }
-    }
+    composeOptions { kotlinCompilerExtensionVersion = "1.5.8" }
+    packaging { resources { excludes += "/META-INF/{AL2.0,LGPL2.1}" } }
 }
 
 dependencies {
-
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
@@ -79,12 +64,12 @@ dependencies {
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
     implementation(libs.androidx.material.icons.extended)
-    
+
     // Room
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
     ksp(libs.androidx.room.compiler)
-    
+
     // Navigation
     implementation(libs.androidx.navigation.compose)
     implementation(libs.gson)
