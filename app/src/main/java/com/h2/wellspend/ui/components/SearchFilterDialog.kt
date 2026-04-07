@@ -32,6 +32,7 @@ fun SearchFilterDialog(
     var searchField by remember { mutableStateOf(currentFilter.searchField) }
     var sortOption by remember { mutableStateOf(currentFilter.sortOption) }
     var sortOrder by remember { mutableStateOf(currentFilter.sortOrder) }
+    var excludeLoans by remember { mutableStateOf(currentFilter.excludeLoans) }
     
     // Helper to manage date picker dialogs
     var showStartDatePicker by remember { mutableStateOf(false) }
@@ -126,6 +127,21 @@ fun SearchFilterDialog(
                 )
             }
             
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Extra Filters
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Exclude Loan Transactions", style = MaterialTheme.typography.titleMedium)
+                Switch(
+                    checked = excludeLoans,
+                    onCheckedChange = { excludeLoans = it }
+                )
+            }
+
             Spacer(modifier = Modifier.height(16.dp))
 
             // Sort Options Header with Order Toggle
@@ -244,7 +260,7 @@ fun SearchFilterDialog(
                 }
                 Spacer(modifier = Modifier.width(8.dp))
                 Button(onClick = {
-                    onApply(MainViewModel.SearchFilter(selectedType, startDate, endDate, searchField, sortOption, sortOrder))
+                    onApply(MainViewModel.SearchFilter(selectedType, startDate, endDate, searchField, sortOption, sortOrder, excludeLoans))
                     onDismiss()
                 }) {
                     Text("Apply")

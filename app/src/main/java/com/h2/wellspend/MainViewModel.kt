@@ -60,7 +60,8 @@ class MainViewModel(
         val endDate: LocalDate? = null,
         val searchField: SearchField = SearchField.ALL,
         val sortOption: SortOption = SortOption.DATE,
-        val sortOrder: SortOrder = SortOrder.DESC
+        val sortOrder: SortOrder = SortOrder.DESC,
+        val excludeLoans: Boolean = false
     )
     
     private val _searchFilter = MutableStateFlow(SearchFilter())
@@ -94,6 +95,13 @@ class MainViewModel(
                 // Type Match
                 val typeMatch = filter.type == null || expense.transactionType == filter.type
                 
+                // Loan Match
+                val loanMatch = if (filter.excludeLoans) {
+                    expense.category != SystemCategory.Loan.name && expense.loanId == null
+                } else {
+                    true
+                }
+                
                 // Date Match
                 val dateMatch = try {
                     val expDate = LocalDate.parse(expense.date.take(10))
@@ -104,7 +112,7 @@ class MainViewModel(
                     true // If date parse fails, include it (or exclude, depending on policy. Including is safer)
                 }
                 
-                queryMatch && typeMatch && dateMatch
+                queryMatch && typeMatch && loanMatch && dateMatch
             }.let { filtered ->
                 // Apply sorting with order
                 when (filter.sortOption) {
