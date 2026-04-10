@@ -1109,12 +1109,18 @@ fun MainScreen(
                             accountBalances = balances,
                             currency = currency,
                             selectedType = lastEditingLoan?.type ?: newLoanType,
-                            onSave = { name, amount, type, desc, accId, fee, feeName, date ->
+                            onSave = { name, amount, type, desc, accId, fee, feeName, date, excludeFromSummary ->
                                 if (lastEditingLoan != null) {
-                                    viewModel.updateLoan(lastEditingLoan!!.copy(name = name, amount = amount, description = desc, type = type))
+                                    viewModel.updateLoan(lastEditingLoan!!.copy(
+                                        name = name, 
+                                        amount = amount, 
+                                        description = desc, 
+                                        type = type,
+                                        excludeFromSummary = excludeFromSummary
+                                    ))
                                     editingLoan = null
                                 } else {
-                                    viewModel.addLoan(name, amount, type, desc, accId, fee, feeName, date)
+                                    viewModel.addLoan(name, amount, type, desc, accId, fee, feeName, date, excludeFromSummary)
                                     isCreatingLoan = false
                                     newLoanType = com.h2.wellspend.data.LoanType.LEND // Reset
                                 }
@@ -1261,14 +1267,14 @@ fun MainScreen(
                         val allRangeTransactions = unfilteredVisibleTransactions
                             .sortedWith(compareByDescending<Expense> { it.date }.thenByDescending { it.timestamp })
                         
-                        val totalDue = loans.filter { it.type == com.h2.wellspend.data.LoanType.LEND }.sumOf { loan ->
+                        val totalDue = loans.filter { it.type == com.h2.wellspend.data.LoanType.LEND && !it.excludeFromSummary }.sumOf { loan ->
                             val loanExpenses = expenses.filter { it.loanId == loan.id }
                             val sumExpense = loanExpenses.filter { it.transactionType == com.h2.wellspend.data.TransactionType.EXPENSE }.sumOf { it.amount }
                             val sumIncome = loanExpenses.filter { it.transactionType == com.h2.wellspend.data.TransactionType.INCOME }.sumOf { it.amount }
                             sumExpense - sumIncome
                         }
 
-                        val debtAmount = loans.filter { it.type == com.h2.wellspend.data.LoanType.BORROW }.sumOf { loan ->
+                        val debtAmount = loans.filter { it.type == com.h2.wellspend.data.LoanType.BORROW && !it.excludeFromSummary }.sumOf { loan ->
                             val loanExpenses = expenses.filter { it.loanId == loan.id }
                             val sumExpense = loanExpenses.filter { it.transactionType == com.h2.wellspend.data.TransactionType.EXPENSE }.sumOf { it.amount }
                             val sumIncome = loanExpenses.filter { it.transactionType == com.h2.wellspend.data.TransactionType.INCOME }.sumOf { it.amount }

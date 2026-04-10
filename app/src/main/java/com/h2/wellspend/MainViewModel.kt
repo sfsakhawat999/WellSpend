@@ -144,7 +144,8 @@ class MainViewModel(
         accountId: String?,
         feeAmount: Double,
         feeConfigName: String?,
-        date: java.time.LocalDate
+        date: java.time.LocalDate,
+        excludeFromSummary: Boolean = false
     ) {
         viewModelScope.launch {
             val loanId = UUID.randomUUID().toString()
@@ -153,7 +154,9 @@ class MainViewModel(
                 name = name,
                 type = type,
                 amount = amount,
-                description = description
+                description = description,
+                createdAt = date.atStartOfDay(java.time.ZoneOffset.UTC).toInstant().toEpochMilli(),
+                excludeFromSummary = excludeFromSummary
             )
             repository.addLoan(loan)
 
