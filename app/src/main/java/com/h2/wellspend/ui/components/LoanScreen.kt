@@ -43,6 +43,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.h2.wellspend.data.Account
 import com.h2.wellspend.data.Expense
 import com.h2.wellspend.data.Loan
@@ -56,6 +57,7 @@ import com.h2.wellspend.ui.theme.cardBackgroundColor
 import com.h2.wellspend.ui.performWiggle
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.VisibilityOff
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -346,17 +348,38 @@ fun LoanCard(
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
                         Box(
-                            modifier = Modifier
-                                .size(40.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.surfaceVariant),
-                            contentAlignment = Alignment.Center
+                            modifier = Modifier.size(40.dp)
                         ) {
-                             Icon(
-                                imageVector = Icons.Default.AttachMoney,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                            Box(
+                                modifier = Modifier
+                                    .matchParentSize()
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                 Icon(
+                                    imageVector = Icons.Default.AttachMoney,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            if (loan.excludeFromSummary) {
+                                Box(
+                                    modifier = Modifier
+                                        .align(Alignment.BottomEnd)
+                                        .size(14.dp)
+                                        .background(MaterialTheme.colorScheme.background, CircleShape)
+                                        .padding(1.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.VisibilityOff,
+                                        contentDescription = "Excluded from summary",
+                                        tint = MaterialTheme.colorScheme.error.copy(alpha = 0.8f),
+                                        modifier = Modifier.size(10.dp)
+                                    )
+                                }
+                            }
                         }
                         Spacer(modifier = Modifier.width(12.dp))
                         Column {
@@ -445,7 +468,23 @@ fun LoanCard(
         ) {
             Column(modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background).padding(top = 2.dp)) {
 
-                 
+                 if (loan.excludeFromSummary) {
+                     Box(
+                         modifier = Modifier
+                             .fillMaxWidth()
+                             .background(cardBackgroundColor())
+                             .padding(horizontal = 16.dp, vertical = 8.dp)
+                     ) {
+                         Text(
+                             text = "EXCLUDED FROM HOMEPAGE SUMMARY",
+                             style = MaterialTheme.typography.labelSmall,
+                             color = MaterialTheme.colorScheme.onSurfaceVariant,
+                             fontWeight = FontWeight.Bold,
+                             letterSpacing = 0.5.sp
+                         )
+                     }
+                     androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(2.dp))
+                 }
 
                  // Transactions List
                  displayTransactions.forEach { trans ->
