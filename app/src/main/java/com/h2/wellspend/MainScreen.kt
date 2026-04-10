@@ -1314,6 +1314,8 @@ fun MainScreen(
                             onBalanceClick = { currentScreen = Screen.ACCOUNTS },
                             onIncomeClick = { currentScreen = Screen.INCOME },
                             onExpenseClick = { currentScreen = Screen.EXPENSES },
+                            onDueClick = { loanSelectedTab = 0; showLoans = true },
+                            onDebtClick = { loanSelectedTab = 1; showLoans = true },
                             onAccountClick = { currentScreen = Screen.ACCOUNTS },
                             categories = allCategories,
                             onTransactionClick = { transactionToPreview = it },
@@ -1653,6 +1655,8 @@ fun DashboardScreen(
     onBalanceClick: () -> Unit,
     onIncomeClick: () -> Unit,
     onExpenseClick: () -> Unit,
+    onDueClick: () -> Unit = {},
+    onDebtClick: () -> Unit = {},
     onAccountClick: (String) -> Unit,
     categories: List<com.h2.wellspend.data.Category>,
     onTransactionClick: (Expense) -> Unit = {},
@@ -1918,6 +1922,7 @@ fun DashboardScreen(
                                 colors = CardDefaults.cardColors(containerColor = Color(0xFF0D47A1).copy(alpha = 0.15f)),
                                 modifier = Modifier
                                     .weight(1f)
+                                    .clickable { onDueClick() }
                             ) {
                                 Column(modifier = Modifier.padding(16.dp)) {
                                     Text(
@@ -1942,6 +1947,7 @@ fun DashboardScreen(
                                 colors = CardDefaults.cardColors(containerColor = Color(0xFFE65100).copy(alpha = 0.15f)),
                                 modifier = Modifier
                                     .weight(1f)
+                                    .clickable { onDebtClick() }
                             ) {
                                 Column(modifier = Modifier.padding(16.dp)) {
                                     Text(
