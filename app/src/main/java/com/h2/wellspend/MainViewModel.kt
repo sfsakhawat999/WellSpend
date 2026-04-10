@@ -353,6 +353,10 @@ class MainViewModel(
         .map { it?.toBoolean() ?: false } // Default to false
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
+    val showLoansOnHomepage: StateFlow<Boolean> = repository.showLoansOnHomepage
+        .map { it?.toBoolean() ?: true } // Default to true
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
     val groupIncomeByAccount: StateFlow<Boolean> = repository.groupIncomeByAccount
         .map { it?.toBoolean() ?: true } // Default to true (new design)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
@@ -682,6 +686,12 @@ class MainViewModel(
     fun updateShowAccountsOnHomepage(show: Boolean) {
         viewModelScope.launch {
             repository.setShowAccountsOnHomepage(show)
+        }
+    }
+
+    fun updateShowLoansOnHomepage(show: Boolean) {
+        viewModelScope.launch {
+            repository.setShowLoansOnHomepage(show)
         }
     }
 

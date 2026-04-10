@@ -257,6 +257,7 @@ fun MainScreen(
     val balances by viewModel.accountBalances.collectAsState(initial = emptyMap())
     val excludeLoanTransactions by viewModel.excludeLoanTransactions.collectAsState()
     val showAccountsOnHomepage by viewModel.showAccountsOnHomepage.collectAsState()
+    val showLoansOnHomepage by viewModel.showLoansOnHomepage.collectAsState()
     val allCategories by viewModel.categoryOrder.collectAsState(initial = emptyList())
     val searchQuery by viewModel.searchQuery.collectAsState()
     val searchFilter by viewModel.searchFilter.collectAsState()
@@ -1194,6 +1195,7 @@ fun MainScreen(
                                 currentDynamicColor = dynamicColor,
                                 excludeLoanTransactions = excludeLoanTransactions,
                                 showAccountsOnHomepage = showAccountsOnHomepage,
+                                showLoansOnHomepage = showLoansOnHomepage,
 
                                 onCurrencyChange = { newCurrency ->
                                      viewModel.updateBudgets(emptyList(), newCurrency)
@@ -1202,6 +1204,7 @@ fun MainScreen(
                                 onDynamicColorChange = { viewModel.updateDynamicColor(it) },
                                 onExcludeLoanTransactionsChange = { viewModel.updateExcludeLoanTransactions(it) },
                                 onShowAccountsOnHomepageChange = { viewModel.updateShowAccountsOnHomepage(it) },
+                                onShowLoansOnHomepageChange = { viewModel.updateShowLoansOnHomepage(it) },
                                 onStartOfWeekChange = { viewModel.updateStartOfWeek(it) },
                                 startOfWeek = startOfWeek,
 
@@ -1258,6 +1261,20 @@ fun MainScreen(
                         val allRangeTransactions = unfilteredVisibleTransactions
                             .sortedWith(compareByDescending<Expense> { it.date }.thenByDescending { it.timestamp })
                         
+                        val totalDue = loans.filter { it.type == com.h2.wellspend.data.LoanType.LEND }.sumOf { loan ->
+                            val loanExpenses = expenses.filter { it.loanId == loan.id }
+                            val sumExpense = loanExpenses.filter { it.transactionType == com.h2.wellspend.data.TransactionType.EXPENSE }.sumOf { it.amount }
+                            val sumIncome = loanExpenses.filter { it.transactionType == com.h2.wellspend.data.TransactionType.INCOME }.sumOf { it.amount }
+                            sumExpense - sumIncome
+                        }
+
+                        val debtAmount = loans.filter { it.type == com.h2.wellspend.data.LoanType.BORROW }.sumOf { loan ->
+                            val loanExpenses = expenses.filter { it.loanId == loan.id }
+                            val sumExpense = loanExpenses.filter { it.transactionType == com.h2.wellspend.data.TransactionType.EXPENSE }.sumOf { it.amount }
+                            val sumIncome = loanExpenses.filter { it.transactionType == com.h2.wellspend.data.TransactionType.INCOME }.sumOf { it.amount }
+                            sumIncome - sumExpense
+                        }
+
                         DashboardScreen(
                             currentDate = currentDate,
                             onDateChange = { currentDate = it },
@@ -1269,11 +1286,14 @@ fun MainScreen(
                             totalBalance = rangeEndBalance,
                             totalIncome = totalIncome,
                             totalExpense = totalSpend,
+                            totalDue = totalDue,
+                            debtAmount = debtAmount,
                             recentTransactions = allRangeTransactions,
                             allAccounts = accounts,
                             accountBalances = balances,
                             loans = loans,
                             showAccounts = showAccountsOnHomepage,
+                            showLoansOnHomepage = showLoansOnHomepage,
                             showLoanExcludedLabel = excludeLoanTransactions,
                             isLoading = !isDataLoaded,
                             onEdit = { transaction ->
@@ -1612,11 +1632,14 @@ fun DashboardScreen(
     totalBalance: Double,
     totalIncome: Double,
     totalExpense: Double,
+    totalDue: Double = 0.0,
+    debtAmount: Double = 0.0,
     recentTransactions: List<com.h2.wellspend.data.Expense>,
     allAccounts: List<com.h2.wellspend.data.Account>,
     accountBalances: Map<String, Double>,
     loans: List<com.h2.wellspend.data.Loan>,
     showAccounts: Boolean,
+    showLoansOnHomepage: Boolean = true,
     showLoanExcludedLabel: Boolean = false,
     isLoading: Boolean = false,
     onEdit: (com.h2.wellspend.data.Expense) -> Unit,
@@ -1872,6 +1895,63 @@ fun DashboardScreen(
                                     fontWeight = FontWeight.Bold,
                                     color = Color(0xFFF44336)
                                 )
+                            }
+                        }
+                    }
+
+                    if (showLoansOnHomepage) {
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            // Total Due Card
+                            Card(
+                                shape = RoundedCornerShape(16.dp),
+                                colors = CardDefaults.cardColors(containerColor = Color(0xFF0D47A1).copy(alpha = 0.15f)),
+                                modifier = Modifier
+                                    .weight(1f)
+                            ) {
+                                Column(modifier = Modifier.padding(16.dp)) {
+                                    Text(
+                                        "Total Due",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = Color(0xFF2196F3)
+                                    )
+
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        "$currency${if (totalDue % 1.0 == 0.0) String.format("%.0f", totalDue) else String.format("%.2f", totalDue)}",
+                                        style = MaterialTheme.typography.headlineSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFF2196F3)
+                                    )
+                                }
+                            }
+
+                            // Debt Amount Card
+                            Card(
+                                shape = RoundedCornerShape(16.dp),
+                                colors = CardDefaults.cardColors(containerColor = Color(0xFFE65100).copy(alpha = 0.15f)),
+                                modifier = Modifier
+                                    .weight(1f)
+                            ) {
+                                Column(modifier = Modifier.padding(16.dp)) {
+                                    Text(
+                                        "Debt Amount",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = Color(0xFFFF9800)
+                                    )
+
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        "$currency${if (debtAmount % 1.0 == 0.0) String.format("%.0f", debtAmount) else String.format("%.2f", debtAmount)}",
+                                        style = MaterialTheme.typography.headlineSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFFFF9800)
+                                    )
+                                }
                             }
                         }
                     }

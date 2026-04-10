@@ -74,6 +74,7 @@ fun SettingsScreen(
     currentDynamicColor: Boolean,
     excludeLoanTransactions: Boolean,
     showAccountsOnHomepage: Boolean,
+    showLoansOnHomepage: Boolean,
     startOfWeek: java.time.DayOfWeek,
 
     onCurrencyChange: (String) -> Unit,
@@ -81,6 +82,7 @@ fun SettingsScreen(
     onDynamicColorChange: (Boolean) -> Unit,
     onExcludeLoanTransactionsChange: (Boolean) -> Unit,
     onShowAccountsOnHomepageChange: (Boolean) -> Unit,
+    onShowLoansOnHomepageChange: (Boolean) -> Unit,
     onStartOfWeekChange: (java.time.DayOfWeek) -> Unit,
 
     onExport: () -> Unit,
@@ -399,6 +401,32 @@ fun SettingsScreen(
                     Switch(
                         checked = showAccountsOnHomepage,
                         onCheckedChange = onShowAccountsOnHomepageChange,
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
+                            checkedTrackColor = MaterialTheme.colorScheme.primary
+                        )
+                    )
+                }
+
+                 Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onShowLoansOnHomepageChange(!showLoansOnHomepage) }
+                        .padding(bottom = 16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Show Loans Summary in Homepage", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Medium)
+                        Text(
+                            "Display Total Due and Debt Amount on the dashboard",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                    Switch(
+                        checked = showLoansOnHomepage,
+                        onCheckedChange = onShowLoansOnHomepageChange,
                         colors = SwitchDefaults.colors(
                             checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
                             checkedTrackColor = MaterialTheme.colorScheme.primary
