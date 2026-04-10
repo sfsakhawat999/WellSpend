@@ -45,7 +45,7 @@ fun LoanInputScreen(
     accountBalances: Map<String, Double>,
     currency: String,
     selectedType: LoanType = LoanType.LEND, // Hoisted defaults
-    onSave: (String, Double, LoanType, String?, String?, Double, String?, LocalDate) -> Unit // name, amount, type, desc, accId, fee, feeConfigName, date
+    onSave: (String, Double, LoanType, String?, String?, Double, String?, LocalDate, Boolean) -> Unit // name, amount, type, desc, accId, fee, feeConfigName, date, excludeFromSummary
 ) {
     // BackHandler(onBack = onCancel) // Handled by MainScreen now
     
@@ -55,7 +55,7 @@ fun LoanInputScreen(
     // selectedType hoisted to MainScreen
     var description by remember { mutableStateOf(initialLoan?.description ?: "") }
     var selectedAccountId by remember { mutableStateOf<String?>(null) } 
-    
+    var excludeFromSummary by remember { mutableStateOf(initialLoan?.excludeFromSummary ?: false) }    
     // Fee State
     var selectedFeeConfigName by remember { mutableStateOf<String?>(null) }
     var feeAmount by remember { mutableStateOf("") }
@@ -242,6 +242,33 @@ fun LoanInputScreen(
                 }
             }
 
+            // Exclude from Summary Toggle
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { excludeFromSummary = !excludeFromSummary }
+                    .padding(vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        "Exclude from homepage summary",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        "If enabled, this loan will not be counted in the 'Total Due' and 'Debt Amount' cards on the dashboard.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Switch(
+                    checked = excludeFromSummary,
+                    onCheckedChange = { excludeFromSummary = it }
+                )
+            }
+
             // Description (Moved to bottom)
             OutlinedTextField(
                 value = description, 
@@ -268,7 +295,7 @@ fun LoanInputScreen(
                 val fee = if (selectedAccountId != null) feeAmount.toDoubleOrNull() ?: 0.0 else 0.0
                 val finalFeeConfigName = if (selectedAccountId != null) selectedFeeConfigName else null
                 if (name.isNotBlank() && amt != null) {
-                    onSave(name, amt, selectedType, description.ifBlank { null }, selectedAccountId, fee, finalFeeConfigName, date)
+                    onSave(name, amt, selectedType, description.ifBlank { null }, selectedAccountId, fee, finalFeeConfigName, date, excludeFromSummary)
                 }
             }
             

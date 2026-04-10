@@ -62,7 +62,8 @@ data class Loan(
     val type: LoanType,
     val amount: Double, // Current balance logic might be derived, but initial amount is useful or we just sum transactions
     val description: String? = null,
-    val createdAt: Long = System.currentTimeMillis()
+    val createdAt: Long = System.currentTimeMillis(),
+    val excludeFromSummary: Boolean = false
 )
 
 @Keep

@@ -60,7 +60,8 @@ class MainViewModel(
         val endDate: LocalDate? = null,
         val searchField: SearchField = SearchField.ALL,
         val sortOption: SortOption = SortOption.DATE,
-        val sortOrder: SortOrder = SortOrder.DESC
+        val sortOrder: SortOrder = SortOrder.DESC,
+        val excludeLoans: Boolean = false
     )
     
     private val _searchFilter = MutableStateFlow(SearchFilter())
@@ -94,6 +95,13 @@ class MainViewModel(
                 // Type Match
                 val typeMatch = filter.type == null || expense.transactionType == filter.type
                 
+                // Loan Match
+                val loanMatch = if (filter.excludeLoans) {
+                    expense.category != SystemCategory.Loan.name && expense.loanId == null
+                } else {
+                    true
+                }
+                
                 // Date Match
                 val dateMatch = try {
                     val expDate = LocalDate.parse(expense.date.take(10))
@@ -104,7 +112,7 @@ class MainViewModel(
                     true // If date parse fails, include it (or exclude, depending on policy. Including is safer)
                 }
                 
-                queryMatch && typeMatch && dateMatch
+                queryMatch && typeMatch && loanMatch && dateMatch
             }.let { filtered ->
                 // Apply sorting with order
                 when (filter.sortOption) {
@@ -136,7 +144,8 @@ class MainViewModel(
         accountId: String?,
         feeAmount: Double,
         feeConfigName: String?,
-        date: java.time.LocalDate
+        date: java.time.LocalDate,
+        excludeFromSummary: Boolean = false
     ) {
         viewModelScope.launch {
             val loanId = UUID.randomUUID().toString()
@@ -145,7 +154,9 @@ class MainViewModel(
                 name = name,
                 type = type,
                 amount = amount,
-                description = description
+                description = description,
+                createdAt = date.atStartOfDay(java.time.ZoneOffset.UTC).toInstant().toEpochMilli(),
+                excludeFromSummary = excludeFromSummary
             )
             repository.addLoan(loan)
 
@@ -344,6 +355,10 @@ class MainViewModel(
     val showAccountsOnHomepage: StateFlow<Boolean> = repository.showAccountsOnHomepage
         .map { it?.toBoolean() ?: false } // Default to false
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    val showLoansOnHomepage: StateFlow<Boolean> = repository.showLoansOnHomepage
+        .map { it?.toBoolean() ?: true } // Default to true
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
 
     val groupIncomeByAccount: StateFlow<Boolean> = repository.groupIncomeByAccount
         .map { it?.toBoolean() ?: true } // Default to true (new design)
@@ -674,6 +689,12 @@ class MainViewModel(
     fun updateShowAccountsOnHomepage(show: Boolean) {
         viewModelScope.launch {
             repository.setShowAccountsOnHomepage(show)
+        }
+    }
+
+    fun updateShowLoansOnHomepage(show: Boolean) {
+        viewModelScope.launch {
+            repository.setShowLoansOnHomepage(show)
         }
     }
 
