@@ -22,8 +22,8 @@ android {
         applicationId = "com.h2.wellspend"
         minSdk = 26
         targetSdk = 34
-        versionCode = 15
-        versionName = "1.2.5"
+        versionCode = 16
+        versionName = "1.3.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
