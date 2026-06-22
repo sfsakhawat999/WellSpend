@@ -20,7 +20,8 @@ enum class SystemCategory {
 @Keep
 @Entity(tableName = "categories")
 data class Category(
-    @PrimaryKey val name: String,
+    @PrimaryKey val id: String = UUID.randomUUID().toString(),
+    val name: String,
     val iconName: String, // Name of the icon in the map
     val color: Long, // Color as Long (ARGB)
     val isSystem: Boolean = false
@@ -117,6 +118,6 @@ data class AppData(
 @Keep
 @Entity(tableName = "category_sort_orders")
 data class CategorySortOrder(
-    @PrimaryKey val categoryName: String,
+    @PrimaryKey val categoryId: String,
     val sortOrder: Int
 )

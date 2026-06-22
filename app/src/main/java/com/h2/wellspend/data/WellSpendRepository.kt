@@ -89,22 +89,23 @@ class WellSpendRepository(private val database: AppDatabase) {
         database.categoryDao().deleteCategory(category)
     }
 
-    // Category Sorting and Listing
     val sortedCategories: Flow<List<Category>> = database.categoryDao().getAllCategories()
         .combine(database.categoryDao().getAllCategorySortOrders()) { categories, sortOrders ->
              if (categories.isEmpty()) {
                  emptyList()
              } else {
-                 val orderMap = sortOrders.associate { it.categoryName to it.sortOrder }
-                 categories.sortedBy { category ->
-                     orderMap[category.name] ?: Int.MAX_VALUE
-                 }
+                 val orderMap = sortOrders.associate { it.categoryId to it.sortOrder }
+                 categories.sortedWith(
+                     compareBy<Category> { category -> 
+                         orderMap[category.id] ?: Int.MAX_VALUE 
+                     }.thenBy { it.name }
+                 )
              }
         }
 
     suspend fun updateCategoryOrder(categories: List<Category>) {
         val sortOrders = categories.mapIndexed { index, category ->
-            CategorySortOrder(category.name, index)
+            CategorySortOrder(category.id, index)
         }
         database.categoryDao().insertCategorySortOrders(sortOrders)
     }
@@ -121,6 +122,7 @@ class WellSpendRepository(private val database: AppDatabase) {
                 systemInternalCategories.contains(it)
             }.map { sysCat ->
                 Category(
+                    id = sysCat.name,
                     name = sysCat.name,
                     iconName = sysCat.name, // Use nameKey which maps to SystemCategory icon lookup
                     color = getSystemCategoryColor(sysCat).toArgb().toLong(),
@@ -131,7 +133,7 @@ class WellSpendRepository(private val database: AppDatabase) {
             
             // Also initialize sort order
             val defaultOrders = defaultCategories.mapIndexed { index, category ->
-                CategorySortOrder(category.name, index)
+                CategorySortOrder(category.id, index)
             }
             database.categoryDao().insertCategorySortOrders(defaultOrders)
         }

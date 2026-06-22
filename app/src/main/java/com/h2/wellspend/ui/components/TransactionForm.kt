@@ -131,7 +131,7 @@ fun TransactionForm(
         var title by remember { mutableStateOf(initialExpense?.title ?: "") }
         var note by remember { mutableStateOf(initialExpense?.note ?: "") }
         var category by remember {
-                mutableStateOf(categories.find { it.name == initialExpense?.category })
+                mutableStateOf(categories.find { it.id == initialExpense?.category } ?: categories.find { it.name == initialExpense?.category })
         }
         var date by remember {
                 mutableStateOf(initialExpense?.date?.substring(0, 10) ?: LocalDate.now().toString())

@@ -100,7 +100,7 @@ fun CategoryManagementScreen(
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 150.dp),
             verticalArrangement = Arrangement.spacedBy(0.dp)
         ) {
-            itemsIndexed(categories, key = { _, cat -> cat.name }) { index, category ->
+            itemsIndexed(categories, key = { _, cat -> cat.id }) { index, category ->
                 val shape = getGroupedItemShape(index, categories.size)
                 val backgroundShape = getGroupedItemBackgroundShape(index, categories.size)
                 

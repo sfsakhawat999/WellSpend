@@ -82,6 +82,11 @@ fun TransactionItem(
         loans.find { it.id == transaction.loanId }?.name
     } else null
     
+    val categoryObj = remember(transaction.category, categories) {
+        categories.find { it.id == transaction.category } ?: categories.find { it.name == transaction.category }
+    }
+    val categoryName = categoryObj?.name ?: transaction.category
+
     val isIncome = transaction.transactionType == TransactionType.INCOME
     val isTransfer = transaction.transactionType == TransactionType.TRANSFER
     
@@ -99,13 +104,13 @@ fun TransactionItem(
     val displayDesc = when {
         isTransfer && targetAccountName != null -> "Transfer: $sourceAccountName → $targetAccountName"
         isTransfer -> "Transfer: $sourceAccountName → ?"
-        loanName != null -> transaction.title.ifEmpty { transaction.category }
-        isBalanceAdjustment -> transaction.title.ifEmpty { transaction.category }
+        loanName != null -> transaction.title.ifEmpty { categoryName }
+        isBalanceAdjustment -> transaction.title.ifEmpty { categoryName }
         transaction.title.isNotEmpty() -> {
-            val prefix = if (isIncome) "Income" else transaction.category
+            val prefix = if (isIncome) "Income" else categoryName
             "$prefix: ${transaction.title}"
         }
-        else -> if (isIncome) "Income" else transaction.category
+        else -> if (isIncome) "Income" else categoryName
     }
     
     val dateStr = try {
@@ -263,7 +268,6 @@ fun TransactionItem(
             verticalAlignment = Alignment.CenterVertically
         ) {
             // Transaction Icon
-            val categoryObj = categories.find { it.name == transaction.category }
             val transactionIcon = when {
                 isIncome -> Icons.Default.AttachMoney
                 isTransfer -> Icons.AutoMirrored.Filled.CompareArrows

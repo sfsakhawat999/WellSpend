@@ -68,7 +68,7 @@ fun CategoryDialog(
                     onValueChange = { name = it },
                     label = { Text("Category Name") },
                     singleLine = true,
-                    enabled = initialCategory == null
+                    enabled = true
                 )
                 
                 // Color Picker Trigger
@@ -126,14 +126,15 @@ fun CategoryDialog(
                 onClick = { 
                     onConfirm(
                         Category(
-                            name = name,
+                            id = initialCategory?.id ?: java.util.UUID.randomUUID().toString(),
+                            name = name.trim(),
                             iconName = iconName,
                             color = color.toArgb().toLong(),
                             isSystem = initialCategory?.isSystem ?: false
                         )
                     ) 
                 },
-                enabled = name.isNotBlank() && (initialCategory?.name == name || !usedCategoryNames.contains(name))
+                enabled = name.trim().isNotBlank() && (initialCategory?.name == name.trim() || !usedCategoryNames.contains(name.trim()))
             ) {
                 Text("Save")
             }

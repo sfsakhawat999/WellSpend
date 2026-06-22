@@ -48,7 +48,9 @@ fun TransactionPreviewScreen(
 ) {
         val scrollState = rememberScrollState()
 
-        val categoryObj = categories.find { it.name == transaction.category }
+        val categoryObj = remember(transaction.category, categories) {
+                categories.find { it.id == transaction.category } ?: categories.find { it.name == transaction.category }
+        }
         val isIncome = transaction.transactionType == TransactionType.INCOME
         val isTransfer = transaction.transactionType == TransactionType.TRANSFER
         val isExpense = transaction.transactionType == TransactionType.EXPENSE
@@ -187,7 +189,7 @@ fun TransactionPreviewScreen(
                         DetailRow(
                                 icon = Icons.Default.Category,
                                 label = "Category",
-                                value = transaction.category
+                                value = categoryObj?.name ?: transaction.category
                         )
 
                         if (isTransfer && targetAccountName != null) {

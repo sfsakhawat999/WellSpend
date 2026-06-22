@@ -308,16 +308,17 @@ fun ExpenseList(
                     
                     // DATA MAPPING
                     val displayCategory = if (groupingMode == GroupingMode.CATEGORY) {
-                        val categoryName = groupKey ?: "Uncategorized" // Should not happen for category mode usually
-                        categories.find { it.name == categoryName } 
-                            ?: categories.find { it.name == SystemCategory.TransactionFee.name && categoryName == SystemCategory.TransactionFee.name }
-                            ?: Category(name = categoryName, iconName = "Help", color = 0xFF9ca3af, isSystem = false)
+                        val categoryId = groupKey ?: "Uncategorized"
+                        categories.find { it.id == categoryId } 
+                            ?: categories.find { it.name == categoryId }
+                            ?: Category(id = categoryId, name = categoryId, iconName = "Help", color = 0xFF9ca3af, isSystem = false)
                     } else {
                         // ACCOUNT MODE
                         val accountId = groupKey
                         val account = accounts.find { it.id == accountId }
                         if (account != null) {
                             Category(
+                                id = account.id,
                                 name = account.name,
                                 iconName = "Bank", // Use generic bank icon
                                 color = getAccountColor(account.id).toArgb().toLong(),
@@ -326,6 +327,7 @@ fun ExpenseList(
                         } else {
                             // Null Account (e.g. Cash or Unassigned)
                             Category(
+                                id = "Unknown",
                                 name = "Unknown Account",
                                 iconName = "Money",
                                 color = 0xFF9ca3af,
@@ -336,7 +338,7 @@ fun ExpenseList(
                     
                     // Budgets only apply in Category Mode
                     val displayBudget = if (groupingMode == GroupingMode.CATEGORY) {
-                         budgets.find { it.category == displayCategory.name }
+                         budgets.find { it.category == displayCategory.id } ?: budgets.find { it.category == displayCategory.name }
                     } else null
 
                         Box(modifier = Modifier.padding(horizontal = 16.dp)) {

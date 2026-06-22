@@ -292,8 +292,8 @@ class MainViewModel(
         (optimistic ?: repo)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    val usedCategoryNames: StateFlow<Set<String>> = expenses.map { list -> 
-        list.map { it.category }.toSet()
+    val usedCategoryNames: StateFlow<Set<String>> = combine(expenses, repository.sortedCategories) { list, cats ->
+        list.mapNotNull { exp -> cats.find { it.id == exp.category }?.name ?: cats.find { it.name == exp.category }?.name }.toSet()
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptySet())
 
     // Calculate Balances
@@ -443,11 +443,11 @@ class MainViewModel(
         note: String? = null
     ) {
         viewModelScope.launch {
-            val categoryName = category?.name ?: SystemCategory.Others.name
+            val categoryId = category?.id ?: SystemCategory.Others.name
             val expense = Expense(
                 amount = amount,
                 title = title,
-                category = categoryName,
+                category = categoryId,
                 date = date, // Should be ISO string
                 timestamp = System.currentTimeMillis(),
                 // isRecurring removed
@@ -466,7 +466,7 @@ class MainViewModel(
                 
                 val config = RecurringConfig(
                     amount = amount,
-                    category = categoryName,
+                    category = categoryId,
                     title = title,
                     note = note,
                     frequency = frequency,
@@ -500,12 +500,12 @@ class MainViewModel(
         note: String? = null
     ) {
         viewModelScope.launch {
-            val categoryName = category?.name ?: SystemCategory.Others.name
+            val categoryId = category?.id ?: SystemCategory.Others.name
             val expense = Expense(
                 id = id,
                 amount = amount,
                 title = title,
-                category = categoryName,
+                category = categoryId,
                 date = date,
                 timestamp = System.currentTimeMillis(), 
                 // isRecurring removed
@@ -525,7 +525,7 @@ class MainViewModel(
                 
                 val config = RecurringConfig(
                     amount = amount,
-                    category = categoryName,
+                    category = categoryId,
                     title = title,
                     note = note,
                     frequency = frequency,
@@ -763,53 +763,134 @@ class MainViewModel(
                         val expenses = importData.expenses.map { it.toExpense() }
                         val budgets = importData.budgets // No change
                         val accounts = importData.accounts // Strict Account is fine if entire list is missing (null list handled in repo)
-                        // But if list exists, items must be valid. Old data has no list.
-                        // New data has list.
-                        
                         val recurringConfigs = importData.recurringConfigs?.map { it.toRecurringConfig() }
                         val loans = importData.loans
-                        var categories = importData.categories ?: emptyList()
-                        
-                        // Check for missing categories in imported expenses
-                        val importedCategoryNames = expenses.map { it.category }.toSet()
-                        val existingCategoryNames = categories.map { it.name }.toSet()
-                        val missingCategoryNames = importedCategoryNames - existingCategoryNames
-                        
-                        if (missingCategoryNames.isNotEmpty()) {
-                            val newCategories = missingCategoryNames.map { name ->
-                                val sysCat = try { com.h2.wellspend.data.SystemCategory.valueOf(name) } catch (e: Exception) { null }
-                                
-                                if (sysCat != null) {
-                                    val isSystemProtected = setOf(
-                                         com.h2.wellspend.data.SystemCategory.Others.name,
-                                         com.h2.wellspend.data.SystemCategory.Loan.name,
-                                         com.h2.wellspend.data.SystemCategory.TransactionFee.name,
-                                         com.h2.wellspend.data.SystemCategory.BalanceAdjustment.name
-                                    ).contains(name)
-                                    
-                                    val color = com.h2.wellspend.ui.CategoryColors[sysCat]?.toArgb()?.toLong() 
-                                        ?: (0xFF000000 or (kotlin.random.Random.nextLong() and 0x00FFFFFF))
 
-                                    com.h2.wellspend.data.Category(
-                                        name = name,
-                                        iconName = name, 
-                                        color = color,
-                                        isSystem = isSystemProtected
-                                    )
+                        val systemCategories = setOf("Loan", "TransactionFee", "BalanceAdjustment", "Others")
+                        val sanitizedCategories = mutableListOf<com.h2.wellspend.data.Category>()
+                        val categoryIdMap = mutableMapOf<String, String>()
+
+                        // 1. Process imported categories
+                        val importedCats = importData.categories ?: emptyList()
+                        importedCats.forEach { cat ->
+                            val trimmedName = cat.name.trim()
+                            val isSystem = cat.isSystem || systemCategories.contains(trimmedName)
+                            val hasId = !cat.id.isNullOrBlank()
+                            val finalId = if (isSystem) {
+                                trimmedName
+                            } else if (hasId) {
+                                cat.id.trim()
+                            } else {
+                                java.util.UUID.randomUUID().toString()
+                            }
+                            
+                            if (sanitizedCategories.none { it.id == finalId }) {
+                                val sanitizedCat = com.h2.wellspend.data.Category(
+                                    id = finalId,
+                                    name = trimmedName,
+                                    iconName = (cat.iconName as String?) ?: "Label",
+                                    color = cat.color,
+                                    isSystem = isSystem
+                                )
+                                sanitizedCategories.add(sanitizedCat)
+                            }
+                            
+                            categoryIdMap[cat.name] = finalId
+                            categoryIdMap[trimmedName] = finalId
+                            if (hasId) {
+                                categoryIdMap[cat.id] = finalId
+                                categoryIdMap[cat.id.trim()] = finalId
+                            }
+                        }
+
+                        // 2. Identify all references in imported transactions, budgets, recurringConfigs
+                        val allReferenced = mutableSetOf<String>()
+                        expenses.forEach { allReferenced.add(it.category) }
+                        budgets.forEach { allReferenced.add(it.category) }
+                        recurringConfigs?.forEach { allReferenced.add(it.category) }
+
+                        // Helper to check UUID
+                        fun isUuid(str: String): Boolean {
+                            return try {
+                                java.util.UUID.fromString(str)
+                                true
+                            } catch (e: Exception) {
+                                false
+                            }
+                        }
+
+                        // 3. For any referenced category not mapped, resolve it
+                        allReferenced.forEach { ref ->
+                            val trimmed = ref.trim()
+                            if (!categoryIdMap.containsKey(ref) && !categoryIdMap.containsKey(trimmed)) {
+                                if (systemCategories.contains(trimmed)) {
+                                    val finalId = trimmed
+                                    categoryIdMap[ref] = finalId
+                                    categoryIdMap[trimmed] = finalId
+                                    if (sanitizedCategories.none { it.id == finalId }) {
+                                        val sysCat = try { com.h2.wellspend.data.SystemCategory.valueOf(trimmed) } catch (e: Exception) { null }
+                                        val color = sysCat?.let { com.h2.wellspend.ui.CategoryColors[it]?.toArgb()?.toLong() }
+                                            ?: (0xFF000000 or (kotlin.random.Random.nextLong() and 0x00FFFFFF))
+                                        sanitizedCategories.add(
+                                            com.h2.wellspend.data.Category(
+                                                id = finalId,
+                                                name = trimmed,
+                                                iconName = trimmed,
+                                                color = color,
+                                                isSystem = true
+                                            )
+                                        )
+                                    }
+                                } else if (isUuid(trimmed)) {
+                                    val finalId = trimmed
+                                    categoryIdMap[ref] = finalId
+                                    categoryIdMap[trimmed] = finalId
+                                    if (sanitizedCategories.none { it.id == finalId }) {
+                                        sanitizedCategories.add(
+                                            com.h2.wellspend.data.Category(
+                                                id = finalId,
+                                                name = "Category (${finalId.take(8)})",
+                                                iconName = "Label",
+                                                color = (0xFF000000 or (kotlin.random.Random.nextLong() and 0x00FFFFFF)),
+                                                isSystem = false
+                                            )
+                                        )
+                                    }
                                 } else {
+                                    val finalId = java.util.UUID.randomUUID().toString()
+                                    categoryIdMap[ref] = finalId
+                                    categoryIdMap[trimmed] = finalId
                                     val randomColor = (0xFF000000 or (kotlin.random.Random.nextLong() and 0x00FFFFFF))
-                                    com.h2.wellspend.data.Category(
-                                        name = name,
-                                        iconName = "Label", 
-                                        color = randomColor,
-                                        isSystem = false
+                                    sanitizedCategories.add(
+                                        com.h2.wellspend.data.Category(
+                                            id = finalId,
+                                            name = trimmed,
+                                            iconName = "Label",
+                                            color = randomColor,
+                                            isSystem = false
+                                        )
                                     )
                                 }
                             }
-                            categories = categories + newCategories
                         }
 
-                        repository.importData(expenses, budgets, accounts, recurringConfigs, loans, categories)
+                        // 4. Update the references in expenses, budgets, recurringConfigs using our map
+                        val mappedExpenses = expenses.map { exp ->
+                            val finalCatId = categoryIdMap[exp.category] ?: categoryIdMap[exp.category.trim()] ?: exp.category.trim()
+                            exp.copy(category = finalCatId)
+                        }
+
+                        val mappedBudgets = budgets.map { b ->
+                            val finalCatId = categoryIdMap[b.category] ?: categoryIdMap[b.category.trim()] ?: b.category.trim()
+                            b.copy(category = finalCatId)
+                        }
+
+                        val mappedRecurringConfigs = recurringConfigs?.map { rc ->
+                            val finalCatId = categoryIdMap[rc.category] ?: categoryIdMap[rc.category.trim()] ?: rc.category.trim()
+                            rc.copy(category = finalCatId)
+                        }
+
+                        repository.importData(mappedExpenses, mappedBudgets, accounts, mappedRecurringConfigs, loans, sanitizedCategories)
                         viewModelScope.launch(kotlinx.coroutines.Dispatchers.Main) {
                             onResult(true, "Import successful")
                         }

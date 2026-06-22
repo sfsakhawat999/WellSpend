@@ -163,7 +163,8 @@ fun FinancialReport(
 
         val catData = currentCatMap.map { (catName, amount) ->
              val prevAmount = prevCatMap[catName] ?: 0.0
-             val category = categories.find { it.name == catName } ?: Category(
+             val category = categories.find { it.id == catName } ?: categories.find { it.name == catName } ?: Category(
+                id = catName,
                 name = catName,
                 iconName = catName,
                 color = com.h2.wellspend.ui.getSystemCategoryColor(com.h2.wellspend.data.SystemCategory.Others).toArgb().toLong().also {
@@ -200,7 +201,8 @@ fun FinancialReport(
         
         val breakdownData = breakdownCatMap.map { (catName, amount) ->
              val prevAmount = breakdownPrevCatMap[catName] ?: 0.0
-             val category = categories.find { it.name == catName } ?: Category(
+             val category = categories.find { it.id == catName } ?: categories.find { it.name == catName } ?: Category(
+                id = catName,
                 name = catName,
                 iconName = catName,
                 color = com.h2.wellspend.ui.getSystemCategoryColor(com.h2.wellspend.data.SystemCategory.Others).toArgb().toLong().also {

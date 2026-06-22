@@ -281,7 +281,7 @@ fun MainScreen(
         if (showBudgets) {
             // Reset/Init draft logic when opening
             viewModel.categoryOrder.value.forEach { cat ->
-                val existing = budgets.find { it.category == cat.name }
+                val existing = budgets.find { it.category == cat.id } ?: budgets.find { it.category == cat.name }
                 localBudgetLimits[cat] = existing?.limitAmount?.toString() ?: ""
             }
         }
@@ -770,7 +770,7 @@ fun MainScreen(
                                                 val newBudgets = localBudgetLimits.mapNotNull { (cat, limitStr) ->
                                                     val limit = limitStr.toDoubleOrNull()
                                                     if (limit != null && limit > 0) {
-                                                        com.h2.wellspend.data.Budget(cat.name, limit)
+                                                        com.h2.wellspend.data.Budget(cat.id, limit)
                                                     } else null
                                                 }
                                                 viewModel.updateBudgets(newBudgets, currency)
