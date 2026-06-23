@@ -51,8 +51,8 @@ enum class OnboardingStep {
     WELCOME,
     THEME,
     CURRENCY,
-    CATEGORY_SELECTION,
     START_OPTION,
+    CATEGORY_SELECTION,
     CREATE_ACCOUNT,
     RESTORE_BACKUP,
     COMPLETE
@@ -128,9 +128,9 @@ fun OnboardingScreen(
                         currentStep = when (currentStep) {
                             OnboardingStep.THEME -> OnboardingStep.WELCOME
                             OnboardingStep.CURRENCY -> OnboardingStep.THEME
-                            OnboardingStep.CATEGORY_SELECTION -> OnboardingStep.CURRENCY
-                            OnboardingStep.START_OPTION -> OnboardingStep.CATEGORY_SELECTION
-                            OnboardingStep.CREATE_ACCOUNT -> OnboardingStep.START_OPTION
+                            OnboardingStep.START_OPTION -> OnboardingStep.CURRENCY
+                            OnboardingStep.CATEGORY_SELECTION -> OnboardingStep.START_OPTION
+                            OnboardingStep.CREATE_ACCOUNT -> OnboardingStep.CATEGORY_SELECTION
                             OnboardingStep.RESTORE_BACKUP -> OnboardingStep.START_OPTION
                             else -> OnboardingStep.WELCOME
                         }
@@ -168,12 +168,12 @@ fun OnboardingScreen(
                             currentStep = when (currentStep) {
                                 OnboardingStep.WELCOME -> OnboardingStep.THEME
                                 OnboardingStep.THEME -> OnboardingStep.CURRENCY
-                                OnboardingStep.CURRENCY -> OnboardingStep.CATEGORY_SELECTION
-                                OnboardingStep.CATEGORY_SELECTION -> OnboardingStep.START_OPTION
+                                OnboardingStep.CURRENCY -> OnboardingStep.START_OPTION
                                 OnboardingStep.START_OPTION -> {
                                     if (selectedStartOption == "RESTORE") OnboardingStep.RESTORE_BACKUP 
-                                    else OnboardingStep.CREATE_ACCOUNT
+                                    else OnboardingStep.CATEGORY_SELECTION
                                 }
+                                OnboardingStep.CATEGORY_SELECTION -> OnboardingStep.CREATE_ACCOUNT
                                 OnboardingStep.CREATE_ACCOUNT -> OnboardingStep.COMPLETE
                                 else -> OnboardingStep.COMPLETE
                             }
@@ -205,10 +205,10 @@ fun OnboardingScreen(
                 OnboardingStep.WELCOME -> 0.1f
                 OnboardingStep.THEME -> 0.25f
                 OnboardingStep.CURRENCY -> 0.4f
-                OnboardingStep.CATEGORY_SELECTION -> 0.55f
-                OnboardingStep.START_OPTION -> 0.7f
-                OnboardingStep.CREATE_ACCOUNT -> 0.9f
-                OnboardingStep.RESTORE_BACKUP -> 0.9f
+                OnboardingStep.START_OPTION -> 0.55f
+                OnboardingStep.CATEGORY_SELECTION -> 0.7f
+                OnboardingStep.CREATE_ACCOUNT -> 0.85f
+                OnboardingStep.RESTORE_BACKUP -> 0.85f
                 OnboardingStep.COMPLETE -> 1.0f
             }
             LinearProgressIndicator(
