@@ -23,6 +23,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.h2.wellspend.data.Account
@@ -37,12 +38,18 @@ import com.h2.wellspend.data.Category
 import com.h2.wellspend.data.SystemCategory
 import com.h2.wellspend.ui.getSystemCategoryColor
 import com.h2.wellspend.ui.getSystemCategoryIcon
+import com.h2.wellspend.utils.MathParser
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -99,7 +106,6 @@ fun OnboardingScreen(
     // Removed local createdAccounts state, using existingAccounts
     var accountName by remember { mutableStateOf("") }
     var initialBalance by remember { mutableStateOf("") }
-    
     // State for Backup
     var importStatus by remember { mutableStateOf<String?>(null) }
     val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -192,14 +198,19 @@ fun OnboardingScreen(
             }
         }
     ) { paddingValues ->
-        Column(
-             // ... existing modifiers
-             modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            var isAbcKeyboard by remember { mutableStateOf(false) }
+            var isFocused by remember { mutableStateOf(false) }
+            val focusRequester = remember { FocusRequester() }
+
+            Column(
+                 // ... existing modifiers
+                 modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues)
+                    .padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
             // ... (Progress Indicator and AnimatedContent structure remains same) ...
              val progress = when(currentStep) {
                 OnboardingStep.WELCOME -> 0.1f
@@ -547,12 +558,39 @@ fun OnboardingScreen(
                             Spacer(modifier = Modifier.height(16.dp))
                             OutlinedTextField(
                                 value = initialBalance,
-                                onValueChange = { if (it.all { char -> char.isDigit() || char == '.' }) initialBalance = it },
+                                onValueChange = {
+                                    val filtered = it.filter { char ->
+                                        char.isDigit() || char == '.' || char == '+' || char == '-' || char == '*' || char == '/' || char == '(' || char == ')' || char == ' '
+                                    }
+                                    initialBalance = filtered
+                                },
                                 label = { Text("Initial Balance") },
                                 singleLine = true,
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                modifier = Modifier.fillMaxWidth(),
-                                leadingIcon = { Text(selectedCurrencySymbol, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold) }
+                                keyboardOptions = KeyboardOptions(
+                                    keyboardType = if (isAbcKeyboard) KeyboardType.Text else KeyboardType.Decimal
+                                ),
+                                textStyle = TextStyle(
+                                    color = if (MathParser.hasMathOperator(initialBalance) && !MathParser.areParenthesesCorrect(initialBalance)) {
+                                        MaterialTheme.colorScheme.error
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurface
+                                    }
+                                ),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .focusRequester(focusRequester)
+                                    .onFocusChanged { isFocused = it.isFocused },
+                                leadingIcon = { Text(selectedCurrencySymbol, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold) },
+                                supportingText = if (MathParser.hasMathOperator(initialBalance)) {
+                                    val evalResult = MathParser.evaluate(initialBalance)
+                                    if (evalResult != null) {
+                                        if (evalResult >= 0.0) {
+                                            { Text("= $selectedCurrencySymbol${String.format("%.2f", evalResult)}", color = MaterialTheme.colorScheme.secondary) }
+                                        } else {
+                                            { Text("= -$selectedCurrencySymbol${String.format("%.2f", kotlin.math.abs(evalResult))} (Negative amount not allowed)", color = MaterialTheme.colorScheme.error) }
+                                        }
+                                    } else null
+                                } else null
                             )
                             
                             Spacer(modifier = Modifier.height(24.dp))
@@ -561,22 +599,27 @@ fun OnboardingScreen(
                             Button(
                                 onClick = {
                                     if (accountName.isNotBlank()) {
+                                        val bal = (if (MathParser.hasMathOperator(initialBalance)) MathParser.evaluate(initialBalance) else initialBalance.toDoubleOrNull()) ?: 0.0
                                         val account = Account(
                                             id = UUID.randomUUID().toString(),
                                             name = accountName,
-                                            initialBalance = initialBalance.toDoubleOrNull() ?: 0.0,
+                                            initialBalance = bal,
                                             feeConfigs = emptyList(),
                                             sortOrder = existingAccounts.size // Use existingAccounts size
                                         )
                                         onCreateAccount(account)
-                                        // removed local list update
                                         // Reset fields
                                         accountName = ""
                                         initialBalance = ""
                                     }
                                 },
                                 modifier = Modifier.fillMaxWidth(),
-                                enabled = accountName.isNotBlank(),
+                                enabled = accountName.isNotBlank() && (initialBalance.isEmpty() || if (MathParser.hasMathOperator(initialBalance)) {
+                                    MathParser.areParenthesesCorrect(initialBalance) && MathParser.evaluate(initialBalance) != null && MathParser.evaluate(initialBalance)!! >= 0.0
+                                } else {
+                                    val amtVal = initialBalance.toDoubleOrNull()
+                                    amtVal != null && amtVal >= 0.0
+                                }),
                                 shape = RoundedCornerShape(12.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondaryContainer, contentColor = MaterialTheme.colorScheme.onSecondaryContainer)
                             ) {
@@ -673,5 +716,35 @@ fun OnboardingScreen(
                 }
             }
         }
+
+        val isKeyboardVisible = com.h2.wellspend.utils.KeyboardUtils.keyboardAsState().value
+        if (currentStep == OnboardingStep.CREATE_ACCOUNT && isFocused && isKeyboardVisible) {
+            Surface(
+                onClick = {
+                    isAbcKeyboard = !isAbcKeyboard
+                    focusRequester.requestFocus()
+                },
+                shape = RoundedCornerShape(16.dp),
+                color = MaterialTheme.colorScheme.secondaryContainer,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .imePadding()
+                    .padding(16.dp),
+                shadowElevation = 6.dp
+            ) {
+                Box(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = if (isAbcKeyboard) "123" else "Abc",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer
+                    )
+                }
+            }
+        }
     }
+}
 }

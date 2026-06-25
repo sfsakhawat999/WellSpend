@@ -3,6 +3,9 @@ package com.h2.wellspend.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
@@ -40,7 +43,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
 
 import androidx.compose.ui.text.TextStyle
-
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.gestures.Orientation
@@ -52,6 +57,7 @@ import kotlin.math.roundToInt
 import androidx.compose.foundation.layout.offset
 import kotlinx.coroutines.launch
 import com.h2.wellspend.data.TimeRange
+import com.h2.wellspend.utils.MathParser
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -469,7 +475,7 @@ fun AccountItem(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun AccountInputScreen(
     account: Account?,
@@ -495,11 +501,16 @@ fun AccountInputScreen(
     var newFeeValue by remember { mutableStateOf("") }
     var newFeeIsPercent by remember { mutableStateOf(true) }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-    ) {
+    Box(modifier = Modifier.fillMaxSize()) {
+        var isAbcKeyboard by remember { mutableStateOf(false) }
+        var isFocused by remember { mutableStateOf(false) }
+        val focusRequester = remember { FocusRequester() }
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
+        ) {
 
         Column(
             modifier = Modifier
@@ -521,51 +532,81 @@ fun AccountInputScreen(
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = currency,
-                            style = TextStyle(fontSize = 36.sp, color = MaterialTheme.colorScheme.onSurfaceVariant),
-                            modifier = Modifier.padding(end = 8.dp)
-                        )
-                        androidx.compose.foundation.text.BasicTextField(
-                            value = displayBalance,
-                            onValueChange = { newValue ->
-                                val filtered = newValue.filter { it.isDigit() || it == '.' || it == '-' }
-                                val parts = filtered.removePrefix("-").split(".")
-                                val prefix = if (filtered.startsWith("-")) "-" else ""
-                                displayBalance = when {
-                                    parts.size == 1 -> prefix + parts[0]
-                                    parts.size == 2 -> prefix + "${parts[0]}.${parts[1].take(2)}"
-                                    else -> displayBalance
-                                }
-                            },
-                            textStyle = TextStyle(
-                                fontSize = 56.sp,
-                                fontWeight = FontWeight.Bold,
-                                textAlign = TextAlign.Start,
-                                color = MaterialTheme.colorScheme.primary
-                            ),
-                            decorationBox = { innerTextField ->
-                                Box(contentAlignment = Alignment.CenterStart) {
-                                    if (displayBalance.isEmpty()) {
-                                        Text(
-                                            "0",
-                                            style = TextStyle(
-                                                fontSize = 56.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                textAlign = TextAlign.Start,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
-                                            )
-                                        )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text(
+                                text = currency,
+                                style = TextStyle(fontSize = 36.sp, color = MaterialTheme.colorScheme.onSurfaceVariant),
+                                modifier = Modifier.padding(end = 8.dp)
+                            )
+                            androidx.compose.foundation.text.BasicTextField(
+                                value = displayBalance,
+                                onValueChange = { newValue ->
+                                    val filtered = newValue.filter {
+                                        it.isDigit() || it == '.' || it == '+' || it == '-' || it == '*' || it == '/' || it == '(' || it == ')' || it == ' '
                                     }
-                                    innerTextField()
-                                }
-                            },
-                            singleLine = true,
-                            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            modifier = Modifier.widthIn(min = 200.dp)
-                        )
+                                    displayBalance = filtered
+                                },
+                                textStyle = TextStyle(
+                                    fontSize = 56.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    textAlign = TextAlign.Start,
+                                    color = if (MathParser.hasMathOperator(displayBalance) && !MathParser.areParenthesesCorrect(displayBalance)) {
+                                        MaterialTheme.colorScheme.error
+                                    } else {
+                                        MaterialTheme.colorScheme.primary
+                                    }
+                                ),
+                                decorationBox = { innerTextField ->
+                                    Box(contentAlignment = Alignment.CenterStart) {
+                                        if (displayBalance.isEmpty()) {
+                                            Text(
+                                                "0",
+                                                style = TextStyle(
+                                                    fontSize = 56.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    textAlign = TextAlign.Start,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
+                                                )
+                                            )
+                                        }
+                                        innerTextField()
+                                    }
+                                },
+                                singleLine = true,
+                                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                                keyboardOptions = KeyboardOptions(
+                                    keyboardType = if (isAbcKeyboard) KeyboardType.Text else KeyboardType.Decimal
+                                ),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .focusRequester(focusRequester)
+                                    .onFocusChanged { isFocused = it.isFocused }
+                            )
+                        }
+                    }
+                    if (MathParser.hasMathOperator(displayBalance)) {
+                        val evalResult = MathParser.evaluate(displayBalance)
+                        if (evalResult != null) {
+                            val resultText = if (evalResult >= 0.0) {
+                                "= $currency${String.format("%.2f", evalResult)}"
+                            } else {
+                                "= -$currency${String.format("%.2f", kotlin.math.abs(evalResult))}"
+                            }
+                            Text(
+                                text = resultText,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.secondary,
+                                modifier = Modifier.padding(top = 4.dp, start = 48.dp)
+                            )
+                        }
                     }
                     if (account != null) {
                         Text(
@@ -667,7 +708,7 @@ fun AccountInputScreen(
             Button(
                 onClick = {
                     if (name.isNotBlank()) {
-                        val bal = displayBalance.toDoubleOrNull() ?: 0.0
+                        val bal = (if (MathParser.hasMathOperator(displayBalance)) MathParser.evaluate(displayBalance) else displayBalance.toDoubleOrNull()) ?: 0.0
                         if (account == null) {
                             onSave(Account(id = UUID.randomUUID().toString(), name = name, initialBalance = bal, feeConfigs = feeConfigs), null)
                         } else {
@@ -683,7 +724,11 @@ fun AccountInputScreen(
                         }
                     }
                 },
-                enabled = name.isNotBlank(),
+                enabled = name.isNotBlank() && (displayBalance.isEmpty() || if (MathParser.hasMathOperator(displayBalance)) {
+                    MathParser.areParenthesesCorrect(displayBalance) && MathParser.evaluate(displayBalance) != null
+                } else {
+                    displayBalance.toDoubleOrNull() != null
+                }),
                 shape = RoundedCornerShape(16.dp),
                 modifier = Modifier.fillMaxWidth().height(56.dp)
             ) {
@@ -692,5 +737,35 @@ fun AccountInputScreen(
                 Text("Save Account", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             }
         }
+    }
+
+    val isKeyboardVisible = com.h2.wellspend.utils.KeyboardUtils.keyboardAsState().value
+    if (isFocused && isKeyboardVisible) {
+        Surface(
+            onClick = {
+                isAbcKeyboard = !isAbcKeyboard
+                focusRequester.requestFocus()
+            },
+            shape = RoundedCornerShape(16.dp),
+            color = MaterialTheme.colorScheme.secondaryContainer,
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .imePadding()
+                .padding(16.dp),
+            shadowElevation = 6.dp
+        ) {
+            Box(
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = if (isAbcKeyboard) "123" else "Abc",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                )
+            }
+        }
+    }
     }
 }

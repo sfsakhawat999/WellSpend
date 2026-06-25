@@ -18,6 +18,9 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -39,6 +42,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.ui.draw.clip
@@ -63,13 +67,17 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.sp
 import com.h2.wellspend.data.Account
 import com.h2.wellspend.data.Loan
+import com.h2.wellspend.utils.MathParser
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import com.h2.wellspend.data.LoanType
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun AddLoanTransactionScreen(
     loan: Loan,
@@ -128,11 +136,16 @@ fun AddLoanTransactionScreen(
     }
 
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-    ) {
+    Box(modifier = Modifier.fillMaxSize()) {
+        var isAbcKeyboard by remember { mutableStateOf(false) }
+        var isFocused by remember { mutableStateOf(false) }
+        val focusRequester = remember { FocusRequester() }
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
+        ) {
         // Header Removed - Handled by MainScreen
 
         // Content
@@ -181,52 +194,83 @@ fun AddLoanTransactionScreen(
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Start
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text(
-                        text = currency,
-                        style = androidx.compose.ui.text.TextStyle(fontSize = 36.sp, color = MaterialTheme.colorScheme.onSurfaceVariant),
-                        modifier = Modifier.padding(end = 8.dp)
-                    )
-                    androidx.compose.foundation.text.BasicTextField(
-                        value = amount,
-                        onValueChange = { newValue ->
-                            // Allow only valid decimal input with max 2 decimal places
-                            val filtered = newValue.filter { it.isDigit() || it == '.' }
-                            val parts = filtered.split(".")
-                            amount = when {
-                                parts.size == 1 -> filtered
-                                parts.size == 2 -> "${parts[0]}.${parts[1].take(2)}"
-                                else -> amount
-                            }
-                        },
-                        textStyle = TextStyle(
-                            fontSize = 56.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary,
-                            textAlign = TextAlign.Start
-                        ),
-                        decorationBox = { innerTextField ->
-                            Box(contentAlignment = Alignment.CenterStart) {
-                                if (amount.isEmpty()) {
-                                    Text(
-                                        "0",
-                                        style = TextStyle(
-                                            fontSize = 56.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
-                                            textAlign = TextAlign.Start
-                                        )
-                                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text(
+                            text = currency,
+                            style = androidx.compose.ui.text.TextStyle(fontSize = 36.sp, color = MaterialTheme.colorScheme.onSurfaceVariant),
+                            modifier = Modifier.padding(end = 8.dp)
+                        )
+                        androidx.compose.foundation.text.BasicTextField(
+                            value = amount,
+                            onValueChange = { newValue ->
+                                val filtered = newValue.filter {
+                                    it.isDigit() || it == '.' || it == '+' || it == '-' || it == '*' || it == '/' || it == '(' || it == ')' || it == ' '
                                 }
-                                innerTextField()
-                            }
-                        },
-                        singleLine = true,
-                        cursorBrush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.primary),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        modifier = Modifier.widthIn(min = 200.dp)
-                    )
+                                amount = filtered
+                            },
+                            textStyle = TextStyle(
+                                fontSize = 56.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (MathParser.hasMathOperator(amount) && !MathParser.areParenthesesCorrect(amount)) {
+                                    MaterialTheme.colorScheme.error
+                                } else {
+                                    MaterialTheme.colorScheme.primary
+                                },
+                                textAlign = TextAlign.Start
+                            ),
+                            decorationBox = { innerTextField ->
+                                Box(contentAlignment = Alignment.CenterStart) {
+                                    if (amount.isEmpty()) {
+                                        Text(
+                                            "0",
+                                            style = TextStyle(
+                                                fontSize = 56.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
+                                                textAlign = TextAlign.Start
+                                            )
+                                        )
+                                    }
+                                    innerTextField()
+                                }
+                            },
+                            singleLine = true,
+                            cursorBrush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.primary),
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = if (isAbcKeyboard) KeyboardType.Text else KeyboardType.Decimal
+                            ),
+                            modifier = Modifier
+                                .weight(1f)
+                                .focusRequester(focusRequester)
+                                .onFocusChanged { isFocused = it.isFocused }
+                        )
+                    }
+                }
+                if (MathParser.hasMathOperator(amount)) {
+                    val evalResult = MathParser.evaluate(amount)
+                    if (evalResult != null) {
+                        if (evalResult >= 0.0) {
+                            Text(
+                                text = "= $currency${String.format("%.2f", evalResult)}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.secondary,
+                                modifier = Modifier.padding(top = 4.dp, start = 48.dp)
+                            )
+                        } else {
+                            Text(
+                                text = "= -$currency${String.format("%.2f", kotlin.math.abs(evalResult))} (Negative amount not allowed)",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.padding(top = 4.dp, start = 48.dp)
+                            )
+                        }
+                    }
                 }
             }
                 
@@ -273,9 +317,10 @@ fun AddLoanTransactionScreen(
                  // Fee Logic (only show when account is selected)
                  val showFee = ((loan.type == LoanType.LEND && !isPayment) || (loan.type == LoanType.BORROW && isPayment)) && selectedAccountId != null
                  if (showFee) {
+                    val parsedAmount = (if (MathParser.hasMathOperator(amount)) MathParser.evaluate(amount) else amount.toDoubleOrNull()) ?: 0.0
                     FeeSelector(
                         account = currentAccount,
-                        transactionAmount = amount.toDoubleOrNull() ?: 0.0,
+                        transactionAmount = parsedAmount,
                         currency = currency,
                         selectedConfigName = selectedFeeConfigName,
                         currentFeeAmount = feeAmount,
@@ -318,7 +363,7 @@ fun AddLoanTransactionScreen(
         ) {
             // Helper function to perform the save
             val performSave = {
-                val amt = amount.toDoubleOrNull()
+                val amt = if (MathParser.hasMathOperator(amount)) MathParser.evaluate(amount) else amount.toDoubleOrNull()
                 if (amt != null) {
                     val fee = if (selectedAccountId != null) feeAmount.toDoubleOrNull() ?: 0.0 else 0.0
                     val finalFeeConfigName = if (selectedAccountId != null) selectedFeeConfigName else null
@@ -334,7 +379,12 @@ fun AddLoanTransactionScreen(
                         performSave()
                     }
                 },
-                enabled = amount.isNotEmpty() && amount.toDoubleOrNull() != null,
+                enabled = amount.isNotEmpty() && (if (MathParser.hasMathOperator(amount)) {
+                    MathParser.areParenthesesCorrect(amount) && MathParser.evaluate(amount) != null && MathParser.evaluate(amount)!! >= 0.0
+                } else {
+                    val amtVal = amount.toDoubleOrNull()
+                    amtVal != null && amtVal >= 0.0
+                }),
                 shape = RoundedCornerShape(16.dp),
                 modifier = Modifier.fillMaxWidth().height(56.dp)
             ) {
@@ -366,4 +416,34 @@ fun AddLoanTransactionScreen(
             }
         }
     }
+
+    val isKeyboardVisible = com.h2.wellspend.utils.KeyboardUtils.keyboardAsState().value
+    if (isFocused && isKeyboardVisible) {
+        Surface(
+            onClick = {
+                isAbcKeyboard = !isAbcKeyboard
+                focusRequester.requestFocus()
+            },
+            shape = RoundedCornerShape(16.dp),
+            color = MaterialTheme.colorScheme.secondaryContainer,
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .imePadding()
+                .padding(16.dp),
+            shadowElevation = 6.dp
+        ) {
+            Box(
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = if (isAbcKeyboard) "123" else "Abc",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                )
+            }
+        }
     }
+    }
+}

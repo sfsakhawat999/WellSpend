@@ -11,6 +11,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -78,6 +81,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import com.h2.wellspend.data.Category
+import com.h2.wellspend.utils.MathParser
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.material3.Surface
 import com.h2.wellspend.data.Expense
 import com.h2.wellspend.data.RecurringFrequency
 import com.h2.wellspend.data.SystemCategory
@@ -91,7 +99,7 @@ import java.util.Locale
 import kotlin.math.pow
 import kotlin.math.roundToInt
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun TransactionForm(
         currency: String,
@@ -266,7 +274,12 @@ fun TransactionForm(
                 )
         }
 
-        Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+        Box(modifier = Modifier.fillMaxSize()) {
+                var isAbcKeyboard by remember { mutableStateOf(false) }
+                var isFocused by remember { mutableStateOf(false) }
+                val focusRequester = remember { FocusRequester() }
+
+                Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
                 // Header
                 Row(
                         modifier =
@@ -483,105 +496,121 @@ fun TransactionForm(
                                 horizontalAlignment = Alignment.Start,
                                 modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
                         ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Text(
-                                                text = currency,
-                                                style =
-                                                        TextStyle(
-                                                                fontSize = 36.sp,
-                                                                color =
-                                                                        MaterialTheme.colorScheme
-                                                                                .onSurfaceVariant
-                                                        ),
-                                                modifier = Modifier.padding(end = 8.dp)
-                                        )
-                                        androidx.compose.foundation.text.BasicTextField(
-                                                value = amount,
-                                                onValueChange = { newValue ->
-                                                        // Allow only valid decimal input with max 2
-                                                        // decimal places
-                                                        val filtered =
-                                                                newValue.filter {
-                                                                        it.isDigit() || it == '.'
+                                Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                        Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                modifier = Modifier.weight(1f)
+                                        ) {
+                                                Text(
+                                                        text = currency,
+                                                        style =
+                                                                TextStyle(
+                                                                        fontSize = 36.sp,
+                                                                        color =
+                                                                                MaterialTheme.colorScheme
+                                                                                        .onSurfaceVariant
+                                                                ),
+                                                        modifier = Modifier.padding(end = 8.dp)
+                                                )
+                                                androidx.compose.foundation.text.BasicTextField(
+                                                        value = amount,
+                                                        onValueChange = { newValue ->
+                                                                val filtered =
+                                                                        newValue.filter {
+                                                                                it.isDigit() || it == '.' || it == '+' || it == '-' || it == '*' || it == '/' || it == '(' || it == ')' || it == ' '
+                                                                        }
+                                                                amount = filtered
+                                                        },
+                                                        textStyle =
+                                                                TextStyle(
+                                                                        fontSize = 56.sp,
+                                                                        fontWeight = FontWeight.Bold,
+                                                                        color =
+                                                                                if (MathParser.hasMathOperator(amount) && !MathParser.areParenthesesCorrect(amount)) {
+                                                                                        MaterialTheme.colorScheme.error
+                                                                                } else {
+                                                                                        MaterialTheme.colorScheme.primary
+                                                                                },
+                                                                        textAlign =
+                                                                                androidx.compose.ui.text
+                                                                                        .style.TextAlign
+                                                                                        .Start
+                                                                 ),
+                                                        decorationBox = { innerTextField ->
+                                                                Box(
+                                                                        contentAlignment =
+                                                                                Alignment.CenterStart
+                                                                ) {
+                                                                        if (amount.isEmpty()) {
+                                                                                Text(
+                                                                                        "0",
+                                                                                        style =
+                                                                                                TextStyle(
+                                                                                                        fontSize =
+                                                                                                                 56.sp,
+                                                                                                        fontWeight =
+                                                                                                                FontWeight
+                                                                                                                        .Bold,
+                                                                                                        color =
+                                                                                                                MaterialTheme
+                                                                                                                        .colorScheme
+                                                                                                                        .onSurfaceVariant
+                                                                                                                        .copy(
+                                                                                                                                alpha =
+                                                                                                                                        0.3f
+                                                                                                                        ),
+                                                                                                        textAlign =
+                                                                                                                androidx.compose
+                                                                                                                        .ui
+                                                                                                                        .text
+                                                                                                                        .style
+                                                                                                                        .TextAlign
+                                                                                                                        .Start
+                                                                                                )
+                                                                                )
+                                                                        }
+                                                                        innerTextField()
                                                                 }
-                                                        val parts = filtered.split(".")
-                                                        amount =
-                                                                when {
-                                                                        parts.size == 1 ->
-                                                                                filtered // No
-                                                                        // decimal
-                                                                        // point
-                                                                        parts.size == 2 ->
-                                                                                "${parts[0]}.${parts[1].take(2)}" // Limit to 2
-                                                                        // decimal
-                                                                        // places
-                                                                        else -> amount // Invalid
-                                                                // (multiple
-                                                                // dots),
-                                                                // keep
-                                                                // previous
-                                                                // value
-                                                                }
-                                                },
-                                                textStyle =
-                                                        TextStyle(
-                                                                fontSize = 56.sp,
-                                                                fontWeight = FontWeight.Bold,
-                                                                color =
-                                                                        MaterialTheme.colorScheme
-                                                                                .primary,
-                                                                textAlign =
-                                                                        androidx.compose.ui.text
-                                                                                .style.TextAlign
-                                                                                .Start
-                                                        ),
-                                                decorationBox = { innerTextField ->
-                                                        Box(
-                                                                contentAlignment =
-                                                                        Alignment.CenterStart
-                                                        ) {
-                                                                if (amount.isEmpty()) {
-                                                                        Text(
-                                                                                "0",
-                                                                                style =
-                                                                                        TextStyle(
-                                                                                                fontSize =
-                                                                                                        56.sp,
-                                                                                                fontWeight =
-                                                                                                        FontWeight
-                                                                                                                .Bold,
-                                                                                                color =
-                                                                                                        MaterialTheme
-                                                                                                                .colorScheme
-                                                                                                                .onSurfaceVariant
-                                                                                                                .copy(
-                                                                                                                        alpha =
-                                                                                                                                0.3f
-                                                                                                                ),
-                                                                                                textAlign =
-                                                                                                        androidx.compose
-                                                                                                                .ui
-                                                                                                                .text
-                                                                                                                .style
-                                                                                                                .TextAlign
-                                                                                                                .Start
-                                                                                        )
-                                                                        )
-                                                                }
-                                                                innerTextField()
-                                                        }
-                                                },
-                                                singleLine = true,
-                                                cursorBrush =
-                                                        androidx.compose.ui.graphics.SolidColor(
-                                                                MaterialTheme.colorScheme.primary
-                                                        ),
-                                                keyboardOptions =
-                                                        KeyboardOptions(
-                                                                keyboardType = KeyboardType.Number
-                                                        ),
-                                                modifier = Modifier.widthIn(min = 200.dp)
-                                        )
+                                                        },
+                                                        singleLine = true,
+                                                        cursorBrush =
+                                                                androidx.compose.ui.graphics.SolidColor(
+                                                                        MaterialTheme.colorScheme.primary
+                                                                ),
+                                                        keyboardOptions =
+                                                                KeyboardOptions(
+                                                                        keyboardType = if (isAbcKeyboard) KeyboardType.Text else KeyboardType.Decimal
+                                                                ),
+                                                        modifier = Modifier
+                                                                .weight(1f)
+                                                                .focusRequester(focusRequester)
+                                                                .onFocusChanged { isFocused = it.isFocused }
+                                                )
+                                        }
+                                }
+                                if (MathParser.hasMathOperator(amount)) {
+                                        val evalResult = MathParser.evaluate(amount)
+                                        if (evalResult != null) {
+                                                if (evalResult >= 0.0) {
+                                                        Text(
+                                                                text = "= $currency${String.format("%.2f", evalResult)}",
+                                                                style = MaterialTheme.typography.bodySmall,
+                                                                color = MaterialTheme.colorScheme.secondary,
+                                                                modifier = Modifier.padding(top = 4.dp, start = 48.dp)
+                                                        )
+                                                } else {
+                                                        Text(
+                                                                text = "= -$currency${String.format("%.2f", kotlin.math.abs(evalResult))} (Negative amount not allowed)",
+                                                                style = MaterialTheme.typography.bodySmall,
+                                                                color = MaterialTheme.colorScheme.error,
+                                                                modifier = Modifier.padding(top = 4.dp, start = 48.dp)
+                                                        )
+                                                }
+                                        }
                                 }
                         }
 
@@ -692,48 +721,47 @@ fun TransactionForm(
                                 Column {
                                         // Fees (only show when account is selected)
                                         if (transactionType !=
-                                                        com.h2.wellspend.data.TransactionType
-                                                                .INCOME && accountId != null
+                                                         com.h2.wellspend.data.TransactionType
+                                                                 .INCOME && accountId != null
                                         ) {
+                                                val parsedAmount = (if (MathParser.hasMathOperator(amount)) MathParser.evaluate(amount) else amount.toDoubleOrNull()) ?: 0.0
                                                 FeeSelector(
-                                                        account = currentAccount,
-                                                        transactionAmount = amount.toDoubleOrNull()
-                                                                        ?: 0.0,
-                                                        currency = currency,
-                                                        selectedConfigName = selectedFeeConfigName,
-                                                        currentFeeAmount = feeAmount,
-                                                        isCustomFee = isCustomFee,
-                                                        onFeeChanged = { name, amt, isCustom ->
-                                                                selectedFeeConfigName = name
-                                                                feeAmount = amt
-                                                                isCustomFee = isCustom
-                                                        }
+                                                         account = currentAccount,
+                                                         transactionAmount = parsedAmount,
+                                                         currency = currency,
+                                                         selectedConfigName = selectedFeeConfigName,
+                                                         currentFeeAmount = feeAmount,
+                                                         isCustomFee = isCustomFee,
+                                                         onFeeChanged = { name, amt, isCustom ->
+                                                                 selectedFeeConfigName = name
+                                                                 feeAmount = amt
+                                                                 isCustomFee = isCustom
+                                                         }
                                                 )
 
                                                 val total =
-                                                        (amount.toDoubleOrNull()
-                                                                ?: 0.0) +
+                                                        parsedAmount +
                                                                 (feeAmount.toDoubleOrNull() ?: 0.0)
                                                 if (total > 0 &&
                                                                 (feeAmount.toDoubleOrNull()
                                                                         ?: 0.0) > 0
                                                 ) {
-                                                        Text(
-                                                                text =
-                                                                        "Total Deduction: $currency${String.format("%.2f", total)}",
-                                                                style =
-                                                                        MaterialTheme.typography
-                                                                                .bodyMedium,
-                                                                fontWeight = FontWeight.SemiBold,
-                                                                color =
-                                                                        MaterialTheme.colorScheme
-                                                                                .onSurfaceVariant,
-                                                                modifier =
-                                                                        Modifier.padding(
-                                                                                top = 8.dp,
-                                                                                start = 4.dp
-                                                                        )
-                                                        )
+                                                         Text(
+                                                                 text =
+                                                                         "Total Deduction: $currency${String.format("%.2f", total)}",
+                                                                 style =
+                                                                         MaterialTheme.typography
+                                                                                 .bodyMedium,
+                                                                 fontWeight = FontWeight.SemiBold,
+                                                                 color =
+                                                                         MaterialTheme.colorScheme
+                                                                                 .onSurfaceVariant,
+                                                                 modifier =
+                                                                         Modifier.padding(
+                                                                                 top = 8.dp,
+                                                                                 start = 4.dp
+                                                                         )
+                                                         )
                                                 }
                                                 Spacer(modifier = Modifier.height(24.dp))
                                         }
@@ -1066,7 +1094,7 @@ fun TransactionForm(
                 ) {
                         // Helper function to perform the save
                         val performSave = {
-                                val amountVal = amount.toDoubleOrNull()
+                                val amountVal = if (MathParser.hasMathOperator(amount)) MathParser.evaluate(amount) else amount.toDoubleOrNull()
                                 if (amountVal != null) {
                                         val feeVal =
                                                 if (accountId != null)
@@ -1125,11 +1153,17 @@ fun TransactionForm(
                                 },
                                 enabled =
                                         amount.isNotEmpty() &&
+                                                (if (MathParser.hasMathOperator(amount)) {
+                                                        MathParser.areParenthesesCorrect(amount) && MathParser.evaluate(amount) != null && MathParser.evaluate(amount)!! >= 0.0
+                                                } else {
+                                                        val amtVal = amount.toDoubleOrNull()
+                                                        amtVal != null && amtVal >= 0.0
+                                                }) &&
                                                 (transactionType !=
-                                                        com.h2.wellspend.data.TransactionType
-                                                                .TRANSFER ||
-                                                        (accountId != null &&
-                                                                targetAccountId != null)) &&
+                                                         com.h2.wellspend.data.TransactionType
+                                                                 .TRANSFER ||
+                                                         (accountId != null &&
+                                                                 targetAccountId != null)) &&
                                                 (!isRecurring || frequency != null),
                                 shape = RoundedCornerShape(16.dp),
                                 modifier = Modifier.fillMaxWidth().height(56.dp)
@@ -1172,6 +1206,36 @@ fun TransactionForm(
                                 )
                         }
                 }
+        }
+
+        val isKeyboardVisible = com.h2.wellspend.utils.KeyboardUtils.keyboardAsState().value
+        if (isFocused && isKeyboardVisible) {
+                Surface(
+                        onClick = {
+                                isAbcKeyboard = !isAbcKeyboard
+                                focusRequester.requestFocus()
+                        },
+                        shape = RoundedCornerShape(16.dp),
+                        color = MaterialTheme.colorScheme.secondaryContainer,
+                        modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .imePadding()
+                                .padding(16.dp),
+                        shadowElevation = 6.dp
+                ) {
+                        Box(
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                                contentAlignment = Alignment.Center
+                        ) {
+                                Text(
+                                        text = if (isAbcKeyboard) "123" else "Abc",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSecondaryContainer
+                                )
+                        }
+                }
+        }
         }
 }
 
