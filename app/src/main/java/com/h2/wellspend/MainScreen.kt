@@ -400,9 +400,9 @@ fun MainScreen(
         }.filterNotNull().toMutableList()
     } else {
         expensesByCat.map { (cat, list) ->
-            val categoryObj = allCategories.find { it.name == cat }
+            val categoryObj = allCategories.find { it.id == cat } ?: allCategories.find { it.name == cat }
             ChartData(
-                name = cat,
+                name = categoryObj?.name ?: cat,
                 value = list.sumOf { it.amount }, // Fees are handled separately
                 color = categoryObj?.let { Color(it.color) } 
                     ?: CategoryColors[SystemCategory.Others] 
